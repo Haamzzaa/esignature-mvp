@@ -80,7 +80,8 @@ class SendEnvelopeView(APIView):
             user_agent=request.META.get("HTTP_USER_AGENT"),
         )
 
-        signing_url = f"http://localhost:5173/sign/{signing_token.token}"
+        from django.conf import settings
+        signing_url = f"{settings.FRONTEND_URL}/sign/{signing_token.token}"
 
         
         return Response(

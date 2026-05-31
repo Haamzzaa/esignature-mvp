@@ -14,12 +14,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 import os
 
 DEBUG = os.environ.get("DEBUG", "False") == "True"
-DEBUG = os.environ.get("DEBUG", "False") == "True"
 
 SECRET_KEY = os.environ.get("SECRET_KEY")
 
 if not SECRET_KEY:
     raise ValueError("SECRET_KEY environment variable is required.")
+
 ALLOWED_HOSTS = [
     "localhost",
     "127.0.0.1",
@@ -29,6 +29,8 @@ ALLOWED_HOSTS = [
 render_external_hostname = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if render_external_hostname:
     ALLOWED_HOSTS.append(render_external_hostname)
+
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
 
 # Application definition
 INSTALLED_APPS = [
