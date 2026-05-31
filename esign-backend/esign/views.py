@@ -106,7 +106,7 @@ class SigningView(APIView):
         envelope = signer.envelope
         document = envelope.document
         print("TOKEN RECEIVED:", token)
-        print("TOKENS IN DB:", list(SigningToken.objects.values_list("token", flat=True)))
+        print("TOKENS IN DB:", list(SigningToken.obFjects.values_list("token", flat=True)))
 
         # Check if completed/signed
         signed_doc = SignedDocument.objects.filter(envelope=envelope).first()
@@ -427,6 +427,11 @@ class SigningView(APIView):
 
             signed_doc = SignedDocument(envelope=envelope, final_hash=final_hash)
             signed_doc.file.save(original_name, ContentFile(pdf_bytes), save=True)
+            import os
+
+            print("SIGNED FILE URL:", signed_doc.file.url)
+            print("SIGNED FILE PATH:", signed_doc.file.path)
+            print("EXISTS:", os.path.exists(signed_doc.file.path))
 
             # Invalidate token (unchanged)
             signing_token.is_used   = True
