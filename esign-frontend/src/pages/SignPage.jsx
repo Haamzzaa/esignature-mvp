@@ -4,7 +4,7 @@ import SignatureCanvas from 'react-signature-canvas'
 import { motion, AnimatePresence } from 'framer-motion'
 import { PenTool, Type, Upload, FileSignature, ShieldCheck, CheckCircle2, AlertCircle, RefreshCw, ChevronRight, Download, X } from 'lucide-react'
 
-import { apiClient, completeSigning, getSigningSession } from '../services/api.js'
+import { apiClient, completeSigning, getSigningSession, API_URL } from '../services/api.js'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -13,7 +13,7 @@ function backendOriginFromBaseUrl(baseUrl) {
     const u = new URL(baseUrl)
     return u.origin
   } catch {
-    return 'http://localhost:8000'
+    return API_URL
   }
 }
 
