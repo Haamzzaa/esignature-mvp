@@ -10,6 +10,8 @@ from django.core.files.base import ContentFile
 from django.db import transaction
 from .models import Envelope, Signer, SigningToken, AuditLog, SignedDocument
 from .serializers import DocumentUploadSerializer, EnvelopeCreateSerializer
+from django.http import FileResponse, Http404
+import os
 import fitz
 from io import BytesIO
 
@@ -92,6 +94,52 @@ class SendEnvelopeView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+class SigningDocumentView(APIView):
+    def get(self, request, token, *args, **kwargs):
+        signing_token = get_object_or_404(SigningToken, token=token)
+        if signing_token.expires_at < timezone.now():
+            return Response({'detail': 'Token expired.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        signer = signing_token.signer
+        envelope = signer.envelope
+        document = envelope.document
+        
+        if not document.file:
+            raise Http404("Document file not found.")
+            
+        return FileResponse(document.file.open('rb'), content_type='application/pdf')
+
+class SigningSignedDocumentView(APIView):
+    def get(self, request, token, *args, **kwargs):
+        signing_token = get_object_or_404(SigningToken, token=token)
+        signer = signing_token.signer
+        envelope = signer.envelope
+        
+        signed_doc = get_object_or_404(SignedDocument, envelope=envelope)
+        if not signed_doc.file:
+            raise Http404("Signed document file not found.")
+            
+        return FileResponse(signed_doc.file.open('rb'), content_type='application/pdf')
+
+class SigningDownloadView(APIView):
+    def get(self, request, token, *args, **kwargs):
+        signing_token = get_object_or_404(SigningToken, token=token)
+        signer = signing_token.signer
+        envelope = signer.envelope
+        
+        signed_doc = get_object_or_404(SignedDocument, envelope=envelope)
+        if not signed_doc.file:
+            raise Http404("Signed document file not found.")
+            
+        original_name = os.path.basename(signed_doc.file.name) or "signed.pdf"
+        
+        return FileResponse(
+            signed_doc.file.open('rb'),
+            as_attachment=True,
+            filename=original_name,
+            content_type='application/pdf'
+        )
    
 class SigningView(APIView):
     def get(self, request, token, *args, **kwargs):
@@ -125,8 +173,11 @@ class SigningView(APIView):
             return Response({
                 "signer_name": signer.name,
                 "signer_email": signer.email,
+                "document_url": request.build_absolute_uri(
+                    reverse('signing-signed', kwargs={'token': token})
+                ),
                 "signed_document_url": request.build_absolute_uri(
-                    signed_doc.file.url
+                    reverse('signing-download', kwargs={'token': token})
                 ),
                 "envelope_id": envelope.id,
                 "status": "completed"
@@ -145,7 +196,9 @@ class SigningView(APIView):
         return Response({
             "signer_name": signer.name,
             "signer_email": signer.email,
-            "document_url": request.build_absolute_uri(document.file.url),
+            "document_url": request.build_absolute_uri(
+                reverse('signing-document', kwargs={'token': token})
+            ),
             "envelope_id": envelope.id,
             "status": envelope.status,
         })
@@ -354,7 +407,9 @@ class SigningView(APIView):
                 {
                     "detail": "Envelope already signed.",
                     "status": "completed",
-                    "signed_document_url": signed_doc.file.url if signed_doc else None,
+                    "signed_document_url": request.build_absolute_uri(
+                        reverse('signing-download', kwargs={'token': token})
+                    ) if signed_doc else None,
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -465,7 +520,9 @@ class SigningView(APIView):
                 "message": "Document signed successfully.",
                 "envelope_id": envelope.id,
                 "signed_document_id": signed_doc.id,
-                "signed_document_url": request.build_absolute_uri(signed_doc.file.url),
+                "signed_document_url": request.build_absolute_uri(
+                    reverse('signing-download', kwargs={'token': token})
+                ),
             },
             status=status.HTTP_201_CREATED,
         )
