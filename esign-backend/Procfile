@@ -1,0 +1,1 @@
+web: gunicorn esign_service.wsgi:application
