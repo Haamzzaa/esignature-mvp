@@ -334,12 +334,16 @@ class SigningView(APIView):
         from PIL import Image, ImageEnhance
         from io import BytesIO as _BytesIO
 
-        img = Image.open(_BytesIO(image_bytes)).convert("RGBA")
+        # 1. Immediately resize the image on load to prevent OOM on large phone resolutions
+        # Use context manager to open the image safely and keep memory footprints minimal
+        with _BytesIO(image_bytes) as in_stream:
+            with Image.open(in_stream) as original_img:
+                # Downsize immediately to at most 800x400
+                original_img.thumbnail((800, 400), Image.LANCZOS)
+                img = original_img.convert("RGBA")
 
         # ── Step 1: Remove white / near-white background ──────────────────────
-        # We iterate pixel data once using Pillow's own getdata/putdata.
-        # A pixel is "white background" when R, G, B are all > 240 and the
-        # pixel is already (mostly) opaque.
+        # getdata() now processes at most 320,000 pixels, which requires almost zero memory!
         pixels = list(img.getdata())
         cleaned = []
         for r, g, b, a in pixels:
@@ -350,38 +354,47 @@ class SigningView(APIView):
         img.putdata(cleaned)
 
         # ── Step 2: Tight crop around remaining opaque content ────────────────
-        _, _, _, alpha_ch = img.split()
-        bbox = alpha_ch.getbbox()              # None when fully transparent
+        r_ch, g_ch, b_ch, a_ch = img.split()
+        bbox = a_ch.getbbox()              # None when fully transparent
         if bbox:
-            img = img.crop(bbox)
+            img_cropped = img.crop(bbox)
+            img.close()
+            img = img_cropped
+            # Re-split channels after crop
+            r_ch, g_ch, b_ch, a_ch = img.split()
         else:
             # Nothing visible after whitespace removal — return as-is
-            out = _BytesIO()
-            img.save(out, format="PNG")
-            return out.getvalue()
+            with _BytesIO() as out:
+                img.save(out, format="PNG", optimize=True)
+                img.close()
+                return out.getvalue()
 
         # ── Step 3: Darken / contrast — RGB channels only ─────────────────────
-        # Extract alpha BEFORE any colour operation so it is never modified.
-        r_ch, g_ch, b_ch, a_ch = img.split()
+        # Merge R, G, B channels and apply enhancement transforms
         rgb = Image.merge("RGB", (r_ch, g_ch, b_ch))
-
+        
         # Boost contrast so faint strokes become solid.
-        rgb = ImageEnhance.Contrast(rgb).enhance(2.0)
-
+        rgb_contrast = ImageEnhance.Contrast(rgb).enhance(2.0)
+        rgb.close()
+        
         # Darken the ink so it reads as deep black on the page.
-        rgb = ImageEnhance.Brightness(rgb).enhance(0.4)
+        rgb_dark = ImageEnhance.Brightness(rgb_contrast).enhance(0.4)
+        rgb_contrast.close()
 
         # Reconstruct RGBA — alpha channel is completely untouched.
-        r2, g2, b2 = rgb.split()
-        img = Image.merge("RGBA", (r2, g2, b2, a_ch))
+        r2, g2, b2 = rgb_dark.split()
+        img_enhanced = Image.merge("RGBA", (r2, g2, b2, a_ch))
+        rgb_dark.close()
+        img.close()
 
         # ── Step 4: Resize to a sensible thumbnail ────────────────────────────
-        img.thumbnail((180, 80), Image.LANCZOS)
+        img_enhanced.thumbnail((180, 80), Image.LANCZOS)
 
         # ── Output: transparent PNG ───────────────────────────────────────────
-        out = _BytesIO()
-        img.save(out, format="PNG")
-        return out.getvalue()
+        with _BytesIO() as out:
+            img_enhanced.save(out, format="PNG", optimize=True)
+            img_enhanced.close()
+            return out.getvalue()
 
 
 
@@ -443,6 +456,45 @@ class SigningView(APIView):
                     {"detail": "signature_image (base64) is required for upload/draw signatures."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+            
+            if sig_type == "upload":
+                try:
+                    b64_data = signature_image_b64
+                    if "," in b64_data:
+                        b64_data = b64_data.split(",", 1)[1]
+                    
+                    import base64
+                    decoded_bytes = base64.b64decode(b64_data)
+                    
+                    if len(decoded_bytes) > 2 * 1024 * 1024:
+                        return Response(
+                            {"detail": "Signature image exceeds maximum allowed size (2MB)."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    
+                    # pyrefly: ignore [missing-import]
+                    from PIL import Image
+                    import io
+                    try:
+                        with Image.open(io.BytesIO(decoded_bytes)) as img:
+                            img_format = img.format
+                    except Exception:
+                        return Response(
+                            {"detail": "Unable to parse signature image format."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    
+                    if not img_format or img_format.upper() not in ("PNG", "JPEG", "WEBP"):
+                        return Response(
+                            {"detail": "Unsupported image format. Allowed formats: PNG, JPG, JPEG, WEBP."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                except Exception:
+                    return Response(
+                        {"detail": "Invalid base64 signature image data."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
             signature_text = None
 
         else:
@@ -472,15 +524,24 @@ class SigningView(APIView):
             page = pdf_document[target_page_idx]
 
             # Delegate embedding — pass stored ratios (may be None)
-            self._embed_signature(
-                page,
-                sig_type,
-                x_ratio=envelope.signature_x_ratio,
-                y_ratio=envelope.signature_y_ratio,
-                signature_text=signature_text,
-                signature_image_b64=signature_image_b64,
-                signer_name=signer.name,
-            )
+            try:
+                self._embed_signature(
+                    page,
+                    sig_type,
+                    x_ratio=envelope.signature_x_ratio,
+                    y_ratio=envelope.signature_y_ratio,
+                    signature_text=signature_text,
+                    signature_image_b64=signature_image_b64,
+                    signer_name=signer.name,
+                )
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Image processing failed: {str(e)}", exc_info=True)
+                return Response(
+                    {"detail": "Unable to process uploaded signature image."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             pdf_bytes = pdf_document.tobytes()
             pdf_document.close()
