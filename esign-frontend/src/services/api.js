@@ -1,4 +1,5 @@
 import axios from 'axios'
+console.log("VITE_API_URL =", import.meta.env.VITE_API_URL)
 
 export const API_URL = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:8000` : '')
 
@@ -25,7 +26,7 @@ export async function createEnvelope({ documentId, signer, signaturePosition = n
     // Include ratio-based placement only when the sender clicked a position.
     // x_ratio / y_ratio are 0.0–1.0 relative to the rendered page dimensions.
     ...(signaturePosition && {
-      signature_page:    signaturePosition.page,
+      signature_page: signaturePosition.page,
       signature_x_ratio: signaturePosition.x_ratio,
       signature_y_ratio: signaturePosition.y_ratio,
     }),
