@@ -105,8 +105,12 @@ class SigningView(APIView):
         signer = signing_token.signer
         envelope = signer.envelope
         document = envelope.document
-        print("TOKEN RECEIVED:", token)
-        print("TOKENS IN DB:", list(SigningToken.obFjects.values_list("token", flat=True)))
+        try:
+            print("TOKEN RECEIVED:", token)
+            print("TOKENS IN DB:", list(SigningToken.objects.values_list("token", flat=True)))
+        except Exception as e:
+            print("DEBUG ERROR:", str(e))
+            raise
 
         # Check if completed/signed
         signed_doc = SignedDocument.objects.filter(envelope=envelope).first()
