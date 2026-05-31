@@ -177,8 +177,9 @@ class SigningView(APIView):
                     reverse('signing-signed', kwargs={'token': token})
                 ),
                 "signed_document_url": request.build_absolute_uri(
-                    reverse('signing-download', kwargs={'token': token})
+                    reverse('signing-signed', kwargs={'token': token})
                 ),
+                
                 "envelope_id": envelope.id,
                 "status": "completed"
             })
