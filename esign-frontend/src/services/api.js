@@ -19,10 +19,11 @@ export async function uploadDocument(file) {
   return data
 }
 
-export async function createEnvelope({ documentId, signer, signaturePosition = null }) {
+export async function createEnvelope({ documentId, signer, participants, signaturePosition = null, ...rest }) {
   const payload = {
     document_id: documentId,
-    signer,
+    ...(signer && { signer }),
+    ...(participants && { participants }),
     // Include ratio-based placement only when the sender clicked a position.
     // x_ratio / y_ratio are 0.0–1.0 relative to the rendered page dimensions.
     ...(signaturePosition && {
@@ -30,6 +31,7 @@ export async function createEnvelope({ documentId, signer, signaturePosition = n
       signature_x_ratio: signaturePosition.x_ratio,
       signature_y_ratio: signaturePosition.y_ratio,
     }),
+    ...rest
   }
 
   const { data } = await apiClient.post('/envelopes/', payload)
@@ -53,5 +55,15 @@ export async function completeSigning(token, payload) {
   )
 
   return response.data
+}
+
+export async function getDashboardData() {
+  const { data } = await apiClient.get('/dashboard/')
+  return data
+}
+
+export async function getPackageDetail(id) {
+  const { data } = await apiClient.get(`/packages/${id}/`)
+  return data
 }
 

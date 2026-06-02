@@ -16,9 +16,20 @@ class Envelope(models.Model):
         ('viewed', 'Viewed'),
         ('signed', 'Signed'),
         ('completed', 'Completed'),
+        ('expired', 'Expired'),
+        ('declined', 'Declined'),
     ]
 
     document = models.ForeignKey(Document, on_delete=models.CASCADE)
+
+    title = models.CharField(
+        max_length=255,
+        blank=True
+    )
+
+    description = models.TextField(
+        blank=True
+    )
 
     status = models.CharField(
         max_length=20,
@@ -33,6 +44,14 @@ class Envelope(models.Model):
     signature_x_ratio = models.FloatField(null=True, blank=True)
 
     signature_y_ratio = models.FloatField(null=True, blank=True)
+
+    send_reminders = models.BooleanField(default=False)
+
+    send_final_email = models.BooleanField(default=True)
+
+    allow_printing = models.BooleanField(default=True)
+
+    additional_recipients = models.JSONField(default=list, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
         
@@ -74,6 +93,63 @@ class SignedDocument(models.Model):
 
     def __str__(self):
         return f"SignedDocument for Envelope {self.envelope.id}"
+
+class Participant(models.Model):
+    ROLE_CHOICES = [
+        ("signer", "Signer"),
+        ("approver", "Approver"),
+        ("reviewer", "Reviewer"),
+        ("cc", "CC"),
+    ]
+
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("active", "Active"),
+        ("viewed", "Viewed"),
+        ("completed", "Completed"),
+        ("declined", "Declined"),
+        ("returned", "Returned"),
+    ]
+
+    envelope = models.ForeignKey(Envelope, on_delete=models.CASCADE, related_name="participants")
+    name = models.CharField(max_length=255)
+    email = models.EmailField()
+    role = models.CharField(
+        max_length=20,
+        choices=ROLE_CHOICES,
+        default="signer"
+    )
+    order = models.PositiveIntegerField(default=1)
+    step_number = models.PositiveIntegerField(default=1)
+    has_completed = models.BooleanField(default=False)
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="pending"
+    )
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.get_role_display()}) for Envelope {self.envelope.id}"
+
+class ParticipantToken(models.Model):
+    participant = models.OneToOneField(Participant, on_delete=models.CASCADE, related_name="token")
+    token = models.UUIDField(
+        default=uuid.uuid4,
+        unique=True,
+        editable=False,
+        db_index=True
+    )
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Token for {self.participant.name} ({self.participant.role}) - Used: {self.is_used}"
    
    
 

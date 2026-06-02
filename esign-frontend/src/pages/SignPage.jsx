@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import SignatureCanvas from 'react-signature-canvas'
 import { motion, AnimatePresence } from 'framer-motion'
-import { PenTool, Type, Upload, FileSignature, ShieldCheck, CheckCircle2, AlertCircle, RefreshCw, ChevronRight, Download, X } from 'lucide-react'
+import { PenTool, Type, Upload, FileSignature, ShieldCheck, CheckCircle2, AlertCircle, RefreshCw, ChevronRight, Download, X, User } from 'lucide-react'
 
 import { apiClient, completeSigning, getSigningSession, API_URL } from '../services/api.js'
 
@@ -169,7 +169,21 @@ export default function SignPage() {
     try {
       const response = await completeSigning(token, payload)
       console.log(response)
-      navigate('/success', { state: { token } })
+      const signedUrl = response?.signed_document_url
+      
+      // Navigate with full state so SuccessPage doesn't call API on the used token
+      navigate('/success', {
+        state: {
+          token,
+          successType: 'sign',
+          session: {
+            ...session,
+            participant_status: 'completed',
+          },
+          signedDocumentUrl: signedUrl || toAbsoluteUrl(session?.signed_document_url || session?.document_url, backendOrigin),
+          isSuccessDirect: true,
+        },
+      })
     } catch (err) {
       const data = err?.response?.data
       const message =
@@ -181,6 +195,46 @@ export default function SignPage() {
       if (data?.status === 'completed' && data?.signed_document_url) {
         setSignedDocumentUrl(toAbsoluteUrl(data.signed_document_url, backendOrigin))
       }
+    } finally {
+      setIsSigning(false)
+    }
+  }
+
+  // ── Reviewer / Approver actions ────────────────────────────────────────────
+  async function handleAction(actionType) {
+    setError('')
+    setSuccessMessage('')
+
+    if (!token) return setError('Missing token.')
+
+    setIsSigning(true)
+    try {
+      const response = await completeSigning(token, { action: actionType })
+      console.log(response)
+
+      let newParticipantStatus = 'completed'
+      if (actionType === 'return') newParticipantStatus = 'returned'
+      if (actionType === 'reject') newParticipantStatus = 'declined'
+
+      navigate('/success', {
+        state: {
+          token,
+          successType: actionType,
+          session: {
+            ...session,
+            participant_status: newParticipantStatus,
+          },
+          isSuccessDirect: true,
+        },
+      })
+    } catch (err) {
+      const data = err?.response?.data
+      const message =
+        data?.detail ||
+        (typeof data === 'string' ? data : null) ||
+        err?.message ||
+        'Action failed.'
+      setError(message)
     } finally {
       setIsSigning(false)
     }
@@ -222,7 +276,9 @@ export default function SignPage() {
 
   // ── Derived session state (unchanged) ─────────────────────────────────────
   const status = session?.status
-  const isCompleted = status === 'completed'
+  const isEnvelopeCompleted = status === 'completed'
+  const isParticipantCompleted = session?.participant_status && ['completed', 'returned', 'declined'].includes(session.participant_status)
+  const isCompleted = isEnvelopeCompleted || (session?.participant_role && isParticipantCompleted)
   const isActive = !!session && !isCompleted
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -289,7 +345,14 @@ export default function SignPage() {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-white">{session.signer_name || 'Unknown User'}</p>
-                  <p className="text-xs text-zinc-400">{session.signer_email || 'No email provided'}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-xs text-zinc-400">{session.signer_email || 'No email provided'}</span>
+                    {session.participant_role && (
+                      <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-zinc-800 text-zinc-300 border border-white/5">
+                        {session.participant_role}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="flex flex-col items-start sm:items-end">
@@ -343,8 +406,18 @@ export default function SignPage() {
               <div className="glass-panel rounded-3xl p-8 text-center relative overflow-hidden group">
                 <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-50" />
                 <CheckCircle2 className="h-16 w-16 text-emerald-400 mx-auto mb-4" />
-                <h3 className="text-xl font-light text-emerald-300 mb-2">Signature Verified</h3>
-                <p className="text-sm text-zinc-400 mb-6">This document has been cryptographically sealed.</p>
+                <h3 className="text-xl font-light text-emerald-300 mb-2">
+                  {session?.participant_role === 'cc' ? 'Document Viewed' : 
+                   session?.participant_role === 'reviewer' ? 'Review Completed' :
+                   session?.participant_role === 'approver' ? 'Approval Completed' :
+                   'Signature Verified'}
+                </h3>
+                <p className="text-sm text-zinc-400 mb-6">
+                  {session?.participant_role === 'cc' ? 'You have successfully viewed this document.' :
+                   session?.participant_role === 'reviewer' ? 'Your review action has been registered and advanced.' :
+                   session?.participant_role === 'approver' ? 'Your approval action has been registered and advanced.' :
+                   'This document has been cryptographically sealed.'}
+                </p>
                 {signedDocumentUrl && (
                   <a
                     href={signedDocumentUrl}
@@ -355,6 +428,78 @@ export default function SignPage() {
                     <Download className="h-4 w-4" /> Access Sealed Payload
                   </a>
                 )}
+              </div>
+            ) : session?.participant_role === 'cc' ? (
+              <div className="glass-panel rounded-3xl p-8 text-center relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-30" />
+                <User className="h-16 w-16 text-cyan-400 mx-auto mb-4" />
+                <h3 className="text-xl font-light text-cyan-300 mb-2">View-Only Access</h3>
+                <p className="text-sm text-zinc-400 mb-6">
+                  You are a CC recipient on this workflow step. You have view-only authorization, and no further action is required from you.
+                </p>
+                <button
+                  onClick={() => handleAction('acknowledge')}
+                  disabled={isSigning}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50"
+                >
+                  {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Acknowledge & Finish'}
+                </button>
+              </div>
+            ) : session?.participant_role === 'reviewer' ? (
+              <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8 space-y-6">
+                <h3 className="text-lg font-light text-white mb-2 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                  Reviewer Decisions
+                </h3>
+                <p className="text-xs text-zinc-400">
+                  Please review the document in the viewport and select an action.
+                </p>
+
+                <div className="space-y-4 pt-2">
+                  <button
+                    onClick={() => handleAction('approve')}
+                    disabled={isSigning}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(16,185,129,0.2)] disabled:opacity-50"
+                  >
+                    {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Approve Document'}
+                  </button>
+                  
+                  <button
+                    onClick={() => handleAction('return')}
+                    disabled={isSigning}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 hover:shadow-[0_0_20px_rgba(245,158,11,0.1)] px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 disabled:opacity-50"
+                  >
+                    {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Return Document'}
+                  </button>
+                </div>
+              </div>
+            ) : session?.participant_role === 'approver' ? (
+              <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8 space-y-6">
+                <h3 className="text-lg font-light text-white mb-2 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                  Approver Decisions
+                </h3>
+                <p className="text-xs text-zinc-400">
+                  Please review the document in the viewport and select an action.
+                </p>
+
+                <div className="space-y-4 pt-2">
+                  <button
+                    onClick={() => handleAction('approve')}
+                    disabled={isSigning}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(16,185,129,0.2)] disabled:opacity-50"
+                  >
+                    {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Approve Document'}
+                  </button>
+                  
+                  <button
+                    onClick={() => handleAction('reject')}
+                    disabled={isSigning}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-500/30 bg-red-500/10 text-red-300 hover:bg-red-500/20 hover:shadow-[0_0_20px_rgba(239,68,68,0.1)] px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 disabled:opacity-50"
+                  >
+                    {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Reject Document'}
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8">

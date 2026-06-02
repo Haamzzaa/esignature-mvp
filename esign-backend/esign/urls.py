@@ -7,6 +7,8 @@ from .views import (
     SigningDocumentView,
     SigningSignedDocumentView,
     SigningDownloadView,
+    DashboardView,
+    PackageDetailView,
 )
 
 urlpatterns = [
@@ -17,4 +19,6 @@ urlpatterns = [
     path('sign/<uuid:token>/document/', SigningDocumentView.as_view(), name='signing-document'),
     path('sign/<uuid:token>/signed/', SigningSignedDocumentView.as_view(), name='signing-signed'),
     path('sign/<uuid:token>/download/', SigningDownloadView.as_view(), name='signing-download'),
+    path('dashboard/', DashboardView.as_view()),
+    path('packages/<int:pk>/', PackageDetailView.as_view()),
 ]

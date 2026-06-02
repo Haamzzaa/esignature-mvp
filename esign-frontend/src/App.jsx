@@ -3,6 +3,8 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import UploadPage from './pages/UploadPage.jsx'
 import SignPage from './pages/SignPage.jsx'
 import SuccessPage from './pages/SuccessPage.jsx'
+import WorkspaceHome from './pages/WorkspaceHome.jsx'
+import PackageDetailPage from './pages/PackageDetailPage.jsx'
 
 export default function App() {
   return (
@@ -14,9 +16,12 @@ export default function App() {
         
         <div className="relative z-10 min-h-dvh">
           <Routes>
-            <Route path="/" element={<UploadPage />} />
+            <Route path="/" element={<WorkspaceHome />} />
+            <Route path="/create-request" element={<UploadPage />} />
             <Route path="/sign/:token" element={<SignPage />} />
             <Route path="/success" element={<SuccessPage />} />
+            <Route path="/dashboard" element={<WorkspaceHome />} />
+            <Route path="/packages/:id" element={<PackageDetailPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
