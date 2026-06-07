@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import SignatureCanvas from 'react-signature-canvas'
 import { motion, AnimatePresence } from 'framer-motion'
-import { PenTool, Type, Upload, FileSignature, ShieldCheck, CheckCircle2, AlertCircle, RefreshCw, ChevronRight, Download, X, User } from 'lucide-react'
+import { PenTool, Type, Upload, FileSignature, ShieldCheck, CheckCircle2, AlertCircle, RefreshCw, ChevronRight, Download, X, User, Clock } from 'lucide-react'
 
 import { apiClient, completeSigning, getSigningSession, API_URL } from '../services/api.js'
 
@@ -35,7 +35,80 @@ const SIGNATURE_METHODS = [
   { id: 'draw', label: 'Draw', icon: PenTool },
 ]
 
-// ── Component ──────────────────────────────────────────────────────────────────
+function WorkflowPendingScreen({ session }) {
+  const roleLabels = {
+    signer: 'Signer',
+    approver: 'Approver',
+    reviewer: 'Reviewer',
+    cc: 'CC Recipient'
+  }
+
+  const roleName = roleLabels[session.participant_role] || session.participant_role || 'Participant'
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.5, ease: "easeOut" }}
+      className="max-w-xl mx-auto glass-panel rounded-[2rem] p-8 sm:p-12 text-center relative overflow-hidden group shadow-2xl mt-10 font-sans"
+    >
+      {/* Glow */}
+      <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-transparent opacity-50 pointer-events-none" />
+      
+      {/* Icon */}
+      <div className="relative mb-6 flex justify-center">
+        <div className="absolute inset-0 rounded-full bg-amber-500/10 blur-xl animate-pulse w-20 h-20 mx-auto" />
+        <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-amber-500/5 border border-amber-500/20 text-amber-500 shadow-[0_0_30px_rgba(245,158,11,0.1)]">
+          <Clock className="h-10 w-10" />
+        </div>
+      </div>
+
+      <h2 className="text-2xl sm:text-3xl font-light tracking-tight text-white neon-text-glow">
+        Workflow Not Yet Available
+      </h2>
+      <p className="mt-3 text-sm text-zinc-400 leading-relaxed">
+        This document is currently waiting for a previous workflow participant to complete their action.
+      </p>
+
+      {/* Info Grid */}
+      <div className="w-full mt-8 p-6 rounded-2xl border border-white/5 bg-black/40 text-left space-y-4">
+        <div className="flex items-center justify-between border-b border-white/5 pb-3">
+          <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">Your Action Details</span>
+          <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/5 px-2.5 py-0.5 text-[10px] font-bold uppercase text-amber-500 tracking-wider">
+            Pending
+          </span>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-zinc-500">Your Role</span>
+            <span className="text-xs font-semibold text-zinc-200 capitalize">
+              {roleName}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-zinc-500">Your Step</span>
+            <span className="text-xs font-semibold text-zinc-200 font-mono">
+              {session.participant_step} of {session.total_steps}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-zinc-500">Current Workflow Status</span>
+            <span className="text-xs font-semibold text-amber-400">
+              Waiting For Previous Step
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <p className="mt-8 text-xs text-zinc-500 max-w-sm mx-auto leading-normal">
+        You will be able to review and complete actions on this document once the workflow reaches your assigned step.
+      </p>
+    </motion.div>
+  )
+}
 
 export default function SignPage() {
   const { token } = useParams()
@@ -178,9 +251,11 @@ export default function SignPage() {
           successType: 'sign',
           session: {
             ...session,
+            status: response?.status || 'completed',
             participant_status: 'completed',
           },
           signedDocumentUrl: signedUrl || toAbsoluteUrl(session?.signed_document_url || session?.document_url, backendOrigin),
+          downloadUrl: response?.download_url || toAbsoluteUrl(`/api/sign/${token}/download/`, backendOrigin),
           isSuccessDirect: true,
         },
       })
@@ -280,6 +355,7 @@ export default function SignPage() {
   const isParticipantCompleted = session?.participant_status && ['completed', 'returned', 'declined'].includes(session.participant_status)
   const isCompleted = isEnvelopeCompleted || (session?.participant_role && isParticipantCompleted)
   const isActive = !!session && !isCompleted
+  const isPending = session?.participant_status === 'pending'
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -327,7 +403,10 @@ export default function SignPage() {
 
       {/* Main content */}
       {!isLoading && session ? (
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-8">
+        isPending ? (
+          <WorkflowPendingScreen session={session} />
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-8">
           
           {/* Left Column: Document */}
           <motion.div 
@@ -659,6 +738,7 @@ export default function SignPage() {
             )}
           </motion.div>
         </div>
+        )
       ) : null}
     </div>
   )

@@ -1,29 +1,60 @@
 # Python
-venv/
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
+*.pyd
 
-# Django
+# Virtual environment
+venv/
+env/
+ENV/
+
+# Environment variables
+.env
+
+# Database
 db.sqlite3
+
+# Media uploads
 media/
+
+# Static files
 staticfiles/
 
-# Node
-node_modules/
-dist/
-
-# Environment
-.env
-.env.production
+# Logs
+*.log
 
 # VS Code
 .vscode/
 
-# OS files
-.DS_Store
-Thumbs.db
+# PyCharm
+.idea/
 
-# Other
-*.log
-*.backup
-*.db.bak
+# macOS
+.DS_Store
+
+# Node modules
+node_modules/
+
+# Build files
+dist/
+build/
+
+# Coverage
+.coverage
+htmlcov/
+
+# Pytest cache
+.pytest_cache/
+
+# Mypy
+.mypy_cache/
+
+# Ruff
+.ruff_cache/
+
+# Temporary files
+*.tmp
+
+# OS files
+Thumbs.db

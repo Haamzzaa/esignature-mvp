@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { createEnvelope, sendEnvelope, uploadDocument } from '../services/api.js'
+import { createEnvelope, sendEnvelope, uploadDocument, createTemplate, getTemplateDetail, getPackageDetail, apiClient, API_URL } from '../services/api.js'
+import UserNav from '../components/UserNav.jsx'
 import { Document, Page, pdfjs } from 'react-pdf'
 import { motion, AnimatePresence } from 'framer-motion'
-import { UploadCloud, User, Mail, FileText, X, ArrowRight, CheckCircle2, Sparkles, Crosshair, Plus, Trash2, Edit3, UserPlus, Check, ChevronDown, Sparkles as SparkleIcon, Bell, Share2, Printer, Settings } from 'lucide-react'
+import { UploadCloud, User, Mail, FileText, X, ArrowRight, CheckCircle2, Sparkles, Crosshair, Plus, Trash2, Edit3, UserPlus, Check, ChevronDown, Sparkles as SparkleIcon, Bell, Share2, Printer, Settings, Activity, Eye } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
 
@@ -91,7 +93,139 @@ function CustomSelect({ value, onChange, options, disabled }) {
   )
 }
 
+function SuccessScreen({ sentPackageInfo, onTrackProgress, onViewDetails, onReturn }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.5, ease: "easeOut" }}
+      className="relative z-10 flex flex-col items-center py-6 text-center"
+    >
+      {/* Icon and Title */}
+      <div className="relative mb-6">
+        <div className="absolute inset-0 rounded-full bg-emerald-500/20 blur-xl animate-pulse" />
+        <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.2)]">
+          <CheckCircle2 className="h-10 w-10" />
+        </div>
+      </div>
+
+      <h2 className="text-3xl font-light tracking-tight text-white sm:text-4xl neon-text-glow">
+        Workflow Dispatched
+      </h2>
+      <p className="mt-2 text-sm text-zinc-400 max-w-md">
+        Your document has been sent successfully. The sequential enterprise routing sequence is now active.
+      </p>
+
+      {/* Details Receipt Card */}
+      <div className="w-full max-w-md mt-8 p-6 rounded-2xl border border-white/5 bg-white/[0.02] backdrop-blur-xl text-left space-y-4 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-white/5 pb-3">
+          <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">Envelope Details</span>
+          <span className="inline-flex items-center gap-1 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-mono font-bold uppercase text-cyan-400 tracking-wider animate-pulse">
+            <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-ping mr-1" />
+            In Progress
+          </span>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-start justify-between gap-4">
+            <span className="text-xs text-zinc-500 shrink-0">Document</span>
+            <span className="text-xs font-medium text-zinc-200 truncate flex items-center gap-1.5 max-w-[240px]">
+              <FileText className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
+              <span className="truncate" title={sentPackageInfo.documentName}>{sentPackageInfo.documentName}</span>
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-zinc-500">Active Routing Step</span>
+            <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border bg-cyan-500/10 text-cyan-400 border-cyan-500/20">
+              Step 1 - {sentPackageInfo.firstStepRole}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-zinc-500">Total Participants</span>
+            <span className="text-xs font-semibold text-zinc-300 font-mono">
+              {sentPackageInfo.totalParticipants} enrolled
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-zinc-500">Dispatched Date</span>
+            <span className="text-xs font-semibold text-zinc-300 font-mono">
+              {sentPackageInfo.createdDate}
+            </span>
+          </div>
+        </div>
+
+        <div className="border-t border-white/5 pt-3 flex justify-between items-center text-[10px] text-zinc-500">
+          <span>Envelope ID</span>
+          <span className="font-mono text-zinc-400 select-all truncate max-w-[200px]" title={sentPackageInfo.id}>
+            {sentPackageInfo.id}
+          </span>
+        </div>
+      </div>
+
+      {/* Buttons */}
+      <div className="w-full max-w-md mt-8 flex flex-col gap-3">
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={onTrackProgress}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-3.5 text-xs font-bold transition-all duration-300 shadow-[0_0_15px_rgba(34,211,238,0.15)] hover:shadow-[0_0_20px_rgba(34,211,238,0.3)] uppercase tracking-wider cursor-pointer"
+          >
+            <Activity className="h-4 w-4" />
+            Track Progress
+          </button>
+          
+          <button
+            type="button"
+            onClick={onViewDetails}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/10 text-white px-4 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
+          >
+            <Eye className="h-4 w-4" />
+            View Package
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={onReturn}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900/50 hover:bg-zinc-900 border border-white/5 text-zinc-400 hover:text-white px-4 py-3 text-xs font-medium transition-all duration-300 cursor-pointer"
+        >
+          Return to Workspace
+          <ArrowRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </motion.div>
+  )
+}
+
 export default function UploadPage() {
+  const navigate = useNavigate()
+  const templateId = useMemo(() => new URLSearchParams(window.location.search).get('templateId'), [])
+  const [loadedTemplate, setLoadedTemplate] = useState(null)
+
+  const packageId = useMemo(() => {
+    const params = new URLSearchParams(window.location.search)
+    return params.get('packageId') || params.get('envelopeId')
+  }, [])
+
+  const backendOrigin = useMemo(() => {
+    try {
+      const u = new URL(apiClient?.defaults?.baseURL)
+      return u.origin
+    } catch {
+      return API_URL
+    }
+  }, [])
+
+  function toAbsoluteUrl(maybeRelativeUrl, origin) {
+    if (!maybeRelativeUrl) return ''
+    if (/^https?:\/\//i.test(maybeRelativeUrl)) return maybeRelativeUrl
+    const path = maybeRelativeUrl.startsWith('/') ? maybeRelativeUrl : `/${maybeRelativeUrl}`
+    return `${origin}${path}`
+  }
+
   // ── Form / workflow state ─────────────────────────────────────
   const [file, setFile] = useState(null)
   const [steps, setSteps] = useState([
@@ -102,9 +236,35 @@ export default function UploadPage() {
   ])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const [signingUrl, setSigningUrl] = useState('')
+  const [sentPackageInfo, setSentPackageInfo] = useState(null)
   const [currentTab, setCurrentTab] = useState('documents')
   const [uploadTimestamp, setUploadTimestamp] = useState(null)
+  const [uploadError, setUploadError] = useState('')
+  const [isValidating, setIsValidating] = useState(false)
+  const [placedFields, setPlacedFields] = useState([])
+  const [selectedFieldType, setSelectedFieldType] = useState('signature')
+  const [activeParticipantEmail, setActiveParticipantEmail] = useState('')
+  const [existingDocUrl, setExistingDocUrl] = useState('')
+  const [existingDocName, setExistingDocName] = useState('')
+  const [existingDocId, setExistingDocId] = useState(null)
+
+  // ── Reusable template states ──────────────────────────────────
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false)
+  const [templateName, setTemplateName] = useState('')
+  const [templateDescription, setTemplateDescription] = useState('')
+  const [templateCategory, setTemplateCategory] = useState('General')
+  const [templateVisibility, setTemplateVisibility] = useState('private')
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false)
+  const [templateModalError, setTemplateModalError] = useState('')
+
+  const openTemplateModal = () => {
+    setTemplateName('')
+    setTemplateDescription('')
+    setTemplateCategory('General')
+    setTemplateVisibility('private')
+    setTemplateModalError('')
+    setIsTemplateModalOpen(true)
+  }
 
   // ── Request settings state ───────────────────────────────────────────
   const [sendReminders, setSendReminders] = useState(false)
@@ -122,21 +282,36 @@ export default function UploadPage() {
 
   // ── Object-URL for the selected PDF ──────────────────────────────────────
   const previewUrl = useMemo(() => {
+    if (existingDocUrl) return existingDocUrl
     if (!file || file.type !== 'application/pdf') return null
     return URL.createObjectURL(file)
-  }, [file])
+  }, [file, existingDocUrl])
 
   const isPdf = useMemo(() => {
+    if (existingDocUrl) return true
     if (!file) return true
     const byType = file.type === 'application/pdf'
     const byName = file.name?.toLowerCase().endsWith('.pdf')
     return byType || byName
-  }, [file])
+  }, [file, existingDocUrl])
 
   // ── Preflight derived states ──────────────────────────────────────────────
   const isDocumentValid = useMemo(() => {
-    return !!file && isPdf
-  }, [file, isPdf])
+    return (!!file || !!existingDocUrl) && isPdf && !uploadError && !isValidating
+  }, [file, existingDocUrl, isPdf, uploadError, isValidating])
+
+  const allParticipants = useMemo(() => {
+    return steps.flatMap(s => s.participants.map(p => ({
+      ...p,
+      stepNumber: s.stepNumber
+    }))).filter(p => p.name?.trim() && p.email?.trim())
+  }, [steps])
+
+  useEffect(() => {
+    if (allParticipants.length > 0 && !activeParticipantEmail) {
+      setActiveParticipantEmail(allParticipants[0].email)
+    }
+  }, [allParticipants, activeParticipantEmail])
 
   const isWorkflowValid = useMemo(() => {
     const allParticipants = steps.flatMap(s => s.participants)
@@ -150,8 +325,8 @@ export default function UploadPage() {
   }, [steps])
 
   const isSignaturePlaced = useMemo(() => {
-    return !!sigPosition && !!sigPosition.page && sigPosition.x_ratio != null && sigPosition.y_ratio != null
-  }, [sigPosition])
+    return (!!sigPosition && !!sigPosition.page && sigPosition.x_ratio != null && sigPosition.y_ratio != null) || (placedFields.length > 0)
+  }, [sigPosition, placedFields])
 
   // ── Participant / Step Actions ───────────────────────────────────────────
   const addStep = () => {
@@ -266,14 +441,182 @@ export default function UploadPage() {
     setAdditionalRecipients(prev => prev.filter(e => e !== email))
   }
 
+  const handleSaveTemplateSubmit = async (e) => {
+    e.preventDefault()
+    if (!templateName.trim()) {
+      setTemplateModalError('Template name is required.')
+      return
+    }
+    setTemplateModalError('')
+    setIsSavingTemplate(true)
+    try {
+      const workflowDef = steps.flatMap(s => 
+        s.participants.map(p => ({
+          step: s.stepNumber,
+          role: p.role
+        }))
+      )
+      
+      const reqSettings = {
+        send_reminders: sendReminders,
+        send_final_email: sendFinalEmail,
+        allow_printing: allowPrinting,
+        additional_recipients: additionalRecipients
+      }
+
+      await createTemplate({
+        name: templateName.trim(),
+        description: templateDescription.trim(),
+        category: templateCategory,
+        visibility: templateVisibility,
+        workflow_definition: workflowDef,
+        request_settings: reqSettings
+      })
+
+      setIsTemplateModalOpen(false)
+      navigate('/templates')
+    } catch (err) {
+      setTemplateModalError(err?.response?.data?.detail || err?.message || 'Failed to create template blueprint.')
+    } finally {
+      setIsSavingTemplate(false)
+    }
+  }
+
+  // ── Prepopulate Preset Engine ──
+  useEffect(() => {
+    if (templateId) {
+      async function loadTemplate() {
+        try {
+          const tpl = await getTemplateDetail(templateId)
+          if (tpl) {
+            setLoadedTemplate(tpl)
+            
+            // 1. request_settings
+            if (tpl.request_settings) {
+              if (tpl.request_settings.send_reminders !== undefined) setSendReminders(tpl.request_settings.send_reminders)
+              if (tpl.request_settings.send_final_email !== undefined) setSendFinalEmail(tpl.request_settings.send_final_email)
+              if (tpl.request_settings.allow_printing !== undefined) setAllowPrinting(tpl.request_settings.allow_printing)
+              if (tpl.request_settings.additional_recipients !== undefined) setAdditionalRecipients(tpl.request_settings.additional_recipients)
+            }
+            
+            // 2. workflow_definition / steps
+            if (tpl.workflow_definition && Array.isArray(tpl.workflow_definition) && tpl.workflow_definition.length > 0) {
+              const grouped = {}
+              tpl.workflow_definition.forEach(item => {
+                const stepNum = item.step || 1
+                if (!grouped[stepNum]) {
+                  grouped[stepNum] = []
+                }
+                grouped[stepNum].push({
+                  id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2),
+                  name: '',
+                  email: '',
+                  role: item.role || 'signer'
+                })
+              })
+              
+              const sortedSteps = Object.keys(grouped)
+                .map(Number)
+                .sort((a, b) => a - b)
+                .map((stepNum, idx) => ({
+                  stepNumber: idx + 1,
+                  participants: grouped[stepNum]
+                }))
+              
+              if (sortedSteps.length > 0) {
+                setSteps(sortedSteps)
+              }
+            }
+          }
+        } catch (err) {
+          setError(err?.response?.data?.detail || err?.message || 'Failed to load the selected template blueprint.')
+        }
+      }
+      loadTemplate()
+    }
+  }, [templateId])
+
+  // ── Rehydrate / Load Package Engine ──
+  useEffect(() => {
+    if (packageId) {
+      async function loadPackage() {
+        try {
+          const res = await getPackageDetail(packageId)
+          if (res) {
+            // 1. request_settings
+            if (res.send_reminders !== undefined) setSendReminders(res.send_reminders)
+            if (res.send_final_email !== undefined) setSendFinalEmail(res.send_final_email)
+            if (res.allow_printing !== undefined) setAllowPrinting(res.allow_printing)
+            if (res.additional_recipients !== undefined) setAdditionalRecipients(res.additional_recipients || [])
+
+            // 2. document info
+            if (res.document) {
+              setExistingDocId(res.document.id)
+              setExistingDocName(res.document.filename || 'document.pdf')
+              if (res.document.url) {
+                setExistingDocUrl(toAbsoluteUrl(res.document.url, backendOrigin))
+              }
+            }
+
+            // 3. participants / steps
+            if (res.participants && Array.isArray(res.participants) && res.participants.length > 0) {
+              const grouped = {}
+              res.participants.forEach(p => {
+                const stepNum = p.step_number || 1
+                if (!grouped[stepNum]) {
+                  grouped[stepNum] = []
+                }
+                grouped[stepNum].push({
+                  id: p.id ? p.id.toString() : Math.random().toString(36).substring(2),
+                  name: p.name || '',
+                  email: p.email || '',
+                  role: p.role || 'signer'
+                })
+              })
+              
+              const sortedSteps = Object.keys(grouped)
+                .map(Number)
+                .sort((a, b) => a - b)
+                .map((stepNum, idx) => ({
+                  stepNumber: idx + 1,
+                  participants: grouped[stepNum]
+                }))
+              
+              if (sortedSteps.length > 0) {
+                setSteps(sortedSteps)
+              }
+            }
+
+            // 4. placed fields
+            if (res.fields && Array.isArray(res.fields)) {
+              const mappedFields = res.fields.map(f => ({
+                id: f.id ? f.id.toString() : Math.random().toString(36).substring(2) + Math.random().toString(),
+                field_type: f.field_type,
+                page: f.page,
+                x_ratio: f.x_ratio,
+                y_ratio: f.y_ratio,
+                participant_email: f.participant_email,
+                participant_name: f.participant_name,
+                required: f.required
+              }))
+              setPlacedFields(mappedFields)
+            }
+          }
+        } catch (err) {
+          setError(err?.response?.data?.detail || err?.message || 'Failed to load the selected package.')
+        }
+      }
+      loadPackage()
+    }
+  }, [packageId, backendOrigin])
+
   // ── Submit handler ────────────────────────────────────────────
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
-    setSigningUrl('')
 
-    if (!file) return setError('Please choose a PDF file.')
-    if (!isPdf) return setError('Only PDF files are supported.')
+    if (!file && !existingDocUrl) return setError('Please choose a PDF file.')
+    if (file && !isPdf) return setError('Only PDF files are supported.')
 
     // VALIDATION
     if (steps.length === 0) {
@@ -297,15 +640,18 @@ export default function UploadPage() {
       return setError('At least one participant must be assigned the "Signer" role.')
     }
 
-    if (!sigPosition || !sigPosition.page || sigPosition.x_ratio == null || sigPosition.y_ratio == null) {
+    if (!isSignaturePlaced) {
       return setError('Please select a signature position before generating the signing link.')
     }
 
     setIsSubmitting(true)
     try {
-      const uploadRes = await uploadDocument(file)
-      const documentId = uploadRes?.document_id
-      if (!documentId) throw new Error('Upload succeeded but no document_id returned.')
+      let documentId = existingDocId
+      if (file) {
+        const uploadRes = await uploadDocument(file)
+        documentId = uploadRes?.document_id
+      }
+      if (!documentId) throw new Error('No document ID available.')
 
       const preparedParticipants = []
       let globalOrder = 1
@@ -329,21 +675,44 @@ export default function UploadPage() {
         send_final_email: sendFinalEmail,
         allow_printing: allowPrinting,
         additional_recipients: additionalRecipients,
+        fields: placedFields,
       })
       const envelopeId = envelopeRes?.envelope_id
       if (!envelopeId) throw new Error('Envelope created but no envelope_id returned.')
 
-      const sendRes = await sendEnvelope(envelopeId)
-      const url = sendRes?.signing_url
-      if (!url) throw new Error('Envelope sent but no signing_url returned.')
-
-      setSigningUrl(url)
+      await sendEnvelope(envelopeId)
+      
+      setSentPackageInfo({
+        id: envelopeId,
+        documentName: file ? file.name : (existingDocName || 'document.pdf'),
+        totalParticipants: preparedParticipants.length,
+        firstStepRole: preparedParticipants.find(p => p.step_number === 1)?.role || 'Signer',
+        createdDate: new Date().toLocaleDateString(undefined, {
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric'
+        })
+      })
     } catch (err) {
-      const message =
-        err?.response?.data?.detail ||
-        (typeof err?.response?.data === 'string' ? err.response.data : null) ||
-        err?.message ||
-        'Something went wrong. Please try again.'
+      let message = '';
+      if (err?.response?.data) {
+        if (typeof err.response.data === 'string') {
+          message = err.response.data;
+        } else if (err.response.data.detail) {
+          message = err.response.data.detail;
+        } else if (err.response.data.file) {
+          message = Array.isArray(err.response.data.file) ? err.response.data.file[0] : err.response.data.file;
+        } else {
+          const firstKey = Object.keys(err.response.data)[0];
+          if (firstKey) {
+            const val = err.response.data[firstKey];
+            message = Array.isArray(val) ? val[0] : val;
+          }
+        }
+      }
+      if (!message) {
+        message = err?.message || 'Something went wrong. Please try again.';
+      }
       setError(message)
     } finally {
       setIsSubmitting(false)
@@ -355,13 +724,49 @@ export default function UploadPage() {
     const rect = e.currentTarget.getBoundingClientRect()
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
+    const x_ratio = x / rect.width
+    const y_ratio = y / rect.height
+
+    // 1. Maintain backward compatibility for the legacy signature position
     setSigPosition({
       page: pageNumber,
       x,
       y,
-      x_ratio: x / rect.width,
-      y_ratio: y / rect.height,
+      x_ratio,
+      y_ratio,
     })
+
+    // 2. Add to placed fields if active participant is selected
+    if (!activeParticipantEmail) {
+      const firstPart = allParticipants[0]
+      if (!firstPart) {
+        setError('Please configure at least one participant name and email first.')
+        return
+      }
+      setActiveParticipantEmail(firstPart.email)
+    }
+
+    const targetPart = allParticipants.find(p => p.email === activeParticipantEmail) || allParticipants[0]
+    if (!targetPart) return
+
+    const newField = {
+      id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString() + Math.random().toString(),
+      field_type: selectedFieldType,
+      page: pageNumber,
+      x,
+      y,
+      x_ratio,
+      y_ratio,
+      participant_email: targetPart.email,
+      participant_name: targetPart.name,
+      required: true
+    }
+
+    setPlacedFields(prev => [...prev, newField])
+  }
+
+  const removeField = (fieldId) => {
+    setPlacedFields(prev => prev.filter(f => f.id !== fieldId))
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -378,17 +783,60 @@ export default function UploadPage() {
           {/* Subtle gradient glow behind the card content */}
           <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 via-transparent to-violet-500/5 opacity-50 pointer-events-none group-hover:opacity-100 transition-opacity duration-700" />
 
-          <div className="relative z-10 mb-10 space-y-3">
-            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-medium uppercase tracking-widest text-cyan-400 backdrop-blur-md">
-              <Sparkles className="h-3.5 w-3.5" />
-              E-Sign Demo
+          {sentPackageInfo ? (
+            <SuccessScreen
+              sentPackageInfo={sentPackageInfo}
+              onTrackProgress={() => navigate(`/packages/${sentPackageInfo.id}`)}
+              onViewDetails={() => navigate(`/packages/${sentPackageInfo.id}`)}
+              onReturn={() => {
+                setFile(null)
+                setSteps([
+                  {
+                    stepNumber: 1,
+                    participants: [{ id: '1', name: '', email: '', role: 'signer' }]
+                  }
+                ])
+                setSigPosition(null)
+                setSentPackageInfo(null)
+                setCurrentTab('documents')
+                navigate('/')
+              }}
+            />
+          ) : (
+            <>
+              <div className="relative z-10 mb-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-white/5 pb-6">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-medium uppercase tracking-widest text-cyan-400 backdrop-blur-md">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  E-Sign Demo
+                </div>
+                {loadedTemplate && (
+                  <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-semibold text-violet-400 backdrop-blur-md">
+                    <SparkleIcon className="h-3 w-3 animate-pulse text-violet-400" />
+                    Template: {loadedTemplate.name}
+                  </div>
+                )}
+              </div>
+              <h1 className="text-3xl font-light tracking-tight text-white sm:text-5xl neon-text-glow">
+                Initialize Document
+              </h1>
+              <p className="text-sm font-medium text-zinc-400 sm:text-base">
+                Securely upload a PDF to generate an encrypted signing link.
+              </p>
             </div>
-            <h1 className="text-3xl font-light tracking-tight text-white sm:text-5xl neon-text-glow">
-              Initialize Document
-            </h1>
-            <p className="text-sm font-medium text-zinc-400 sm:text-base">
-              Securely upload a PDF to generate an encrypted signing link.
-            </p>
+
+            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+              <UserNav />
+              <button
+                type="button"
+                onClick={openTemplateModal}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-2.5 text-xs font-bold transition-all duration-300 shadow-[0_0_15px_rgba(34,211,238,0.15)] hover:shadow-[0_0_20px_rgba(34,211,238,0.3)] uppercase tracking-wider cursor-pointer shrink-0"
+              >
+                <SparkleIcon className="h-4 w-4" />
+                Save as Template
+              </button>
+            </div>
           </div>
 
           {/* Stepper Header */}
@@ -408,11 +856,12 @@ export default function UploadPage() {
                 
                 const isActive = currentTab === tab.id;
                 
-                const isClickable = 
+                const isClickable = templateId ? true : (
                   tab.id === 'documents' ? true :
                   tab.id === 'workflow' ? isDocumentValid :
                   tab.id === 'settings' ? (isDocumentValid && isWorkflowValid && hasSignerRole) :
-                  (isDocumentValid && isWorkflowValid && hasSignerRole);
+                  (isDocumentValid && isWorkflowValid && hasSignerRole)
+                );
 
                 return (
                   <button
@@ -471,31 +920,73 @@ export default function UploadPage() {
                       id="pdf-upload"
                       type="file"
                       accept="application/pdf,.pdf"
-                      onChange={(e) => {
+                      onChange={async (e) => {
                         setSigPosition(null)
                         setNumPages(null)
+                        setError('')
+                        setUploadError('')
                         const selectedFile = e.target.files?.[0] ?? null
                         setFile(selectedFile)
                         if (selectedFile) {
                           setUploadTimestamp(new Date().toLocaleString())
+                          
+                          const isFilePdf = selectedFile.type === 'application/pdf' || selectedFile.name?.toLowerCase().endsWith('.pdf')
+                          if (!isFilePdf) {
+                            setUploadError('Only PDF documents are supported.')
+                            return
+                          }
+                          
+                          setIsValidating(true)
+                          try {
+                            await uploadDocument(selectedFile)
+                            setUploadError('')
+                            if (templateId) {
+                              setTimeout(() => {
+                                setCurrentTab('workflow')
+                              }, 400)
+                            }
+                          } catch (err) {
+                            let msg = '';
+                            if (err?.response?.data) {
+                              if (typeof err.response.data === 'string') {
+                                msg = err.response.data;
+                              } else if (err.response.data.detail) {
+                                msg = err.response.data.detail;
+                              } else if (err.response.data.file) {
+                                msg = Array.isArray(err.response.data.file) ? err.response.data.file[0] : err.response.data.file;
+                              } else {
+                                const firstKey = Object.keys(err.response.data)[0];
+                                if (firstKey) {
+                                  const val = err.response.data[firstKey];
+                                  msg = Array.isArray(val) ? val[0] : val;
+                                }
+                              }
+                            }
+                            if (!msg) {
+                              msg = err?.message || 'Something went wrong. Please try again.';
+                            }
+                            setUploadError(msg)
+                          } finally {
+                            setIsValidating(false)
+                          }
                         } else {
                           setUploadTimestamp(null)
                         }
                       }}
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || isValidating}
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-20"
                     />
-                    <div className={`flex flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-all duration-300 p-8 sm:p-10 ${file ? 'border-cyan-500/50 bg-cyan-950/10' : 'border-white/10 bg-white/[0.02] group-hover/upload:border-cyan-500/30 group-hover/upload:bg-white/[0.04]'}`}>
+                    <div className={`flex flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-all duration-300 p-8 sm:p-10 ${(file || existingDocName) ? 'border-cyan-500/50 bg-cyan-950/10' : 'border-white/10 bg-white/[0.02] group-hover/upload:border-cyan-500/30 group-hover/upload:bg-white/[0.04]'}`}>
                       <motion.div
-                        animate={file ? { y: 0, scale: 1 } : { y: [0, -5, 0] }}
-                        transition={file ? {} : { repeat: Infinity, duration: 3, ease: "easeInOut" }}
-                        className={`mb-4 rounded-full p-4 ${file ? 'bg-cyan-500/20 text-cyan-400' : 'bg-white/5 text-zinc-400 group-hover/upload:text-cyan-400 group-hover/upload:bg-cyan-500/10 transition-colors'}`}
+                        animate={(file || existingDocName) ? { y: 0, scale: 1 } : { y: [0, -5, 0] }}
+                        transition={(file || existingDocName) ? {} : { repeat: Infinity, duration: 3, ease: "easeInOut" }}
+                        className={`mb-4 rounded-full p-4 ${(file || existingDocName) ? 'bg-cyan-500/20 text-cyan-400' : 'bg-white/5 text-zinc-400 group-hover/upload:text-cyan-400 group-hover/upload:bg-cyan-500/10 transition-colors'}`}
                       >
-                        {file ? <FileText className="h-8 w-8" /> : <UploadCloud className="h-8 w-8" />}
+                        {(file || existingDocName) ? <FileText className="h-8 w-8" /> : <UploadCloud className="h-8 w-8" />}
                       </motion.div>
-                      {file ? (
+                      {(file || existingDocName) ? (
                         <div className="text-center">
-                          <p className="text-sm font-medium text-cyan-300">{file.name}</p>
+                          <p className="text-sm font-medium text-cyan-300">{file ? file.name : existingDocName}</p>
                           <p className="mt-1 text-xs text-cyan-500/70">Ready for processing</p>
                         </div>
                       ) : (
@@ -506,6 +997,18 @@ export default function UploadPage() {
                       )}
                     </div>
                   </div>
+                  {isValidating && (
+                    <div className="mt-3 flex items-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-4 py-2.5 text-xs text-cyan-400">
+                      <span className="h-3.5 w-3.5 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin shrink-0" />
+                      <span>Validating document payload...</span>
+                    </div>
+                  )}
+                  {uploadError && (
+                    <div className="mt-3 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-2.5 text-xs text-red-400">
+                      <span className="font-bold shrink-0">⚠️ Error:</span>
+                      <span>{uploadError}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex justify-end pt-4">
@@ -734,10 +1237,10 @@ export default function UploadPage() {
                     <button
                       type="button"
                       disabled={!isWorkflowValid || !hasSignerRole}
-                      onClick={() => setCurrentTab('settings')}
+                      onClick={() => setCurrentTab(templateId ? 'review' : 'settings')}
                       className="inline-flex items-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed px-6 py-3.5 text-sm font-semibold text-black transition-all cursor-pointer shadow-[0_0_15px_rgba(34,211,238,0.15)]"
                     >
-                      Continue to Settings
+                      {templateId ? 'Continue to Review' : 'Continue to Settings'}
                       <ArrowRight className="h-4 w-4" />
                     </button>
                     {!hasSignerRole && (
@@ -920,14 +1423,14 @@ export default function UploadPage() {
                   <button
                     type="button"
                     onClick={() => setCurrentTab('workflow')}
-                    className="inline-flex items-center gap-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 px-6 py-3.5 text-sm font-semibold text-zinc-300 transition-all cursor-pointer"
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 px-6 py-3.5 text-sm font-semibold text-zinc-300 transition-all cursor-pointer"
                   >
                     Back
                   </button>
                   <button
                     type="button"
                     onClick={() => setCurrentTab('review')}
-                    className="inline-flex items-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 px-6 py-3.5 text-sm font-semibold text-black transition-all cursor-pointer shadow-[0_0_15px_rgba(34,211,238,0.15)]"
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 px-6 py-3.5 text-sm font-semibold text-black transition-all cursor-pointer shadow-[0_0_15px_rgba(34,211,238,0.15)]"
                   >
                     Continue to Review
                     <ArrowRight className="h-4 w-4" />
@@ -950,182 +1453,130 @@ export default function UploadPage() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Grid Item 1: Document Summary */}
+                  {/* Grid Item 1: Workflow Ready Summary */}
                   <div className="glass-panel rounded-2xl p-6 border border-white/5 bg-white/[0.01] flex flex-col justify-between transition-all duration-300 hover:border-cyan-500/20">
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       <div className="flex items-center gap-2 border-b border-white/5 pb-2.5">
-                        <FileText className="h-4 w-4 text-cyan-400" />
-                        <h4 className="text-sm font-semibold text-white">Document Summary</h4>
+                        <Sparkles className="h-4 w-4 text-cyan-400 animate-pulse" />
+                        <h4 className="text-sm font-semibold text-white">Workflow Ready</h4>
                       </div>
                       
-                      <div className="space-y-2 mt-2">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-zinc-500">Name</span>
-                          <span className="text-zinc-300 font-medium truncate max-w-[200px]" title={file?.name}>{file?.name || 'N/A'}</span>
-                        </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-zinc-500">File Size</span>
-                          <span className="text-zinc-300 font-mono">
-                            {file ? (file.size / (1024 * 1024) > 0.1 
-                              ? `${(file.size / (1024 * 1024)).toFixed(2)} MB` 
-                              : `${(file.size / 1024).toFixed(1)} KB`) 
-                              : 'N/A'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-zinc-500">Total Pages</span>
-                          <span className="text-zinc-300 font-medium">{numPages ? `${numPages} Page${numPages > 1 ? 's' : ''}` : 'N/A'}</span>
-                        </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-zinc-500">Uploaded At</span>
-                          <span className="text-zinc-300 font-medium">{uploadTimestamp || 'N/A'}</span>
-                        </div>
+                      <div className="flex justify-between items-center bg-white/[0.02] border border-white/5 rounded-xl px-4 py-2.5 text-xs">
+                        <span className="text-zinc-500">Participants Enrolled</span>
+                        <span className="text-cyan-400 font-bold font-mono text-sm">
+                          {steps.flatMap(s => s.participants).length}
+                        </span>
                       </div>
-                    </div>
-                  </div>
 
-                  {/* Grid Item 2: Request Settings Summary */}
-                  <div className="glass-panel rounded-2xl p-6 border border-white/5 bg-white/[0.01] flex flex-col justify-between transition-all duration-300 hover:border-cyan-500/20">
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2 border-b border-white/5 pb-2.5">
-                        <Settings className="h-4 w-4 text-cyan-400" />
-                        <h4 className="text-sm font-semibold text-white">Request Settings Summary</h4>
-                      </div>
-                      
-                      <div className="space-y-2 mt-2">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-zinc-500">Automatic Reminders</span>
-                          <span className={`px-2 py-0.5 rounded-[6px] text-[10px] font-bold ${
-                            sendReminders ? 'bg-cyan-500/10 text-cyan-400' : 'bg-zinc-800 text-zinc-500'
-                          }`}>
-                            {sendReminders ? 'ENABLED' : 'DISABLED'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-zinc-500">Final Email Delivery</span>
-                          <span className={`px-2 py-0.5 rounded-[6px] text-[10px] font-bold ${
-                            sendFinalEmail ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-800 text-zinc-500'
-                          }`}>
-                            {sendFinalEmail ? 'DELIVER' : 'DO NOT DELIVER'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-zinc-500">Printing & Download</span>
-                          <span className={`px-2 py-0.5 rounded-[6px] text-[10px] font-bold ${
-                            allowPrinting ? 'bg-cyan-500/10 text-cyan-400' : 'bg-red-500/10 text-red-400'
-                          }`}>
-                            {allowPrinting ? 'ALLOWED' : 'RESTRICTED'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-zinc-500">Additional CC Observers</span>
-                          <span className="text-zinc-300 font-medium">
-                            {additionalRecipients.length > 0 ? `${additionalRecipients.length} Recipient${additionalRecipients.length > 1 ? 's' : ''}` : 'None'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Grid Item 3: Workflow Summary */}
-                <div className="glass-panel rounded-2xl p-6 border border-white/5 bg-white/[0.01] transition-all duration-300 hover:border-cyan-500/20">
-                  <div className="flex items-center gap-2 border-b border-white/5 pb-2.5 mb-4">
-                    <UserPlus className="h-4 w-4 text-cyan-400" />
-                    <h4 className="text-sm font-semibold text-white">Workflow Routing Path</h4>
-                  </div>
-
-                  <div className="space-y-4">
-                    {steps.map((step, idx) => (
-                      <div key={step.stepNumber} className="relative">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 bg-black/40 rounded-xl p-3 border border-white/5">
-                          <div className="flex items-center gap-3">
-                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-cyan-500/20 border border-cyan-500/30 text-[10px] font-bold text-cyan-400">
-                              {step.stepNumber}
-                            </span>
-                            <span className="text-xs font-bold text-white uppercase tracking-wider">Step {step.stepNumber}</span>
-                          </div>
-                          
-                          <div className="flex flex-wrap gap-2">
-                            {step.participants.map(p => (
-                              <div key={p.id} className="flex items-center gap-2 bg-white/[0.02] border border-white/10 px-3 py-1 rounded-lg">
-                                <span className="text-xs font-medium text-zinc-300">{p.name || 'Unnamed'}</span>
-                                <span className="text-[10px] text-zinc-500 font-mono">({p.email || 'No email'})</span>
-                                <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
-                                  p.role === 'signer' ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' :
-                                  p.role === 'approver' ? 'bg-violet-500/10 text-violet-400 border border-violet-500/20' :
-                                  p.role === 'reviewer' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-                                  'bg-zinc-500/10 text-zinc-400 border border-white/5'
+                      {/* Step-by-step visual routing timeline */}
+                      <div className="space-y-3 pt-2">
+                        {steps.map((step, stepIdx) => {
+                          const isFirst = step.stepNumber === 1;
+                          return (
+                            <div key={step.stepNumber} className="relative pl-6 border-l border-white/10 space-y-1">
+                              {/* Indicator dot */}
+                              <div className={`absolute -left-[5.5px] top-1.5 h-2.5 w-2.5 rounded-full border border-black ${
+                                isFirst ? 'bg-cyan-400 shadow-[0_0_10px_#22d3ee]' : 'bg-zinc-700'
+                              }`} />
+                              
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="font-semibold text-white">Step {step.stepNumber}</span>
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold uppercase ${
+                                  isFirst ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' : 'bg-zinc-800 text-zinc-500 border border-white/5'
                                 }`}>
-                                  {p.role}
+                                  {isFirst ? 'Active on launch' : 'Pending'}
                                 </span>
                               </div>
-                            ))}
-                          </div>
-                        </div>
-                        {idx < steps.length - 1 && (
-                          <div className="flex justify-center my-1.5">
-                            <ChevronDown className="h-4 w-4 text-cyan-500/40" />
-                          </div>
-                        )}
+                              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                {step.participants.map(p => (
+                                  <span key={p.id} className={`inline-flex px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${
+                                    p.role === 'signer' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' :
+                                    p.role === 'approver' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                    p.role === 'reviewer' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' :
+                                    'bg-zinc-800 text-zinc-300 border-white/5'
+                                  }`}>
+                                    {p.name || 'Unnamed'} ({p.role})
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    ))}
-                  </div>
-                </div>
 
-                {/* Grid Item 4: Preflight Validation Checklist */}
-                <div className="glass-panel rounded-2xl p-6 border border-white/5 bg-white/[0.01] transition-all duration-300 hover:border-cyan-500/20">
-                  <div className="flex items-center gap-2 border-b border-white/5 pb-2.5 mb-4">
-                    <CheckCircle2 className="h-4 w-4 text-cyan-400" />
-                    <h4 className="text-sm font-semibold text-white">Preflight Validation Checklist</h4>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {[
-                      { 
-                        label: 'Document Payload Uploaded', 
-                        isValid: isDocumentValid, 
-                        desc: 'Valid PDF document selected.' 
-                      },
-                      { 
-                        label: 'Workflow Sequence Configured', 
-                        isValid: isWorkflowValid, 
-                        desc: 'All participants have names and valid email formats.' 
-                      },
-                      { 
-                        label: 'At Least One "Signer" Exists', 
-                        isValid: hasSignerRole, 
-                        desc: 'At least one participant is assigned the Signer role.' 
-                      },
-                      { 
-                        label: 'Target Signature Zone Placed', 
-                        isValid: isSignaturePlaced, 
-                        desc: 'Coordinates clicked on PDF preview page below.' 
-                      }
-                    ].map((item, idx) => (
-                      <div 
-                        key={idx} 
-                        className={`flex items-start gap-3 rounded-xl p-3 border transition-colors ${
-                          item.isValid 
-                            ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-300' 
-                            : 'bg-red-500/5 border-red-500/20 text-red-300'
-                        }`}
-                      >
-                        <div className="mt-0.5">
-                          {item.isValid ? (
-                            <Check className="h-4 w-4 text-emerald-400 stroke-[2.5]" />
-                          ) : (
-                            <X className="h-4 w-4 text-red-400 stroke-[2.5]" />
-                          )}
-                        </div>
-                        <div>
-                          <div className={`text-xs font-bold ${item.isValid ? 'text-emerald-400' : 'text-zinc-400'}`}>
-                            {item.label}
-                          </div>
-                          <p className="text-[10px] text-zinc-500 mt-0.5">{item.desc}</p>
-                        </div>
+                      <div className="flex justify-between items-center bg-cyan-950/20 border border-cyan-500/10 rounded-xl px-4 py-3 text-xs mt-4">
+                        <span className="text-zinc-400 font-semibold">Launch Status</span>
+                        <span className="text-cyan-400 font-bold uppercase tracking-wider animate-pulse">
+                          Ready To Launch
+                        </span>
                       </div>
-                    ))}
+                    </div>
+                  </div>
+
+                  {/* Grid Item 2: Launch Checklist */}
+                  <div className="glass-panel rounded-2xl p-6 border border-white/5 bg-white/[0.01] transition-all duration-300 hover:border-cyan-500/20">
+                    <div className="flex items-center gap-2 border-b border-white/5 pb-2.5 mb-4">
+                      <CheckCircle2 className="h-4 w-4 text-cyan-400" />
+                      <h4 className="text-sm font-semibold text-white font-sans">Launch Checklist</h4>
+                    </div>
+
+                    <div className="space-y-3">
+                      {[
+                        { 
+                          label: 'Document Ready', 
+                          isValid: isDocumentValid, 
+                          desc: 'Valid PDF payload is uploaded and parsed.' 
+                        },
+                        { 
+                          label: 'Participants Configured', 
+                          isValid: isWorkflowValid, 
+                          desc: 'All recipient names and email addresses are valid.' 
+                        },
+                        { 
+                          label: 'Workflow Configured', 
+                          isValid: isWorkflowValid && hasSignerRole, 
+                          desc: 'Sequential routing steps and signer roles are configured.' 
+                        },
+                        { 
+                          label: 'Request Settings Configured', 
+                          isValid: true, 
+                          desc: 'Delivery settings and notifications set to default.' 
+                        },
+                        { 
+                          label: 'Signature Zone Placed', 
+                          isValid: isSignaturePlaced, 
+                          desc: 'Signature placement coordinates selected on document.' 
+                        },
+                        { 
+                          label: 'Ready To Send', 
+                          isValid: isDocumentValid && isWorkflowValid && hasSignerRole && isSignaturePlaced, 
+                          desc: 'Workflow is verified and ready for dispatch.' 
+                        }
+                      ].map((item, idx) => (
+                        <div 
+                          key={idx} 
+                          className={`flex items-start gap-3 rounded-xl p-3 border transition-colors ${
+                            item.isValid 
+                              ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-300' 
+                              : 'bg-red-500/5 border-red-500/20 text-red-300'
+                          }`}
+                        >
+                          <div className="mt-0.5">
+                            {item.isValid ? (
+                              <Check className="h-4 w-4 text-emerald-400 stroke-[2.5]" />
+                            ) : (
+                              <X className="h-4 w-4 text-red-400 stroke-[2.5]" />
+                            )}
+                          </div>
+                          <div>
+                            <div className={`text-xs font-bold ${item.isValid ? 'text-emerald-400' : 'text-zinc-400'}`}>
+                              {item.label}
+                            </div>
+                            <p className="text-[10px] text-zinc-500 mt-0.5">{item.desc}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
@@ -1133,7 +1584,7 @@ export default function UploadPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-6 border-t border-white/5">
                   <button
                     type="button"
-                    onClick={() => setCurrentTab('settings')}
+                    onClick={() => setCurrentTab(templateId ? 'workflow' : 'settings')}
                     disabled={isSubmitting}
                     className="inline-flex items-center justify-center gap-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 px-6 py-3.5 text-sm font-semibold text-zinc-300 transition-all cursor-pointer disabled:opacity-50"
                   >
@@ -1147,7 +1598,7 @@ export default function UploadPage() {
                       className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-2xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed px-8 py-3.5 text-sm font-semibold text-black transition-all shadow-[0_0_25px_rgba(34,211,238,0.2)] cursor-pointer"
                     >
                       <span className="relative z-10 flex items-center gap-2">
-                        {isSubmitting ? 'Initializing Sequence…' : 'Send Package'}
+                        {isSubmitting ? 'Launching Workflow…' : 'Send Package'}
                         {!isSubmitting && <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />}
                       </span>
                       <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent group-hover:animate-[shimmer_1.5s_infinite]" />
@@ -1178,44 +1629,15 @@ export default function UploadPage() {
                 </div>
               </motion.div>
             )}
-
-            {signingUrl && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mt-8 rounded-2xl border border-cyan-500/30 bg-cyan-950/20 p-5 backdrop-blur-xl"
-              >
-                <div className="flex items-center gap-2 mb-3">
-                  <CheckCircle2 className="h-5 w-5 text-cyan-400" />
-                  <span className="text-xs font-semibold uppercase tracking-wider text-cyan-400">Secure Link Generated</span>
-                </div>
-                <div className="flex items-center gap-3 rounded-xl bg-black/40 px-4 py-3">
-                  <a
-                    href={signingUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex-1 truncate text-sm font-medium text-white transition-colors hover:text-cyan-300"
-                  >
-                    {signingUrl}
-                  </a>
-                  <a
-                    href={signingUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded-lg bg-cyan-500/20 p-2 text-cyan-400 transition-colors hover:bg-cyan-500/40"
-                  >
-                    <ArrowRight className="h-4 w-4" />
-                  </a>
-                </div>
-              </motion.div>
-            )}
           </AnimatePresence>
+          </>
+          )}
         </div>
       </motion.div>
 
       {/* ── Signature position selector ── */}
       <AnimatePresence>
-        {previewUrl && (
+        {!sentPackageInfo && previewUrl && (
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1223,37 +1645,75 @@ export default function UploadPage() {
             transition={{ duration: 0.6, delay: 0.1, ease: "easeOut" }}
             className="mt-8 glass-panel rounded-[2rem] p-8 sm:p-12"
           >
-            <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="mb-8 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-6 items-end">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-medium uppercase tracking-widest text-violet-400 mb-3">
                   <Crosshair className="h-3.5 w-3.5" />
                   Spatial Placement
                 </div>
-                <h2 className="text-2xl font-light text-white">Target Signature Zone</h2>
-                <p className="mt-1 text-sm text-zinc-400">Scan document and click to set spatial coordinates.</p>
+                <h2 className="text-2xl font-light text-white font-sans">Place Fields on Document</h2>
+                <p className="mt-1 text-xs text-zinc-400">Select recipient and field type, then click on the PDF to place fields.</p>
               </div>
 
-              {/* Coordinate readout */}
-              {sigPosition && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="flex items-center gap-3 rounded-2xl border border-cyan-500/30 bg-cyan-950/20 px-4 py-2 backdrop-blur-md"
-                >
-                  <div className="flex gap-4 text-xs font-mono text-cyan-300">
-                    <div><span className="text-cyan-600">P:</span>{sigPosition.page}</div>
-                    <div><span className="text-cyan-600">X:</span>{sigPosition.x_ratio.toFixed(2)}</div>
-                    <div><span className="text-cyan-600">Y:</span>{sigPosition.y_ratio.toFixed(2)}</div>
+              {/* Selectors and Toolbar */}
+              <div className="flex flex-wrap gap-4 lg:justify-end items-stretch sm:items-center">
+                {/* Coordinate readout */}
+                {sigPosition && (
+                  <div className="flex items-center gap-3 rounded-2xl border border-cyan-500/30 bg-cyan-950/20 px-3 py-2 backdrop-blur-md self-end lg:self-center">
+                    <div className="flex gap-3 text-[10px] font-mono text-cyan-300">
+                      <div><span className="text-cyan-600">P:</span>{sigPosition.page}</div>
+                      <div><span className="text-cyan-600">X:</span>{sigPosition.x_ratio.toFixed(2)}</div>
+                      <div><span className="text-cyan-600">Y:</span>{sigPosition.y_ratio.toFixed(2)}</div>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setSigPosition(null)}
-                    className="ml-2 rounded-full bg-cyan-500/20 p-1 text-cyan-400 hover:bg-cyan-500/40 transition-colors"
+                )}
+
+                {/* Participant Selector */}
+                <div className="flex flex-col gap-1">
+                  <span className="text-[9px] uppercase font-bold tracking-widest text-zinc-500">Recipient</span>
+                  <select
+                    value={activeParticipantEmail}
+                    onChange={(e) => setActiveParticipantEmail(e.target.value)}
+                    className="rounded-xl border border-white/10 bg-[#0c1220] text-xs text-zinc-300 px-3 py-2 outline-none focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20 max-w-[200px]"
                   >
-                    <X className="h-3 w-3" />
-                  </button>
-                </motion.div>
-              )}
+                    <option value="">-- Choose Recipient --</option>
+                    {allParticipants.map((p) => (
+                      <option key={p.email} value={p.email}>
+                        {p.name} ({p.role})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Field Type Toolbar */}
+                <div className="flex flex-col gap-1">
+                  <span className="text-[9px] uppercase font-bold tracking-widest text-zinc-500">Field Type</span>
+                  <div className="flex rounded-xl bg-white/[0.02] border border-white/10 p-0.5">
+                    {/* Note: Current MVP supports only signature placement.
+                        Future planned field types:
+                        - date
+                        - text
+                        - checkbox
+                        These remain supported in the data model for future enterprise workflow expansion. */}
+                    {[
+                      { id: 'signature', label: 'Signature' },
+                    ].map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setSelectedFieldType(t.id)}
+                        className={`px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${
+                          selectedFieldType === t.id
+                            ? 'text-cyan-300 bg-cyan-500/10 border border-cyan-500/20'
+                            : 'text-zinc-500 hover:text-zinc-300'
+                        }`}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="relative overflow-auto rounded-2xl border border-white/10 bg-black/50 py-8 custom-scrollbar shadow-inner max-h-[700px]">
@@ -1300,9 +1760,46 @@ export default function UploadPage() {
                           className="block relative z-0"
                         />
 
-                        {/* "Sign Here" marker */}
+                        {/* Render all placed fields */}
                         <AnimatePresence>
-                          {isSelected && (
+                          {placedFields.filter(f => f.page === pageNumber).map((f) => (
+                            <motion.div
+                              key={f.id}
+                              initial={{ scale: 0, opacity: 0 }}
+                              animate={{ scale: 1, opacity: 1 }}
+                              style={{
+                                position: 'absolute',
+                                left: f.x !== undefined ? f.x : `${f.x_ratio * 100}%`,
+                                top: f.y !== undefined ? f.y : `${f.y_ratio * 100}%`,
+                                zIndex: 20,
+                              }}
+                            >
+                              <div className="absolute left-0 top-0 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center group/field">
+                                <div className="relative flex h-5 w-5 items-center justify-center">
+                                  <div className="absolute inset-0 rounded-full bg-cyan-500 animate-ping opacity-30" />
+                                  <div className="relative h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_10px_#22d3ee]" />
+                                </div>
+                                <div className="absolute left-0 top-3 -translate-x-1/2 pt-1 flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-cyan-500/50 bg-cyan-950/90 px-2.5 py-1 text-[9px] font-bold tracking-wider text-cyan-300 shadow-[0_0_20px_rgba(34,211,238,0.4)] backdrop-blur-md uppercase">
+                                  <span>{f.field_type}</span>
+                                  <span className="text-zinc-500">|</span>
+                                  <span className="text-zinc-300 max-w-[80px] truncate" title={f.participant_name}>{f.participant_name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeField(f.id);
+                                    }}
+                                    className="ml-1 rounded-full p-0.5 hover:bg-white/10 text-zinc-400 hover:text-red-400 transition-colors pointer-events-auto cursor-pointer"
+                                  >
+                                    <X className="h-2.5 w-2.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            </motion.div>
+                          ))}
+
+                          {/* Fallback to legacy single signature marker if no fields are placed */}
+                          {placedFields.length === 0 && isSelected && (
                             <motion.div
                               initial={{ scale: 0, opacity: 0 }}
                               animate={{ scale: 1, opacity: 1 }}
@@ -1316,15 +1813,12 @@ export default function UploadPage() {
                                 zIndex: 20,
                               }}
                             >
-                              {/* The glowing point is the center anchor */}
                               <div className="absolute left-0 top-0 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
                                 <div className="relative flex h-5 w-5 items-center justify-center">
                                   <div className="absolute inset-0 rounded-full bg-cyan-500 animate-ping opacity-50" />
                                   <div className="relative h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_10px_#22d3ee]" />
                                 </div>
                               </div>
-
-                              {/* Label sits cleanly below the point */}
                               <div className="absolute left-0 top-3 -translate-x-1/2 pt-1">
                                 <div className="whitespace-nowrap rounded-lg border border-cyan-500/50 bg-cyan-950/80 px-3 py-1 text-[10px] font-bold tracking-widest text-cyan-300 shadow-[0_0_20px_rgba(34,211,238,0.4)] backdrop-blur-md uppercase">
                                   Sign Here
@@ -1340,6 +1834,120 @@ export default function UploadPage() {
               </Document>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Save as Template Modal ── */}
+      <AnimatePresence>
+        {isTemplateModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop blur */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsTemplateModalOpen(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="relative w-full max-w-lg overflow-hidden rounded-[2rem] border border-white/10 bg-[#0B1220] p-6 sm:p-8 shadow-[0_25px_60px_rgba(0,0,0,0.95),0_0_30px_rgba(34,211,238,0.15)] z-10"
+            >
+              <button
+                type="button"
+                onClick={() => setIsTemplateModalOpen(false)}
+                className="absolute right-6 top-6 rounded-full bg-white/5 p-1 text-zinc-400 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+
+              <div className="mb-6 space-y-1">
+                <div className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-cyan-400">
+                  <SparkleIcon className="h-3 w-3" />
+                  Save Workflow Blueprint
+                </div>
+                <h3 className="text-xl font-light text-white sm:text-2xl">Save as Reusable Template</h3>
+                <p className="text-xs text-zinc-500">Persist the current workflow steps, roles, and settings configuration as a blueprint template.</p>
+              </div>
+
+              <form onSubmit={handleSaveTemplateSubmit} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide">Template Name</label>
+                  <input
+                    type="text"
+                    value={templateName}
+                    onChange={(e) => setTemplateName(e.target.value)}
+                    placeholder="Standard NDA, Employment Offer, etc."
+                    className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-xs text-zinc-200 outline-none transition-all focus:border-cyan-500/40 focus:bg-cyan-950/5 focus:ring-1 focus:ring-cyan-500/20"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide">Description</label>
+                  <textarea
+                    rows="3"
+                    value={templateDescription}
+                    onChange={(e) => setTemplateDescription(e.target.value)}
+                    placeholder="Describe this reusable business workflow template..."
+                    className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-xs text-zinc-200 outline-none transition-all focus:border-cyan-500/40 resize-none focus:bg-cyan-950/5 focus:ring-1 focus:ring-cyan-500/20"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide">Category</label>
+                    <select
+                      value={templateCategory}
+                      onChange={(e) => setTemplateCategory(e.target.value)}
+                      className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-xs text-zinc-200 outline-none cursor-pointer focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20"
+                    >
+                      {['General', 'Legal', 'HR', 'Finance', 'Operations'].map(c => (
+                        <option key={c} value={c} className="bg-[#0B1220]">{c}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide">Visibility</label>
+                    <select
+                      value={templateVisibility}
+                      onChange={(e) => setTemplateVisibility(e.target.value)}
+                      className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-xs text-zinc-200 outline-none cursor-pointer focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20"
+                    >
+                      <option value="private" className="bg-[#0B1220]">Private (Self)</option>
+                      <option value="public" className="bg-[#0B1220]">Public / Shared</option>
+                    </select>
+                  </div>
+                </div>
+
+                {templateModalError && (
+                  <p className="text-xs font-semibold text-red-400 mt-2">{templateModalError}</p>
+                )}
+
+                <div className="flex justify-end gap-3 pt-4 border-t border-white/5">
+                  <button
+                    type="button"
+                    onClick={() => setIsTemplateModalOpen(false)}
+                    disabled={isSavingTemplate}
+                    className="rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/5 px-4 py-2.5 text-xs font-semibold text-zinc-300 transition-all cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingTemplate}
+                    className="inline-flex items-center justify-center rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-5 py-2.5 text-xs font-bold transition-all shadow-[0_0_15px_rgba(34,211,238,0.15)] cursor-pointer"
+                  >
+                    {isSavingTemplate ? 'Saving Template...' : 'Save Template'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

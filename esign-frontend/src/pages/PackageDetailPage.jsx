@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { getPackageDetail } from '../services/api.js'
+import UserNav from '../components/UserNav.jsx'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   ArrowLeft, 
@@ -20,8 +21,11 @@ import {
   Bell,
   Share2,
   Printer,
-  Settings
+  Settings,
+  Eye,
+  X
 } from 'lucide-react'
+import { PdfPreviewModal } from './SuccessPage.jsx'
 
 export default function PackageDetailPage() {
   const { id } = useParams()
@@ -29,6 +33,7 @@ export default function PackageDetailPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [copiedId, setCopiedId] = useState(null)
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false)
 
   const handleCopy = (id, url) => {
     navigator.clipboard.writeText(url)
@@ -85,11 +90,11 @@ export default function PackageDetailPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:py-16 relative z-10 font-sans">
       
-      {/* ── Return Link ── */}
+      {/* ── Return Link & UserNav ── */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-8"
+        className="mb-8 flex justify-between items-center"
       >
         <Link
           to="/"
@@ -98,6 +103,7 @@ export default function PackageDetailPage() {
           <ArrowLeft className="h-4 w-4" />
           Back to Dashboard
         </Link>
+        <UserNav />
       </motion.div>
 
       <AnimatePresence mode="wait">
@@ -194,7 +200,7 @@ export default function PackageDetailPage() {
                   <div className="flex items-center justify-between pb-2 border-b border-white/5">
                     <h2 className="text-lg font-light text-white flex items-center gap-2">
                       <User className="h-5 w-5 text-cyan-400" />
-                      Workflow Execution Steps
+                      Participant Link Management
                     </h2>
                     <span className="text-xs text-zinc-500 font-mono font-medium">
                       {sortedStepNumbers.length} Step{sortedStepNumbers.length > 1 ? 's' : ''} Configured
@@ -254,71 +260,102 @@ export default function PackageDetailPage() {
                               </span>
                             </div>
 
-                            {/* Recipients List */}
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-left border-collapse text-sm">
-                                <thead>
-                                  <tr className="border-b border-white/5 text-zinc-500 uppercase text-[9px] font-bold tracking-wider bg-white/[0.002]">
-                                    <th className="px-4 py-2">Name</th>
-                                    <th className="px-4 py-2">Email</th>
-                                    <th className="px-4 py-2">Role</th>
-                                    <th className="px-4 py-2 text-center">Status</th>
-                                    <th className="px-4 py-2">Action Links</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-white/5">
-                                  {stepParticipants.map((participant) => (
-                                    <tr key={participant.id} className="hover:bg-white/[0.005] transition-colors">
-                                      <td className="px-4 py-3 font-medium text-white">{participant.name}</td>
-                                      <td className="px-4 py-3 text-zinc-400 font-mono text-xs">{participant.email}</td>
-                                      <td className="px-4 py-3">
-                                        <span className={`inline-flex px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border ${
-                                          participant.role === 'signer' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' :
-                                          participant.role === 'approver' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                                          participant.role === 'reviewer' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' :
-                                          'bg-zinc-500/10 text-zinc-300 border-white/5'
-                                        }`}>
-                                          {participant.role}
-                                        </span>
-                                      </td>
-                                      <td className="px-4 py-3 text-center">
-                                        <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide capitalize border ${
-                                          participant.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                                          participant.status === 'active' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20 shadow-[0_0_10px_rgba(34,211,238,0.05)]' :
-                                          participant.status === 'viewed' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                                          participant.status === 'declined' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-                                          participant.status === 'returned' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                                          'bg-zinc-500/10 text-zinc-400 border-white/5'
-                                        }`}>
-                                          {participant.status || 'pending'}
-                                        </span>
-                                      </td>
-                                      <td className="px-4 py-3">
-                                        {participant.action_url && (participant.status === 'active' || participant.status === 'viewed') ? (
-                                          <div className="flex items-center gap-2">
+                            {/* Recipients Grid of Cards */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                              {stepParticipants.map((participant) => {
+                                const isCopied = copiedId === participant.id;
+                                return (
+                                  <div
+                                    key={participant.id}
+                                    className={`relative rounded-2xl border p-5 transition-all duration-300 ${
+                                      participant.status === 'completed'
+                                        ? 'border-emerald-500/20 bg-emerald-950/[0.02] shadow-[0_0_20px_rgba(16,185,129,0.02)]'
+                                        : participant.status === 'active' || participant.status === 'viewed'
+                                        ? 'border-cyan-500/30 bg-cyan-950/[0.01] shadow-[0_0_25px_rgba(34,211,238,0.04)]'
+                                        : 'border-white/5 bg-white/[0.002]'
+                                    }`}
+                                  >
+                                    <div className="flex flex-col h-full justify-between gap-4">
+                                      <div className="space-y-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 font-mono">
+                                            Step {participant.step_number}
+                                          </span>
+                                          <span className={`inline-flex px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border ${
+                                            participant.role === 'signer' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' :
+                                            participant.role === 'approver' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                            participant.role === 'reviewer' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' :
+                                            'bg-zinc-500/10 text-zinc-300 border-white/5'
+                                          }`}>
+                                            {participant.role}
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <h4 className="text-base font-semibold text-white truncate">
+                                            {participant.name}
+                                          </h4>
+                                          <p className="text-xs text-zinc-400 font-mono flex items-center gap-1.5 mt-0.5 truncate">
+                                            <Mail className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
+                                            {participant.email}
+                                          </p>
+                                        </div>
+                                        <div className="flex items-center gap-2 pt-1">
+                                          <span className="text-xs text-zinc-500">Status:</span>
+                                          <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide capitalize border ${
+                                            participant.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                            participant.status === 'active' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20 shadow-[0_0_10px_rgba(34,211,238,0.05)] animate-pulse' :
+                                            participant.status === 'viewed' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                                            participant.status === 'declined' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                                            participant.status === 'returned' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                                            'bg-zinc-800 text-zinc-500 border-white/5'
+                                          }`}>
+                                            {participant.status || 'pending'}
+                                          </span>
+                                        </div>
+                                      </div>
+
+                                      <div className="pt-3 border-t border-white/5 flex items-center gap-2">
+                                        {participant.action_url ? (
+                                          <>
+                                            <button
+                                              onClick={() => handleCopy(participant.id, participant.action_url)}
+                                              className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold border transition-all duration-300 w-full cursor-pointer ${
+                                                isCopied
+                                                  ? 'bg-emerald-500 text-black border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
+                                                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border-white/5'
+                                              }`}
+                                            >
+                                              {isCopied ? (
+                                                <>
+                                                  <CheckCircle2 className="h-3.5 w-3.5 stroke-[2.5]" />
+                                                  Copied Link!
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <Share2 className="h-3.5 w-3.5" />
+                                                  Copy Link
+                                                </>
+                                              )}
+                                            </button>
                                             <a
                                               href={participant.action_url}
                                               target="_blank"
                                               rel="noreferrer"
-                                              className="inline-flex items-center justify-center gap-1 rounded bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 px-2.5 py-1 text-xs font-semibold border border-cyan-500/20 transition-all shadow-[0_0_10px_rgba(34,211,238,0.05)]"
+                                              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 px-3.5 py-2 text-xs font-bold border border-cyan-500/20 transition-all duration-300 shrink-0"
+                                              title="Test sign / review / approve session"
                                             >
-                                              Act Link
+                                              Act
+                                              <ArrowLeft className="h-3.5 w-3.5 rotate-180" />
                                             </a>
-                                            <button
-                                              onClick={() => handleCopy(participant.id, participant.action_url)}
-                                              className="inline-flex items-center justify-center gap-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white px-2.5 py-1 text-xs font-semibold border border-white/5 transition-all"
-                                            >
-                                              {copiedId === participant.id ? 'Copied!' : 'Copy'}
-                                            </button>
-                                          </div>
+                                          </>
                                         ) : (
                                           <span className="text-xs text-zinc-600 font-mono">—</span>
                                         )}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
 
@@ -354,20 +391,50 @@ export default function PackageDetailPage() {
                         <p className="text-xs text-zinc-500 mt-0.5 font-mono">{data.document.filename}</p>
                       </div>
                     </div>
-
-                    {data.signed_document.available && (
-                      <a
-                        href={data.signed_document.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black px-5 py-3 text-sm font-bold transition-all duration-300 hover:shadow-[0_0_20px_rgba(16,185,129,0.3)] tracking-wider"
-                      >
-                        <Download className="h-4 w-4 stroke-[2.5]" />
-                        Open Signed Document
-                      </a>
-                    )}
                   </div>
                 </motion.div>
+
+                {/* ── 4b. SIGNED DOCUMENT SECTION (COMPLETED) ── */}
+                {data.status === 'completed' && data.signed_document?.available && (
+                  <motion.div variants={itemVariants} className="glass-panel rounded-3xl p-6 sm:p-8 space-y-6 border border-emerald-500/20 bg-emerald-950/[0.01] shadow-[0_0_30px_rgba(16,185,129,0.02)]">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
+                      <div className="flex items-center gap-4">
+                        <div className="h-12 w-12 rounded-2xl bg-emerald-500/20 flex items-center justify-center border border-emerald-500/30 text-emerald-400">
+                          <CheckCircle2 className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <h2 className="text-base font-semibold text-white">Signed Document</h2>
+                          <p className="text-xs text-zinc-300 mt-0.5 font-mono">
+                            {data.signed_document.filename ? data.signed_document.filename.replace(/(\.pdf)$/i, '_signed$1') : 'signed_document.pdf'}
+                          </p>
+                          {data.signed_document.created_at && (
+                            <p className="text-[10px] text-zinc-500 mt-1">
+                              Created: {new Date(data.signed_document.created_at).toLocaleString()}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 w-full sm:w-auto">
+                        <button
+                          onClick={() => setIsPreviewOpen(true)}
+                          className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-5 py-3 text-xs font-bold transition-all duration-300 hover:shadow-[0_0_20px_rgba(34,211,238,0.2)] tracking-wider cursor-pointer"
+                        >
+                          <Eye className="h-4 w-4" />
+                          Preview
+                        </button>
+                        <a
+                          href={data.signed_document.download_url}
+                          download
+                          className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 hover:bg-emerald-500/30 text-emerald-300 px-5 py-3 text-xs font-bold transition-all duration-300 tracking-wider"
+                        >
+                          <Download className="h-4 w-4" />
+                          Download
+                        </a>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
 
                 {/* ── 5. WORKFLOW SECTION ── */}
                 <motion.div variants={itemVariants} className="glass-panel rounded-3xl p-6 sm:p-8 space-y-6 border border-white/5">
@@ -554,7 +621,12 @@ export default function PackageDetailPage() {
           </motion.div>
         )}
       </AnimatePresence>
-
+      <PdfPreviewModal
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        previewUrl={data?.signed_document?.preview_url || ''}
+        title={data?.title || 'Signed Document'}
+      />
     </div>
   )
 }

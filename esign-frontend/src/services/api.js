@@ -67,3 +67,53 @@ export async function getPackageDetail(id) {
   return data
 }
 
+export async function getPackages() {
+  const { data } = await apiClient.get('/packages/')
+  return data
+}
+
+export async function getTemplates() {
+  const { data } = await apiClient.get('/templates/')
+  return data
+}
+
+export async function getTemplateDetail(id) {
+  const { data } = await apiClient.get(`/templates/${id}/`)
+  return data
+}
+
+export async function createTemplate(payload) {
+  const { data } = await apiClient.post('/templates/', payload)
+  return data
+}
+
+export async function updateTemplate(id, payload) {
+  const { data } = await apiClient.put(`/templates/${id}/`, payload)
+  return data
+}
+
+export async function deleteTemplate(id) {
+  const { data } = await apiClient.delete(`/templates/${id}/`)
+  return data
+}
+
+export async function loginUser(username, password) {
+  const { data } = await apiClient.post('/auth/login/', { username, password })
+  return data
+}
+
+export async function registerUser(username, email, password) {
+  const { data } = await apiClient.post('/auth/register/', { username, email, password })
+  return data
+}
+
+export async function logoutUser() {
+  const { data } = await apiClient.post('/auth/logout/')
+  return data
+}
+
+export async function getUserMe() {
+  const { data } = await apiClient.get('/auth/me/')
+  return data
+}
+

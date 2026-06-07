@@ -1,5 +1,14 @@
 from django.db import models
 import uuid
+from django.contrib.auth.models import User
+
+def get_default_user():
+    from django.contrib.auth.models import User
+    user, _ = User.objects.get_or_create(
+        username='default_user',
+        defaults={'email': 'default@example.com', 'is_active': True}
+    )
+    return user
 
 # Create your models here.
 class Document(models.Model):
@@ -54,6 +63,13 @@ class Envelope(models.Model):
     additional_recipients = models.JSONField(default=list, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
+
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='envelopes', null=True, blank=True)
+
+    def save(self, *args, **kwargs):
+        if not self.owner:
+            self.owner = get_default_user()
+        super().save(*args, **kwargs)
         
 class Signer(models.Model):
     envelope = models.OneToOneField(Envelope, on_delete=models.CASCADE)
@@ -150,6 +166,59 @@ class ParticipantToken(models.Model):
 
     def __str__(self):
         return f"Token for {self.participant.name} ({self.participant.role}) - Used: {self.is_used}"
+
+
+class Template(models.Model):
+    VISIBILITY_CHOICES = [
+        ('private', 'Private'),
+        ('public', 'Public'),
+    ]
+    name = models.CharField(max_length=255)
+    category = models.CharField(max_length=50, default='General')
+    description = models.TextField(blank=True)
+    visibility = models.CharField(max_length=20, choices=VISIBILITY_CHOICES, default='private')
+    workflow_definition = models.JSONField(default=list, blank=True)
+    request_settings = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='templates', null=True, blank=True)
+
+    def save(self, *args, **kwargs):
+        if not self.owner:
+            self.owner = get_default_user()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.name} ({self.category})"
+
+
+class DocumentField(models.Model):
+    # Note: Current MVP supports only signature placement.
+    # Future planned field types:
+    # - date
+    # - text
+    # - checkbox
+    # These remain supported in the data model for future enterprise workflow expansion.
+    FIELD_TYPE_CHOICES = [
+        ('signature', 'Signature'),
+        ('date', 'Date'),
+        ('text', 'Text'),
+        ('checkbox', 'Checkbox'),
+    ]
+
+    envelope = models.ForeignKey(Envelope, on_delete=models.CASCADE, related_name="fields")
+    participant = models.ForeignKey(Participant, on_delete=models.CASCADE, related_name="fields")
+    field_type = models.CharField(max_length=20, choices=FIELD_TYPE_CHOICES)
+    page = models.IntegerField()
+    x_ratio = models.FloatField()
+    y_ratio = models.FloatField()
+    required = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.field_type} on page {self.page} for {self.participant.name}"
+
    
    
 

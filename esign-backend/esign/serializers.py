@@ -1,7 +1,7 @@
 # pyrefly: ignore [missing-import]
 from rest_framework import serializers
 import hashlib
-from .models import Document, Signer, Envelope, Participant, AuditLog
+from .models import Document, Signer, Envelope, Participant, AuditLog, Template
 
 class DocumentUploadSerializer(serializers.ModelSerializer):
     class Meta:
@@ -39,6 +39,7 @@ class EnvelopeCreateSerializer(serializers.Serializer):
     send_final_email  = serializers.BooleanField(required=False, default=True)
     allow_printing    = serializers.BooleanField(required=False, default=True)
     additional_recipients = serializers.JSONField(required=False, default=list)
+    fields            = serializers.JSONField(required=False, default=list)
 
     def validate_additional_recipients(self, value):
         if not isinstance(value, list):
@@ -87,9 +88,26 @@ class EnvelopeCreateSerializer(serializers.Serializer):
                     "participants": "At least one participant must have the 'Signer' role."
                 })
 
+        fields_data = attrs.get('fields', [])
+        if fields_data:
+            if not isinstance(fields_data, list):
+                raise serializers.ValidationError({"fields": "fields must be a list of field objects."})
+            
+            participant_emails = {p.get('email') for p in participants if p.get('email')}
+            if signer and signer.get('email'):
+                participant_emails.add(signer.get('email'))
+                
+            from services.field_service import validate_field
+            for field in fields_data:
+                if not isinstance(field, dict):
+                    raise serializers.ValidationError({"fields": "Each field must be an object."})
+                validate_field(field, participant_emails)
+
         return attrs
 
     def create(self, validated_data):
+        owner             = validated_data.pop('owner', None)
+        fields_data       = validated_data.pop('fields', [])
         document_id       = validated_data['document_id']
         signer_data       = validated_data.get('signer')
         participants_data = validated_data.get('participants', [])
@@ -111,21 +129,31 @@ class EnvelopeCreateSerializer(serializers.Serializer):
             send_final_email=send_final_email,
             allow_printing=allow_printing,
             additional_recipients=additional_recipients,
+            owner=owner,
         )
 
         # Determine the lowest step_number
         step_numbers = [p_data.get('step_number', 1) for p_data in participants_data]
         min_step = min(step_numbers) if step_numbers else 1
 
+        from .models import ParticipantToken
+        from django.utils import timezone
+        from datetime import timedelta
+
         for p_idx, p_data in enumerate(participants_data):
             p_data = p_data.copy()
             order = p_data.pop('order', p_idx + 1)
             
-            Participant.objects.create(
+            p = Participant.objects.create(
                 envelope=envelope,
                 order=order,
                 status='pending',
                 **p_data
+            )
+            ParticipantToken.objects.create(
+                participant=p,
+                expires_at=timezone.now() + timedelta(hours=24),
+                is_used=False
             )
 
         # Audit logging for sequential workflow initiation
@@ -153,7 +181,50 @@ class EnvelopeCreateSerializer(serializers.Serializer):
             Signer.objects.create(envelope=envelope, **signer_data)
 
         # Activate Step 1 / min_step participants and provision their ParticipantTokens
-        from .views import activate_workflow_step
+        from services.workflow_service import activate_workflow_step
         activate_workflow_step(envelope, min_step)
 
+        # Create fields
+        if fields_data:
+            from services.field_service import create_field
+            
+            participants_by_email = {p.email: p for p in envelope.participants.all()}
+            
+            # Legacy fallback: if no participants, create a Participant record for the legacy signer
+            if not participants_by_email:
+                legacy_signer = Signer.objects.filter(envelope=envelope).first()
+                if legacy_signer:
+                    p_instance = Participant.objects.create(
+                        envelope=envelope,
+                        name=legacy_signer.name,
+                        email=legacy_signer.email,
+                        role='signer',
+                        order=1,
+                        step_number=1,
+                        status='active'
+                    )
+                    participants_by_email[p_instance.email] = p_instance
+            
+            for field in fields_data:
+                p_email = field.get('participant_email')
+                participant_inst = participants_by_email.get(p_email)
+                if participant_inst:
+                    create_field(
+                        envelope=envelope,
+                        participant=participant_inst,
+                        field_type=field.get('field_type'),
+                        page=field.get('page'),
+                        x_ratio=field.get('x_ratio'),
+                        y_ratio=field.get('y_ratio'),
+                        required=field.get('required', True)
+                    )
+
         return envelope
+
+
+class TemplateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Template
+        fields = '__all__'
+        read_only_fields = ['owner']
+

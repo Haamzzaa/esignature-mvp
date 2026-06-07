@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getDashboardData } from '../services/api.js'
+import UserNav from '../components/UserNav.jsx'
+
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Folder, 
@@ -98,34 +100,25 @@ export default function WorkspaceHome() {
           animate={{ opacity: 1, scale: 1 }}
           className="flex flex-wrap items-center gap-3 w-full lg:w-auto"
         >
-          {/* Secondary Actions (Comming Soon) */}
-          <div className="relative group">
-            <button 
-              type="button" 
-              disabled 
-              className="inline-flex items-center gap-1.5 rounded-xl border border-white/5 bg-white/[0.01] px-4 py-3 text-xs font-bold text-zinc-500 cursor-not-allowed select-none transition-all"
-            >
-              <Layers className="h-3.5 w-3.5 text-zinc-600" />
-              Templates
-            </button>
-            <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded bg-cyan-950 border border-cyan-500/30 px-1.5 py-0.5 text-[8px] font-bold text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-              Coming Soon
-            </span>
-          </div>
+          <UserNav />
 
-          <div className="relative group">
-            <button 
-              type="button" 
-              disabled 
-              className="inline-flex items-center gap-1.5 rounded-xl border border-white/5 bg-white/[0.01] px-4 py-3 text-xs font-bold text-zinc-500 cursor-not-allowed select-none transition-all"
-            >
-              <Inbox className="h-3.5 w-3.5 text-zinc-600" />
-              Inbox
-            </button>
-            <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded bg-cyan-950 border border-cyan-500/30 px-1.5 py-0.5 text-[8px] font-bold text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-              Coming Soon
-            </span>
-          </div>
+          {/* Secondary Actions (Comming Soon) */}
+          {/* Templates Library Link */}
+          <Link
+            to="/templates"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-cyan-500/10 hover:border-cyan-500/30 px-4 py-3 text-xs font-bold text-zinc-300 hover:text-cyan-400 transition-all cursor-pointer"
+          >
+            <Layers className="h-3.5 w-3.5 shrink-0" />
+            Templates
+          </Link>
+
+          <Link
+            to="/inbox"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-cyan-500/10 hover:border-cyan-500/30 px-4 py-3 text-xs font-bold text-zinc-300 hover:text-cyan-400 transition-all cursor-pointer"
+          >
+            <Inbox className="h-3.5 w-3.5 shrink-0" />
+            Inbox
+          </Link>
 
           <div className="relative group">
             <button 
@@ -199,63 +192,83 @@ export default function WorkspaceHome() {
             {/* ── Summary Metrics Grid ── */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
               
-              {/* Total Requests */}
-              <motion.div variants={itemVariants} className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[130px] relative group hover:border-cyan-500/20 transition-all duration-300">
+              {/* Awaiting Me */}
+              <motion.div 
+                variants={itemVariants} 
+                onClick={() => navigate('/inbox?category=awaiting-me')}
+                className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[130px] relative group hover:border-cyan-500/30 hover:bg-cyan-500/5 transition-all duration-300 cursor-pointer"
+              >
                 <div className="flex justify-between items-start">
-                  <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Total Requests</span>
-                  <Folder className="h-5 w-5 text-zinc-500 group-hover:text-cyan-400 transition-colors" />
+                  <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Awaiting Me</span>
+                  <Inbox className="h-5 w-5 text-zinc-500 group-hover:text-cyan-400 transition-colors" />
                 </div>
                 <div className="mt-4">
-                  <span className="text-3xl font-light text-white">{data?.stats?.total_packages ?? 0}</span>
-                  <p className="text-[9px] text-zinc-500 mt-1">Workspace overall volume</p>
+                  <span className="text-3xl font-light text-white">{data?.stats?.awaiting_me ?? 0}</span>
+                  <p className="text-[9px] text-zinc-500 mt-1">Needs your action</p>
                 </div>
               </motion.div>
 
-              {/* Draft Requests */}
-              <motion.div variants={itemVariants} className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[130px] relative group hover:border-zinc-500/20 transition-all duration-300">
+              {/* Awaiting Others */}
+              <motion.div 
+                variants={itemVariants} 
+                onClick={() => navigate('/inbox?category=awaiting-others')}
+                className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[130px] relative group hover:border-violet-500/30 hover:bg-violet-500/5 transition-all duration-300 cursor-pointer"
+              >
                 <div className="flex justify-between items-start">
-                  <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Drafts</span>
-                  <FileText className="h-5 w-5 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+                  <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Awaiting Others</span>
+                  <Users className="h-5 w-5 text-zinc-500 group-hover:text-violet-400 transition-colors" />
                 </div>
                 <div className="mt-4">
-                  <span className="text-3xl font-light text-zinc-400">{data?.stats?.draft ?? 0}</span>
-                  <p className="text-[9px] text-zinc-500 mt-1">Pending configuration</p>
+                  <span className="text-3xl font-light text-white">{data?.stats?.awaiting_others ?? 0}</span>
+                  <p className="text-[9px] text-zinc-500 mt-1">Pending subsequent steps</p>
                 </div>
               </motion.div>
 
-              {/* Pending Requests */}
-              <motion.div variants={itemVariants} className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[130px] relative group hover:border-violet-500/20 transition-all duration-300">
+              {/* In Progress */}
+              <motion.div 
+                variants={itemVariants} 
+                onClick={() => navigate('/inbox?category=in-progress')}
+                className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[130px] relative group hover:border-sky-500/30 hover:bg-sky-500/5 transition-all duration-300 cursor-pointer"
+              >
                 <div className="flex justify-between items-start">
-                  <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Pending Actions</span>
-                  <Send className="h-5 w-5 text-violet-500/50 group-hover:text-violet-400 transition-colors" />
+                  <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">In Progress</span>
+                  <Clock className="h-5 w-5 text-zinc-500 group-hover:text-sky-400 transition-colors" />
                 </div>
                 <div className="mt-4">
-                  <span className="text-3xl font-light text-violet-400">{pendingRequests}</span>
-                  <p className="text-[9px] text-zinc-500 mt-1">Actively routed out</p>
+                  <span className="text-3xl font-light text-white">{data?.stats?.in_progress ?? 0}</span>
+                  <p className="text-[9px] text-zinc-500 mt-1">Actively routing</p>
                 </div>
               </motion.div>
 
-              {/* Completed Requests */}
-              <motion.div variants={itemVariants} className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[130px] relative group hover:border-emerald-500/20 transition-all duration-300">
+              {/* Completed */}
+              <motion.div 
+                variants={itemVariants} 
+                onClick={() => navigate('/inbox?category=completed')}
+                className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[130px] relative group hover:border-emerald-500/30 hover:bg-emerald-500/5 transition-all duration-300 cursor-pointer"
+              >
                 <div className="flex justify-between items-start">
                   <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Completed</span>
-                  <CheckCircle2 className="h-5 w-5 text-emerald-500/50 group-hover:text-emerald-400 transition-colors" />
+                  <CheckCircle2 className="h-5 w-5 text-zinc-500 group-hover:text-emerald-400 transition-colors" />
                 </div>
                 <div className="mt-4">
-                  <span className="text-3xl font-light text-emerald-400">{data?.stats?.completed ?? 0}</span>
-                  <p className="text-[9px] text-zinc-500 mt-1">Successfully signed & archived</p>
+                  <span className="text-3xl font-light text-white">{data?.stats?.completed ?? 0}</span>
+                  <p className="text-[9px] text-zinc-500 mt-1">Signed & archived</p>
                 </div>
               </motion.div>
 
-              {/* Recent Activity Count */}
-              <motion.div variants={itemVariants} className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[130px] relative group hover:border-pink-500/20 transition-all duration-300 col-span-2 lg:col-span-1">
+              {/* Drafts */}
+              <motion.div 
+                variants={itemVariants} 
+                onClick={() => navigate('/inbox?category=drafts')}
+                className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[130px] relative group hover:border-zinc-500/30 hover:bg-zinc-500/5 transition-all duration-300 cursor-pointer"
+              >
                 <div className="flex justify-between items-start">
-                  <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Audit Items</span>
-                  <Activity className="h-5 w-5 text-pink-500/50 group-hover:text-pink-400 transition-colors" />
+                  <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">Drafts</span>
+                  <FileText className="h-5 w-5 text-zinc-500 group-hover:text-zinc-300 transition-colors" />
                 </div>
                 <div className="mt-4">
-                  <span className="text-3xl font-light text-pink-400">{recentActivityCount}</span>
-                  <p className="text-[9px] text-zinc-500 mt-1">Registered audit log logs</p>
+                  <span className="text-3xl font-light text-white">{data?.stats?.draft ?? 0}</span>
+                  <p className="text-[9px] text-zinc-500 mt-1">Awaiting configuration</p>
                 </div>
               </motion.div>
 
@@ -305,32 +318,34 @@ export default function WorkspaceHome() {
                       <ChevronRight className="h-4 w-4 text-zinc-700 group-hover:text-violet-400 transition-colors absolute right-4 top-1/2 -translate-y-1/2" />
                     </div>
 
-                    {/* Shortcut 3 (Coming Soon) */}
-                    <div className="glass-panel rounded-2xl p-5 border border-white/5 bg-white/[0.002] opacity-60 flex items-start gap-4 relative overflow-hidden select-none">
-                      <div className="rounded-xl p-3 bg-zinc-800 text-zinc-500 shrink-0">
-                        <FileSpreadsheet className="h-5 w-5" />
+                    {/* Shortcut 3: Use Template */}
+                    <div 
+                      onClick={() => navigate('/templates')}
+                      className="glass-panel rounded-2xl p-5 border border-white/5 bg-white/[0.005] hover:bg-emerald-500/5 hover:border-emerald-500/30 transition-all duration-300 cursor-pointer group flex items-start gap-4 relative overflow-hidden"
+                    >
+                      <div className="rounded-xl p-3 bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500 group-hover:text-black transition-colors shrink-0">
+                        <Layers className="h-5 w-5 stroke-[2.5]" />
                       </div>
                       <div className="space-y-1">
-                        <h4 className="text-sm font-bold text-zinc-400 flex items-center gap-2">
-                          Use Template
-                          <span className="text-[8px] bg-zinc-800 text-zinc-400 px-1 py-0.5 rounded border border-white/5 uppercase">MVP+</span>
-                        </h4>
-                        <p className="text-xs text-zinc-600">Reuse standard, custom sign-off schemas and routing models.</p>
+                        <h4 className="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors">Use Template</h4>
+                        <p className="text-xs text-zinc-500">Deploy standard business workflows and prepopulate parameters instantly.</p>
                       </div>
+                      <ChevronRight className="h-4 w-4 text-zinc-700 group-hover:text-emerald-400 transition-colors absolute right-4 top-1/2 -translate-y-1/2" />
                     </div>
 
-                    {/* Shortcut 4 (Coming Soon) */}
-                    <div className="glass-panel rounded-2xl p-5 border border-white/5 bg-white/[0.002] opacity-60 flex items-start gap-4 relative overflow-hidden select-none">
-                      <div className="rounded-xl p-3 bg-zinc-800 text-zinc-500 shrink-0">
-                        <Inbox className="h-5 w-5" />
+                    {/* Shortcut 4 */}
+                    <div 
+                      onClick={() => navigate('/inbox')}
+                      className="glass-panel rounded-2xl p-5 border border-white/5 bg-white/[0.005] hover:bg-cyan-500/5 hover:border-cyan-500/30 transition-all duration-300 cursor-pointer group flex items-start gap-4 relative overflow-hidden"
+                    >
+                      <div className="rounded-xl p-3 bg-cyan-500/10 text-cyan-400 group-hover:bg-cyan-500 group-hover:text-black transition-colors shrink-0">
+                        <Inbox className="h-5 w-5 stroke-[2.5]" />
                       </div>
                       <div className="space-y-1">
-                        <h4 className="text-sm font-bold text-zinc-400 flex items-center gap-2">
-                          View Inbox
-                          <span className="text-[8px] bg-zinc-800 text-zinc-400 px-1 py-0.5 rounded border border-white/5 uppercase">MVP+</span>
-                        </h4>
-                        <p className="text-xs text-zinc-600">Inspect outstanding incoming actions and review checklists.</p>
+                        <h4 className="text-sm font-bold text-white group-hover:text-cyan-400 transition-colors">View Inbox</h4>
+                        <p className="text-xs text-zinc-500">Inspect outstanding incoming actions and monitor active routing steps.</p>
                       </div>
+                      <ChevronRight className="h-4 w-4 text-zinc-700 group-hover:text-cyan-400 transition-colors absolute right-4 top-1/2 -translate-y-1/2" />
                     </div>
                   </div>
                 </motion.div>
