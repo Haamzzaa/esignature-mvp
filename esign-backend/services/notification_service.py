@@ -40,8 +40,7 @@ def send_participant_email(participant, envelope, request=None):
     logger.warning(f"EMAIL_PORT={repr(settings.EMAIL_PORT)}")
     logger.warning(f"EMAIL_HOST_USER={repr(settings.EMAIL_HOST_USER)}")
     logger.warning(f"EMAIL_USE_TLS={repr(settings.EMAIL_USE_TLS)}")
-
-    return
+    logger.warning(f"PASSWORD_SET={bool(settings.EMAIL_HOST_PASSWORD)}")
     
     frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173")
     secure_link = f"{frontend_url}/sign/{token_val}"
@@ -80,13 +79,6 @@ The E-Signature Team
         logger.info(f"EMAIL_USE_TLS={settings.EMAIL_USE_TLS}")
         logger.info(f"DEFAULT_FROM_EMAIL={settings.DEFAULT_FROM_EMAIL}")
 
-        send_mail(
-            subject=subject,
-            message=body,
-            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@esignature-mvp.com"),
-            recipient_list=[participant.email],
-            fail_silently=False,
-    )
         send_mail(
             subject=subject,
             message=body,
