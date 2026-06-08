@@ -1156,3 +1156,47 @@ class UserMeView(APIView):
             "username": request.user.username,
             "email": request.user.email
         }, status=status.HTTP_200_OK)
+
+
+class PackageCertificateDownloadView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk, *args, **kwargs):
+        from esign.models import CompletionCertificate
+        envelope = get_object_or_404(Envelope, id=pk, owner=request.user)
+        cert = get_object_or_404(CompletionCertificate, envelope=envelope)
+        if not cert.file:
+            raise Http404("Certificate file not found.")
+        filename = os.path.basename(cert.file.name) or f"certificate_package_{pk}.pdf"
+        return FileResponse(
+            cert.file.open('rb'),
+            as_attachment=True,
+            filename=filename,
+            content_type='application/pdf'
+        )
+
+
+class SigningCertificateDownloadView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, token, *args, **kwargs):
+        from esign.models import CompletionCertificate
+        token_obj, error_msg = get_token_signer_or_participant(token, allow_used=True)
+        if error_msg:
+            return handle_token_error(error_msg)
+            
+        if hasattr(token_obj, 'participant'):
+            envelope = token_obj.participant.envelope
+        else:
+            envelope = token_obj.signer.envelope
+            
+        cert = get_object_or_404(CompletionCertificate, envelope=envelope)
+        if not cert.file:
+            raise Http404("Certificate file not found.")
+        filename = os.path.basename(cert.file.name) or f"certificate_{envelope.id}.pdf"
+        return FileResponse(
+            cert.file.open('rb'),
+            as_attachment=True,
+            filename=filename,
+            content_type='application/pdf'
+        )

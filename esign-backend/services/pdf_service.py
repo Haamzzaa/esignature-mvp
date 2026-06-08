@@ -239,3 +239,178 @@ def sign_document(envelope, participant_rec, name, sig_type, signature_text, sig
     pdf_bytes = pdf_document.tobytes()
     pdf_document.close()
     return pdf_bytes
+
+
+def generate_certificate_pdf(data):
+    """
+    Generates a Certificate of Completion PDF.
+    - data dict structure:
+      {
+          'package_id': int,
+          'package_title': str,
+          'completion_date': str,
+          'owner_email': str,
+          'document_hash': str,
+          'participants': [
+              {
+                  'name': str,
+                  'email': str,
+                  'role': str,
+                  'completed_at': str,
+                  'ip_address': str,
+                  'user_agent': str,
+              }, ...
+          ],
+          'timeline': [
+              {
+                  'timestamp': str,
+                  'event': str,
+                  'ip_address': str,
+                  'user_agent': str,
+              }, ...
+          ],
+          'generation_timestamp': str
+      }
+    """
+    doc = fitz.open()
+    page = doc.new_page(width=595, height=842) # A4
+    
+    # Primary theme colors (vibrant but professional dark slate/blue)
+    primary_color = (0.12, 0.23, 0.35)
+    text_color = (0.2, 0.2, 0.2)
+    secondary_text_color = (0.4, 0.4, 0.4)
+    line_color = (0.8, 0.8, 0.8)
+
+    def draw_page_border(p):
+        p.draw_rect(fitz.Rect(20, 20, 575, 822), color=primary_color, width=1.5)
+        # Draw small decorative corner lines
+        p.draw_rect(fitz.Rect(25, 25, 570, 817), color=primary_color, width=0.5)
+
+    # Initial page border
+    draw_page_border(page)
+
+    current_y = 60
+
+    def check_page_break(y_pos, needed):
+        nonlocal page
+        if y_pos + needed > 790:
+            page = doc.new_page(width=595, height=842)
+            draw_page_border(page)
+            # Add a running page header
+            page.insert_text(
+                (40, 40),
+                f"Certificate of Completion - ID: {data['certificate_id']}",
+                fontsize=8,
+                fontname="hebo",
+                color=secondary_text_color,
+            )
+            page.draw_line((40, 45), (555, 45), color=line_color, width=0.5)
+            return 70
+        return y_pos
+
+    # Document Title & Certificate ID
+    page.insert_text((40, current_y), "CERTIFICATE OF COMPLETION", fontsize=18, fontname="hebo", color=primary_color)
+    page.insert_text((370, current_y + 4), f"ID: {data['certificate_id']}", fontsize=10, fontname="hebo", color=secondary_text_color)
+    current_y += 30
+
+    # Package Information Section
+    page.insert_text((40, current_y), "Package Information", fontsize=12, fontname="hebo", color=primary_color)
+    current_y += 18
+    page.draw_line((40, current_y), (555, current_y), color=primary_color, width=1)
+    current_y += 18
+
+    # Package details key-values
+    details = [
+        ("Certificate ID:", data['certificate_id']),
+        ("Package ID:", str(data['package_id'])),
+        ("Package Name:", data['package_title']),
+        ("Owner:", data['owner_email']),
+        ("Completion Date:", data['completion_date']),
+        ("Document SHA-256:", data['document_hash']),
+    ]
+    for key, val in details:
+        current_y = check_page_break(current_y, 18)
+        page.insert_text((40, current_y), key, fontsize=10, fontname="hebo", color=text_color)
+        if key == "Document SHA-256:" and len(val) > 32:
+            # Split the hash into multiple lines of 32 characters to prevent overflow
+            hash_lines = [val[i:i+32] for i in range(0, len(val), 32)]
+            for line in hash_lines:
+                page.insert_text((160, current_y), line, fontsize=10, fontname="helv", color=text_color)
+                if line != hash_lines[-1]:
+                    current_y += 12
+        else:
+            page.insert_text((160, current_y), val, fontsize=10, fontname="helv", color=text_color)
+        current_y += 16
+
+    current_y += 14
+
+    # Signer / Participant Events Section
+    current_y = check_page_break(current_y, 40)
+    page.insert_text((40, current_y), "Participant Activity Summary", fontsize=12, fontname="hebo", color=primary_color)
+    current_y += 18
+    page.draw_line((40, current_y), (555, current_y), color=primary_color, width=1)
+    current_y += 18
+
+    for p in data['participants']:
+        current_y = check_page_break(current_y, 75)
+        # Participant Name and Email
+        page.insert_text((40, current_y), f"{p['name']} ({p['email']})", fontsize=10, fontname="hebo", color=text_color)
+        current_y += 14
+        
+        # Detail line
+        page.insert_text((50, current_y), f"Role: {p['role']}", fontsize=9, fontname="helv", color=text_color)
+        page.insert_text((160, current_y), f"Completed: {p['completed_at']}", fontsize=9, fontname="helv", color=text_color)
+        current_y += 14
+        
+        # Security footprint
+        page.insert_text((50, current_y), f"IP Address: {p['ip_address'] or 'N/A'}", fontsize=9, fontname="helv", color=secondary_text_color)
+        current_y += 12
+        ua = p['user_agent'] or 'N/A'
+        # Truncate user agent if it's too long
+        if len(ua) > 95:
+            ua = ua[:92] + "..."
+        page.insert_text((50, current_y), f"Device: {ua}", fontsize=8, fontname="heit", color=secondary_text_color)
+        current_y += 18
+
+    current_y += 10
+
+    # Audit Log Timeline Section
+    current_y = check_page_break(current_y, 40)
+    page.insert_text((40, current_y), "Detailed Audit Log Timeline", fontsize=12, fontname="hebo", color=primary_color)
+    current_y += 18
+    page.draw_line((40, current_y), (555, current_y), color=primary_color, width=1)
+    current_y += 18
+
+    for log in data['timeline']:
+        current_y = check_page_break(current_y, 45)
+        # Event time & description
+        page.insert_text((40, current_y), log['timestamp'], fontsize=9, fontname="hebo", color=text_color)
+        page.insert_text((150, current_y), log['event'], fontsize=9, fontname="helv", color=text_color)
+        current_y += 12
+        
+        # IP and UA details
+        ip_ua_info = f"IP: {log['ip_address'] or 'N/A'}"
+        if log['user_agent']:
+            log_ua = log['user_agent']
+            if len(log_ua) > 65:
+                log_ua = log_ua[:62] + "..."
+            ip_ua_info += f"  |  Device: {log_ua}"
+        page.insert_text((50, current_y), ip_ua_info, fontsize=8, fontname="heit", color=secondary_text_color)
+        current_y += 18
+
+    # Final footer detailing when certificate was generated
+    current_y = check_page_break(current_y, 35)
+    current_y += 10
+    page.draw_line((40, current_y), (555, current_y), color=line_color, width=0.5)
+    current_y += 12
+    page.insert_text(
+        (40, current_y),
+        f"This certificate was generated on {data['generation_timestamp']} (UTC) and is cryptographically locked to the SHA-256 hash of the signed document.",
+        fontsize=7.5,
+        fontname="heit",
+        color=secondary_text_color,
+    )
+
+    pdf_bytes = doc.tobytes()
+    doc.close()
+    return pdf_bytes

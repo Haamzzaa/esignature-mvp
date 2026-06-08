@@ -1,6 +1,6 @@
 import os
 import logging
-from django.core.mail import send_mail
+from django.core.mail import send_mail, EmailMessage
 from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
@@ -150,7 +150,7 @@ def send_next_step_notifications(envelope, step_number, request=None):
         send_participant_email(p, envelope, request)
 
 
-def send_completion_email(envelope, request=None):
+def send_completion_email(envelope, certificate_id=None, request=None):
     """
     Sends a final completion email to the package owner and additional recipients.
     """
@@ -186,10 +186,14 @@ def send_completion_email(envelope, request=None):
     package_title = get_envelope_title(envelope)
     
     subject = "Package completed successfully"
-    body = f"""Hello,
+    body_header = f"""Hello,
 
 The document "{package_title}" has been fully completed by all participants.
+"""
+    if certificate_id:
+        body_header += f"Certificate ID: {certificate_id}\n"
 
+    body = body_header + f"""
 You can preview the signed document on the platform at:
 {view_url}
 
@@ -213,15 +217,48 @@ The E-Signature Team
         logger.info("No recipients found to send completion email to.")
         return
         
+    # Build attachments
+    attachments_list = []
+    
+    # 1. Signed Document PDF
+    signed_doc = getattr(envelope, 'signeddocument', None)
+    if signed_doc and signed_doc.file:
+        try:
+            signed_doc.file.open('rb')
+            content = signed_doc.file.read()
+            filename = os.path.basename(signed_doc.file.name) or f"signed_{envelope.id}.pdf"
+            attachments_list.append((filename, content, "application/pdf"))
+        except Exception as e:
+            logger.error(f"Failed to read signed document for attachment: {str(e)}", exc_info=True)
+        finally:
+            signed_doc.file.close()
+            
+    # 2. Certificate of Completion PDF
+    cert_doc = getattr(envelope, 'completion_certificate', None)
+    if cert_doc and cert_doc.file:
+        try:
+            cert_doc.file.open('rb')
+            content = cert_doc.file.read()
+            filename = os.path.basename(cert_doc.file.name) or f"certificate_{envelope.id}.pdf"
+            attachments_list.append((filename, content, "application/pdf"))
+        except Exception as e:
+            logger.error(f"Failed to read certificate for attachment: {str(e)}", exc_info=True)
+        finally:
+            cert_doc.file.close()
+
     for email in recipients:
         try:
-            logger.info(f"Sending completion email to {email}")
-            send_mail(
+            logger.info(f"Sending completion email to {email} with attachments")
+            email_message = EmailMessage(
                 subject=subject,
-                message=body,
+                body=body,
                 from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@esignature-mvp.com"),
-                recipient_list=[email],
-                fail_silently=False,
+                to=[email],
             )
+            # Attach both files
+            for filename, content, mimetype in attachments_list:
+                email_message.attach(filename, content, mimetype)
+                
+            email_message.send(fail_silently=False)
         except Exception as e:
-            logger.error(f"Failed to send completion email to {email}: {str(e)}", exc_info=True)
+            logger.error(f"Failed to send completion email with attachments to {email}: {str(e)}", exc_info=True)

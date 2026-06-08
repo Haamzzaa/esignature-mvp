@@ -104,10 +104,7 @@ def check_and_advance_step(envelope, current_step, request=None):
             envelope.status = "completed"
             envelope.save(update_fields=["status"])
 
-            # Send completion email to owner and additional recipients
-            from services.notification_service import send_completion_email
-            send_completion_email(envelope, request)
-
+            # Create completion audit logs first so that they appear on the certificate timeline
             AuditLog.objects.create(
                 envelope=envelope,
                 event="Workflow Completed",
@@ -133,3 +130,17 @@ def check_and_advance_step(envelope, current_step, request=None):
                 ip_address=ip_address,
                 user_agent=user_agent,
             )
+
+            # Generate Certificate of Completion
+            from services.certificate_service import generate_certificate
+            cert_id = None
+            try:
+                logger.info(f"Generating completion certificate for envelope {envelope.id}")
+                cert_obj = generate_certificate(envelope)
+                cert_id = cert_obj.certificate_id
+            except Exception as e:
+                logger.error(f"Failed to generate certificate of completion for envelope {envelope.id}: {str(e)}", exc_info=True)
+
+            # Send completion email to owner and additional recipients (will now attach signed doc and certificate)
+            from services.notification_service import send_completion_email
+            send_completion_email(envelope, cert_id, request)

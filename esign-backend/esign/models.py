@@ -110,6 +110,16 @@ class SignedDocument(models.Model):
     def __str__(self):
         return f"SignedDocument for Envelope {self.envelope.id}"
 
+class CompletionCertificate(models.Model):
+    envelope = models.OneToOneField(Envelope, on_delete=models.CASCADE, related_name="completion_certificate")
+    file = models.FileField(upload_to="certificates/")
+    certificate_id = models.CharField(max_length=50, unique=True, db_index=True, null=True, blank=True)
+    final_hash = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Completion Certificate for Envelope {self.envelope.id}"
+
 class Participant(models.Model):
     ROLE_CHOICES = [
         ("signer", "Signer"),

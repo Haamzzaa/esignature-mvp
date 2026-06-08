@@ -1496,3 +1496,104 @@ class EmailNotificationsTestCase(TestCase):
             self.assertEqual(p_bob.status, "active")
 
 
+class CertificateOfCompletionTestCase(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from rest_framework.test import APIClient
+        from django.core.files.base import ContentFile
+        import fitz
+        from .models import Document, Envelope
+        from .serializers import EnvelopeCreateSerializer
+        
+        self.client = APIClient()
+        self.owner = User.objects.create_user(username='owner', password='password', email='owner@example.com')
+        self.other_user = User.objects.create_user(username='other', password='password', email='other@example.com')
+        self.client.force_authenticate(user=self.owner)
+        
+        doc = fitz.open()
+        doc.new_page()
+        pdf_bytes = doc.tobytes()
+        doc.close()
+        
+        self.document = Document.objects.create(file_hash="cert_test_hash")
+        self.document.file.save("cert_test.pdf", ContentFile(pdf_bytes))
+
+        data = {
+            "document_id": self.document.id,
+            "participants": [
+                {"name": "Alice Signer", "email": "alice@example.com", "role": "signer", "step_number": 1}
+            ],
+            "signature_page": 1,
+            "signature_x_ratio": 0.5,
+            "signature_y_ratio": 0.5
+        }
+        serializer = EnvelopeCreateSerializer(data=data)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.envelope = serializer.save(owner=self.owner)
+
+    def test_certificate_generation_on_completion(self):
+        from django.core import mail
+        from .models import ParticipantToken, CompletionCertificate
+        
+        # 1. Send the package
+        self.client.post(f"/api/envelopes/{self.envelope.id}/send/")
+        
+        # 2. Complete the signing action
+        p_alice = self.envelope.participants.get(email="alice@example.com")
+        token_alice = ParticipantToken.objects.get(participant=p_alice)
+        
+        mail.outbox = []
+        response = self.client.post(f"/api/sign/{token_alice.token}/", {
+            "signature_type": "typed",
+            "signature_text": "Alice Signature"
+        }, format="json")
+        self.assertEqual(response.status_code, 201)
+        
+        # 3. Check that CompletionCertificate object exists
+        cert_exists = CompletionCertificate.objects.filter(envelope=self.envelope).exists()
+        self.assertTrue(cert_exists)
+        cert = CompletionCertificate.objects.get(envelope=self.envelope)
+        self.assertIsNotNone(cert.file)
+        self.assertTrue(len(cert.final_hash) > 0)
+        
+        # Check that unique certificate ID is generated and persisted
+        self.assertIsNotNone(cert.certificate_id)
+        self.assertTrue(cert.certificate_id.startswith("CERT-"))
+        
+        # 4. Check that emails in outbox have two attachments and contain the Certificate ID
+        self.assertEqual(len(mail.outbox), 1)
+        email = mail.outbox[0]
+        self.assertEqual(len(email.attachments), 2)
+        attachment_names = [a[0] for a in email.attachments]
+        self.assertTrue(any("cert_test" in name for name in attachment_names))
+        self.assertTrue(any("certificate" in name for name in attachment_names))
+        self.assertIn(cert.certificate_id, email.body)
+
+        # Check that the Certificate ID is included in the audit log timeline
+        from .models import AuditLog
+        cert_audit = AuditLog.objects.filter(envelope=self.envelope, event__contains=cert.certificate_id).exists()
+        self.assertTrue(cert_audit)
+
+        # 5. Check owner-level certificate download (authorized)
+        self.client.force_authenticate(user=self.owner)
+        download_response = self.client.get(f"/api/packages/{self.envelope.id}/certificate/download/")
+        self.assertEqual(download_response.status_code, 200)
+        self.assertEqual(download_response['Content-Type'], 'application/pdf')
+        self.assertTrue(len(download_response.getvalue()) > 0)
+
+        # 6. Check BOLA download restriction (unauthorized user gets 404)
+        self.client.force_authenticate(user=self.other_user)
+        download_response = self.client.get(f"/api/packages/{self.envelope.id}/certificate/download/")
+        self.assertEqual(download_response.status_code, 404)
+
+        # 7. Check signer token-level download (authorized)
+        self.client.force_authenticate(user=None) # Unauthenticate
+        token_download_response = self.client.get(f"/api/sign/{token_alice.token}/certificate/download/")
+        self.assertEqual(token_download_response.status_code, 200)
+        self.assertEqual(token_download_response['Content-Type'], 'application/pdf')
+
+        # 8. Check signer token-level download with invalid token
+        invalid_token_response = self.client.get(f"/api/sign/00000000-0000-0000-0000-000000000000/certificate/download/")
+        self.assertEqual(invalid_token_response.status_code, 404)
+
+

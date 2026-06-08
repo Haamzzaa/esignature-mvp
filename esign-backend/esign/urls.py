@@ -18,6 +18,8 @@ from .views import (
     LoginView,
     LogoutView,
     UserMeView,
+    PackageCertificateDownloadView,
+    SigningCertificateDownloadView,
 )
 
 urlpatterns = [
@@ -28,11 +30,13 @@ urlpatterns = [
     path('sign/<uuid:token>/document/', SigningDocumentView.as_view(), name='signing-document'),
     path('sign/<uuid:token>/signed/', SigningSignedDocumentView.as_view(), name='signing-signed'),
     path('sign/<uuid:token>/download/', SigningDownloadView.as_view(), name='signing-download'),
+    path('sign/<uuid:token>/certificate/download/', SigningCertificateDownloadView.as_view(), name='signing-certificate-download'),
     path('dashboard/', DashboardView.as_view()),
     path('packages/', PackageListView.as_view()),
     path('packages/<int:pk>/', PackageDetailView.as_view()),
     path('packages/<int:pk>/preview/', PackageSignedPreviewView.as_view(), name='package-signed-preview'),
     path('packages/<int:pk>/download/', PackageSignedDownloadView.as_view(), name='package-signed-download'),
+    path('packages/<int:pk>/certificate/download/', PackageCertificateDownloadView.as_view(), name='package-certificate-download'),
     path('templates/', TemplateListCreateView.as_view(), name='template-list-create'),
     path('templates/<int:pk>/', TemplateDetailView.as_view(), name='template-detail'),
     path('auth/register/', RegisterView.as_view(), name='register'),
