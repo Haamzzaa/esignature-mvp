@@ -34,14 +34,8 @@ def send_participant_email(participant, envelope, request=None):
         }
     )
     token_val = token_obj.token
-    logger.warning("DEBUG EMAIL FUNCTION REACHED")
+    logger.debug("Preparing notification email for participant %s (role: %s)", participant.email, participant.role)
 
-    logger.warning(f"EMAIL_HOST={repr(settings.EMAIL_HOST)}")
-    logger.warning(f"EMAIL_PORT={repr(settings.EMAIL_PORT)}")
-    logger.warning(f"EMAIL_HOST_USER={repr(settings.EMAIL_HOST_USER)}")
-    logger.warning(f"EMAIL_USE_TLS={repr(settings.EMAIL_USE_TLS)}")
-    logger.warning(f"PASSWORD_SET={bool(settings.EMAIL_HOST_PASSWORD)}")
-    
     frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173")
     secure_link = f"{frontend_url}/sign/{token_val}"
     

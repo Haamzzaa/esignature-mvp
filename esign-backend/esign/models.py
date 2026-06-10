@@ -93,7 +93,7 @@ class SigningToken(models.Model):
 
 class AuditLog(models.Model):
     envelope = models.ForeignKey(Envelope, on_delete=models.CASCADE)
-    event = models.CharField(max_length=50)
+    event = models.CharField(max_length=255)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField(null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)

@@ -96,9 +96,17 @@ def check_and_advance_step(envelope, current_step, request=None):
             envelope.status = "sent"
             envelope.save(update_fields=["status"])
 
-            # Send next step email notifications
+            # Send next step email notifications.
+            # A failure here must NOT unwind the workflow advance already committed above.
             from services.notification_service import send_next_step_notifications
-            send_next_step_notifications(envelope, next_step, request)
+            try:
+                send_next_step_notifications(envelope, next_step, request)
+            except Exception:
+                logger.exception(
+                    "Failed to send step %s notification email for envelope %s",
+                    next_step,
+                    envelope.id,
+                )
         else:
             # Final workflow step completed! Mark envelope as completed
             envelope.status = "completed"
@@ -131,16 +139,29 @@ def check_and_advance_step(envelope, current_step, request=None):
                 user_agent=user_agent,
             )
 
-            # Generate Certificate of Completion
-            from services.certificate_service import generate_certificate
-            cert_id = None
-            try:
-                logger.info(f"Generating completion certificate for envelope {envelope.id}")
-                cert_obj = generate_certificate(envelope)
-                cert_id = cert_obj.certificate_id
-            except Exception as e:
-                logger.error(f"Failed to generate certificate of completion for envelope {envelope.id}: {str(e)}", exc_info=True)
+            # Schedule post-commit side effects.
+            # Both generate_certificate() and send_completion_email() run AFTER the
+            # atomic block commits. A failure in either cannot roll back the completed
+            # envelope status or any of the audit logs saved above.
+            def _post_commit_side_effects():
+                from services.certificate_service import generate_certificate
+                from services.notification_service import send_completion_email
+                cert_id = None
+                try:
+                    logger.info(
+                        "Generating completion certificate for envelope %s", envelope.id
+                    )
+                    cert_obj = generate_certificate(envelope)
+                    cert_id = cert_obj.certificate_id
+                except Exception:
+                    logger.exception(
+                        "Failed to generate certificate for envelope %s", envelope.id
+                    )
+                try:
+                    send_completion_email(envelope, cert_id, request)
+                except Exception:
+                    logger.exception(
+                        "Failed to send completion email for envelope %s", envelope.id
+                    )
 
-            # Send completion email to owner and additional recipients (will now attach signed doc and certificate)
-            from services.notification_service import send_completion_email
-            send_completion_email(envelope, cert_id, request)
+            transaction.on_commit(_post_commit_side_effects)

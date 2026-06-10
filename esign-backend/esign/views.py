@@ -11,6 +11,7 @@ from datetime import timedelta
 from rest_framework.generics import get_object_or_404  # pyright: ignore[reportMissingImports]
 from django.urls import reverse
 import hashlib
+import logging
 from django.core.files.base import ContentFile
 from django.db import transaction
 from .models import Envelope, Signer, SigningToken, AuditLog, SignedDocument, Participant, ParticipantToken, Template
@@ -18,6 +19,8 @@ from .serializers import DocumentUploadSerializer, EnvelopeCreateSerializer, Tem
 from django.http import FileResponse, Http404
 import os
 from services.workflow_service import activate_workflow_step, check_and_advance_step
+
+logger = logging.getLogger(__name__)
 
 def get_token_signer_or_participant(token_str, allow_used=False):
     """
@@ -143,19 +146,30 @@ class SendEnvelopeView(APIView):
             user_agent=request.META.get("HTTP_USER_AGENT"),
         )
 
-        # Send email notification to first active participant / legacy signer
+        # Send email notification to first active participant / legacy signer.
+        # A failure here must NOT roll back the envelope status change above.
         from services.notification_service import send_package_sent_notifications
-        send_package_sent_notifications(envelope, request)
+        email_warning = None
+        try:
+            send_package_sent_notifications(envelope, request)
+        except Exception:
+            logger.exception(
+                "Failed to send package notification email for envelope %s",
+                envelope.id,
+            )
+            email_warning = (
+                "Package sent successfully, but the notification email could not be delivered."
+            )
 
         from django.conf import settings
         signing_url = f"{settings.FRONTEND_URL}/sign/{signing_token.token}"
 
-        
         return Response(
             {
                 "message": "Envelope sent to signer.",
                 "signing_url": signing_url,
                 "expires_at": expires_at.isoformat(),
+                "email_warning": email_warning,
             },
             status=status.HTTP_200_OK,
         )
