@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { createEnvelope, sendEnvelope, uploadDocument, createTemplate, getTemplateDetail, getPackageDetail, apiClient, API_URL } from '../services/api.js'
+import { createEnvelope, sendEnvelope, uploadDocument, createTemplate, getTemplateDetail, getPackageDetail, saveDraft, updateDraft, apiClient, API_URL } from '../services/api.js'
 import UserNav from '../components/UserNav.jsx'
 import { Document, Page, pdfjs } from 'react-pdf'
 import { motion, AnimatePresence } from 'framer-motion'
-import { UploadCloud, User, Mail, FileText, X, ArrowRight, CheckCircle2, Sparkles, Crosshair, Plus, Trash2, Edit3, UserPlus, Check, ChevronDown, Sparkles as SparkleIcon, Bell, Share2, Printer, Settings, Activity, Eye } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { UploadCloud, User, Mail, FileText, X, ArrowRight, CheckCircle2, Sparkles, Crosshair, Plus, Trash2, Edit3, UserPlus, Check, ChevronDown, Sparkles as SparkleIcon, Bell, Share2, Printer, Settings, Activity, Eye, ArrowLeft } from 'lucide-react'
+import { useNavigate, Link } from 'react-router-dom'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
 
@@ -210,6 +210,10 @@ export default function UploadPage() {
     return params.get('packageId') || params.get('envelopeId')
   }, [])
 
+  // draftId: set from URL on resume, or from API response after first Save Draft
+  const draftIdParam = useMemo(() => new URLSearchParams(window.location.search).get('draftId'), [])
+  const [draftId, setDraftId] = useState(null)
+
   const backendOrigin = useMemo(() => {
     try {
       const u = new URL(apiClient?.defaults?.baseURL)
@@ -235,6 +239,8 @@ export default function UploadPage() {
     }
   ])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isSavingDraft, setIsSavingDraft] = useState(false)
+  const [draftSaved, setDraftSaved] = useState(false)
   const [error, setError] = useState('')
   const [sentPackageInfo, setSentPackageInfo] = useState(null)
   const [currentTab, setCurrentTab] = useState('documents')
@@ -273,6 +279,8 @@ export default function UploadPage() {
   const [additionalRecipients, setAdditionalRecipients] = useState([])
   const [newRecipientEmail, setNewRecipientEmail] = useState('')
   const [recipientEmailError, setRecipientEmailError] = useState('')
+  // Keyed by participant id → error message string
+  const [participantErrors, setParticipantErrors] = useState({})
 
   // ── Signature position — page-aware ──────────────────────────────────────
   const [sigPosition, setSigPosition] = useState(null)
@@ -608,10 +616,149 @@ export default function UploadPage() {
       }
       loadPackage()
     }
+  // ── Load draft from URL param ──────────────────────────────────────────────
+  useEffect(() => {
+    if (draftIdParam) {
+      setDraftId(draftIdParam)
+      async function loadDraft() {
+        try {
+          const res = await getPackageDetail(draftIdParam)
+          if (res) {
+            if (res.send_reminders !== undefined) setSendReminders(res.send_reminders)
+            if (res.send_final_email !== undefined) setSendFinalEmail(res.send_final_email)
+            if (res.allow_printing !== undefined) setAllowPrinting(res.allow_printing)
+            if (res.additional_recipients !== undefined) setAdditionalRecipients(res.additional_recipients || [])
+            if (res.document) {
+              setExistingDocId(res.document.id)
+              setExistingDocName(res.document.filename || 'document.pdf')
+              if (res.document.url) setExistingDocUrl(toAbsoluteUrl(res.document.url, backendOrigin))
+            }
+            if (res.participants && Array.isArray(res.participants) && res.participants.length > 0) {
+              const grouped = {}
+              res.participants.forEach(p => {
+                const stepNum = p.step_number || 1
+                if (!grouped[stepNum]) grouped[stepNum] = []
+                grouped[stepNum].push({
+                  id: p.id ? p.id.toString() : Math.random().toString(36).substring(2),
+                  name: p.name || '', email: p.email || '', role: p.role || 'signer'
+                })
+              })
+              const sortedSteps = Object.keys(grouped).map(Number).sort((a, b) => a - b)
+                .map((stepNum, idx) => ({ stepNumber: idx + 1, participants: grouped[stepNum] }))
+              if (sortedSteps.length > 0) setSteps(sortedSteps)
+            }
+            if (res.fields && Array.isArray(res.fields)) {
+              setPlacedFields(res.fields.map(f => ({
+                id: f.id ? f.id.toString() : Math.random().toString(36).substring(2) + Math.random(),
+                field_type: f.field_type, page: f.page,
+                x_ratio: f.x_ratio, y_ratio: f.y_ratio,
+                participant_email: f.participant_email, participant_name: f.participant_name,
+                required: f.required
+              })))
+            }
+          }
+        } catch (err) {
+          setError(err?.response?.data?.detail || err?.message || 'Failed to load draft.')
+        }
+      }
+      loadDraft()
+    }
+  }, [draftIdParam, backendOrigin])
+
   }, [packageId, backendOrigin])
 
-  // ── Submit handler ────────────────────────────────────────────
-  async function handleSubmit(e) {
+  // ── Save Draft handler ────────────────────────────────────────────────────
+  async function handleSaveDraft() {
+    const docAvailable = !!existingDocId || !!file
+    if (!docAvailable) {
+      setError('Please upload a document before saving as draft.')
+      return
+    }
+    setIsSavingDraft(true)
+    setDraftSaved(false)
+    setError('')
+    try {
+      // Upload file if a new one was selected (caches the id for future saves)
+      let documentId = existingDocId
+      if (file) {
+        const uploadRes = await uploadDocument(file)
+        documentId = uploadRes?.document_id
+        setExistingDocId(documentId)
+      }
+      if (!documentId) throw new Error('No document ID available.')
+
+      // Only include participants that have valid name + email
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      const preparedParticipants = []
+      let globalOrder = 1
+      steps.forEach(step => {
+        step.participants.forEach(p => {
+          if (p.name?.trim() && p.email?.trim() && emailRegex.test(p.email.trim())) {
+            preparedParticipants.push({
+              name: p.name.trim(), email: p.email.trim(),
+              role: p.role, step_number: step.stepNumber, order: globalOrder++
+            })
+          }
+        })
+      })
+
+      const preparedFields = placedFields.map(f => ({
+        field_type: f.field_type, page: f.page,
+        x_ratio: f.x_ratio, y_ratio: f.y_ratio,
+        participant_email: f.participant_email, required: f.required !== false,
+      }))
+
+      const sigPayload = sigPosition ? {
+        signature_page: sigPosition.page,
+        signature_x_ratio: sigPosition.x_ratio,
+        signature_y_ratio: sigPosition.y_ratio,
+      } : {}
+
+      if (draftId) {
+        // PATCH — update the existing draft
+        await updateDraft(draftId, {
+          document_id: documentId,
+          participants: preparedParticipants,
+          fields: preparedFields,
+          send_reminders: sendReminders,
+          send_final_email: sendFinalEmail,
+          allow_printing: allowPrinting,
+          additional_recipients: additionalRecipients,
+          ...sigPayload,
+        })
+      } else {
+        // POST — create a new draft envelope
+        const res = await saveDraft({
+          documentId,
+          participants: preparedParticipants,
+          fields: preparedFields,
+          send_reminders: sendReminders,
+          send_final_email: sendFinalEmail,
+          allow_printing: allowPrinting,
+          additional_recipients: additionalRecipients,
+          ...sigPayload,
+        })
+        if (res?.envelope_id) setDraftId(res.envelope_id.toString())
+      }
+
+      setDraftSaved(true)
+      setTimeout(() => setDraftSaved(false), 3000)
+    } catch (err) {
+      let message = ''
+      if (err?.response?.data) {
+        if (typeof err.response.data === 'string') message = err.response.data
+        else if (err.response.data.detail) message = err.response.data.detail
+        else {
+          const firstKey = Object.keys(err.response.data)[0]
+          if (firstKey) { const val = err.response.data[firstKey]; message = Array.isArray(val) ? val[0] : val }
+        }
+      }
+      if (!message) message = err?.message || 'Failed to save draft.'
+      setError(message)
+    } finally {
+      setIsSavingDraft(false)
+    }
+}
     e.preventDefault()
     setError('')
 
@@ -773,6 +920,19 @@ export default function UploadPage() {
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-12 sm:py-20 relative z-10">
 
+      {/* Return link */}
+      {!sentPackageInfo && (
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-400 hover:text-cyan-400 transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Dashboard
+          </Link>
+        </motion.div>
+      )}
+
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
@@ -806,23 +966,17 @@ export default function UploadPage() {
             <>
               <div className="relative z-10 mb-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-white/5 pb-6">
             <div className="space-y-3">
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-medium uppercase tracking-widest text-cyan-400 backdrop-blur-md">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  E-Sign Demo
+              {loadedTemplate && (
+                <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-semibold text-violet-400 backdrop-blur-md mb-2">
+                  <SparkleIcon className="h-3 w-3 animate-pulse text-violet-400" />
+                  Template: {loadedTemplate.name}
                 </div>
-                {loadedTemplate && (
-                  <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-semibold text-violet-400 backdrop-blur-md">
-                    <SparkleIcon className="h-3 w-3 animate-pulse text-violet-400" />
-                    Template: {loadedTemplate.name}
-                  </div>
-                )}
-              </div>
+              )}
               <h1 className="text-3xl font-light tracking-tight text-white sm:text-5xl neon-text-glow">
-                Initialize Document
+                Create Package
               </h1>
               <p className="text-sm font-medium text-zinc-400 sm:text-base">
-                Securely upload a PDF to generate an encrypted signing link.
+                Upload, configure, and send documents for signature.
               </p>
             </div>
 
@@ -1151,16 +1305,35 @@ export default function UploadPage() {
                                     </td>
                                     <td className="px-3 py-2.5 align-middle">
                                       <div className="relative">
-                                        <Mail className="absolute left-3 h-4 w-4 text-zinc-600 top-1/2 -translate-y-1/2" />
+                                        <Mail className={`absolute left-3 h-4 w-4 top-1/2 -translate-y-1/2 ${participantErrors[p.id] ? 'text-red-400' : 'text-zinc-600'}`} />
                                         <input
                                           type="email"
                                           value={p.email}
-                                          onChange={(e) => updateParticipant(step.stepNumber, p.id, 'email', e.target.value)}
+                                          onChange={(e) => {
+                                            updateParticipant(step.stepNumber, p.id, 'email', e.target.value)
+                                            // Clear inline error as user types
+                                            if (participantErrors[p.id]) {
+                                              setParticipantErrors(prev => {
+                                                const next = { ...prev }
+                                                delete next[p.id]
+                                                return next
+                                              })
+                                            }
+                                          }}
                                           placeholder="Email Address"
                                           disabled={isSubmitting}
-                                          className={`${cellInputClass} pl-9 font-mono`}
+                                          className={`${cellInputClass} pl-9 font-mono ${
+                                            participantErrors[p.id]
+                                              ? 'border-red-500/60 focus:border-red-500/60 focus:ring-red-500/20 bg-red-950/10'
+                                              : ''
+                                          }`}
                                         />
                                       </div>
+                                      {participantErrors[p.id] && (
+                                        <p className="mt-1 px-1 text-[10px] text-red-400 font-medium flex items-center gap-1">
+                                          <span aria-hidden="true">⚠</span> {participantErrors[p.id]}
+                                        </p>
+                                      )}
                                     </td>
                                     <td className="px-3 py-2.5 align-middle">
                                       <CustomSelect
@@ -1236,9 +1409,29 @@ export default function UploadPage() {
                   <div className="flex flex-col items-end gap-1">
                     <button
                       type="button"
-                      disabled={!isWorkflowValid || !hasSignerRole}
-                      onClick={() => setCurrentTab(templateId ? 'review' : 'settings')}
-                      className="inline-flex items-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed px-6 py-3.5 text-sm font-semibold text-black transition-all cursor-pointer shadow-[0_0_15px_rgba(34,211,238,0.15)]"
+                      onClick={() => {
+                        // Validate all participant emails inline before advancing
+                        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+                        const errors = {}
+                        steps.forEach(step => {
+                          step.participants.forEach(p => {
+                            const email = p.email.trim()
+                            if (!email) {
+                              errors[p.id] = 'Email address is required.'
+                            } else if (!emailRegex.test(email)) {
+                              errors[p.id] = 'Enter a valid email address.'
+                            }
+                          })
+                        })
+                        if (Object.keys(errors).length > 0) {
+                          setParticipantErrors(errors)
+                          return
+                        }
+                        setParticipantErrors({})
+                        if (!hasSignerRole) return
+                        setCurrentTab(templateId ? 'review' : 'settings')
+                      }}
+                      className="inline-flex items-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 px-6 py-3.5 text-sm font-semibold text-black transition-all cursor-pointer shadow-[0_0_15px_rgba(34,211,238,0.15)]"
                     >
                       {templateId ? 'Continue to Review' : 'Continue to Settings'}
                       <ArrowRight className="h-4 w-4" />
@@ -1950,6 +2143,7 @@ export default function UploadPage() {
           </div>
         )}
       </AnimatePresence>
+
     </div>
   )
 }

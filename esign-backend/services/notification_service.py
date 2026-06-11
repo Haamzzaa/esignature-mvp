@@ -80,8 +80,12 @@ The E-Signature Team
             recipient_list=[participant.email],
             fail_silently=False,
         )
-    except Exception as e:
-        logger.error(f"Failed to send email to participant {participant.email}: {str(e)}", exc_info=True)
+    except Exception:
+        logger.exception(
+            "Failed to send email to participant %s (role: %s)",
+            participant.email,
+            participant.role,
+        )
 
 
 def send_legacy_signer_email(signer, envelope, request=None):
@@ -128,8 +132,11 @@ The E-Signature Team
             recipient_list=[signer.email],
             fail_silently=False,
         )
-    except Exception as e:
-        logger.error(f"Failed to send email to legacy signer {signer.email}: {str(e)}", exc_info=True)
+    except Exception:
+        logger.exception(
+            "Failed to send email to legacy signer %s",
+            signer.email,
+        )
 
 
 def send_package_sent_notifications(envelope, request=None):
@@ -151,10 +158,22 @@ def send_package_sent_notifications(envelope, request=None):
 def send_next_step_notifications(envelope, step_number, request=None):
     """
     Sends email to all participants in the newly activated step.
+
+    Each participant is wrapped in its own try/except so that a failure for
+    one participant (e.g. a token provisioning error before send_mail is
+    reached) does not silently abort notifications for the remaining ones.
     """
     active_participants = envelope.participants.filter(step_number=step_number, status__in=['active', 'viewed'])
     for p in active_participants:
-        send_participant_email(p, envelope, request)
+        try:
+            send_participant_email(p, envelope, request)
+        except Exception:
+            logger.exception(
+                "Failed to send step %s notification to participant %s (envelope %s)",
+                step_number,
+                p.email,
+                envelope.id,
+            )
 
 
 def send_completion_email(envelope, certificate_id=None, request=None):

@@ -43,6 +43,17 @@ export async function sendEnvelope(envelopeId) {
   return data
 }
 
+// Persist a draft envelope (is_draft=true skips workflow activation)
+export async function saveDraft(payload) {
+  return createEnvelope({ ...payload, is_draft: true })
+}
+
+// Update an existing draft envelope (PATCH — participants and fields are replaced)
+export async function updateDraft(id, payload) {
+  const { data } = await apiClient.patch(`/envelopes/${id}/`, payload)
+  return data
+}
+
 export async function getSigningSession(token) {
   const { data } = await apiClient.get(`/sign/${token}/`)
   return data

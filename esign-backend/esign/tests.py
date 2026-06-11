@@ -1597,3 +1597,477 @@ class CertificateOfCompletionTestCase(TestCase):
         self.assertEqual(invalid_token_response.status_code, 404)
 
 
+class EmailValidationTestCase(TestCase):
+    """
+    Verify that invalid email addresses are rejected at the serializer layer
+    before any DB write or email notification is attempted.
+
+    Covers:
+      - Participant email (via EnvelopeCreateSerializer → ParticipantSerializer)
+      - Signer email (via EnvelopeCreateSerializer → SignerSerializer)
+      - additional_recipients (via EnvelopeCreateSerializer.validate_additional_recipients)
+      - Registration email (via RegisterView)
+
+    Valid / invalid cases match the requirements doc exactly.
+    """
+
+    def setUp(self):
+        from .models import Document
+        self.document = Document.objects.create(
+            file="mock.pdf",
+            file_hash="mockhash_email_validation"
+        )
+        self._base_data = {
+            "document_id": self.document.id,
+            "signature_page": 1,
+            "signature_x_ratio": 0.5,
+            "signature_y_ratio": 0.5,
+        }
+
+    # ── Helpers ──────────────────────────────────────────────────────────────
+
+    def _make_participant_data(self, email):
+        return {
+            **self._base_data,
+            "participants": [
+                {"name": "Test Signer", "email": email, "role": "signer"}
+            ],
+        }
+
+    def _make_signer_data(self, email):
+        return {
+            **self._base_data,
+            "signer": {"name": "Test Signer", "email": email},
+        }
+
+    # ── Participant email — invalid cases ─────────────────────────────────────
+
+    def test_participant_email_plain_word_rejected(self):
+        """'hamza' (no @ or domain) must be rejected."""
+        serializer = EnvelopeCreateSerializer(data=self._make_participant_data("hamza"))
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("participants", serializer.errors)
+
+    def test_participant_email_missing_domain_rejected(self):
+        """'hamza@' (missing domain) must be rejected."""
+        serializer = EnvelopeCreateSerializer(data=self._make_participant_data("hamza@"))
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("participants", serializer.errors)
+
+    def test_participant_email_no_tld_rejected(self):
+        """'hamza@gmail' (domain without TLD) must be rejected."""
+        serializer = EnvelopeCreateSerializer(data=self._make_participant_data("hamza@gmail"))
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("participants", serializer.errors)
+
+    def test_participant_email_no_at_sign_rejected(self):
+        """'abc.com' (no @ symbol) must be rejected."""
+        serializer = EnvelopeCreateSerializer(data=self._make_participant_data("abc.com"))
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("participants", serializer.errors)
+
+    # ── Participant email — valid cases ───────────────────────────────────────
+
+    def test_participant_email_valid_gmail_accepted(self):
+        """'test@gmail.com' must be accepted."""
+        serializer = EnvelopeCreateSerializer(data=self._make_participant_data("test@gmail.com"))
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_participant_email_valid_yahoo_accepted(self):
+        """'user123@yahoo.com' must be accepted."""
+        serializer = EnvelopeCreateSerializer(data=self._make_participant_data("user123@yahoo.com"))
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    # ── Signer email — invalid cases ──────────────────────────────────────────
+
+    def test_signer_email_plain_word_rejected(self):
+        """'hamza' signer email must be rejected."""
+        serializer = EnvelopeCreateSerializer(data=self._make_signer_data("hamza"))
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("signer", serializer.errors)
+
+    def test_signer_email_missing_domain_rejected(self):
+        """'hamza@' signer email must be rejected."""
+        serializer = EnvelopeCreateSerializer(data=self._make_signer_data("hamza@"))
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("signer", serializer.errors)
+
+    def test_signer_email_no_tld_rejected(self):
+        """'hamza@gmail' signer email must be rejected."""
+        serializer = EnvelopeCreateSerializer(data=self._make_signer_data("hamza@gmail"))
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("signer", serializer.errors)
+
+    def test_signer_email_no_at_sign_rejected(self):
+        """'abc.com' signer email must be rejected."""
+        serializer = EnvelopeCreateSerializer(data=self._make_signer_data("abc.com"))
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("signer", serializer.errors)
+
+    # ── Signer email — valid cases ────────────────────────────────────────────
+
+    def test_signer_email_valid_accepted(self):
+        """'test@gmail.com' signer email must be accepted."""
+        serializer = EnvelopeCreateSerializer(data=self._make_signer_data("test@gmail.com"))
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    # ── additional_recipients — invalid cases ─────────────────────────────────
+
+    def _make_recipients_data(self, recipients):
+        return {
+            **self._base_data,
+            "participants": [
+                {"name": "Test Signer", "email": "test@gmail.com", "role": "signer"}
+            ],
+            "additional_recipients": recipients,
+        }
+
+    def test_additional_recipients_plain_word_rejected(self):
+        """'hamza' in additional_recipients must be rejected."""
+        serializer = EnvelopeCreateSerializer(data=self._make_recipients_data(["hamza"]))
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("additional_recipients", serializer.errors)
+
+    def test_additional_recipients_missing_domain_rejected(self):
+        """'hamza@' in additional_recipients must be rejected."""
+        serializer = EnvelopeCreateSerializer(data=self._make_recipients_data(["hamza@"]))
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("additional_recipients", serializer.errors)
+
+    def test_additional_recipients_no_tld_rejected(self):
+        """'hamza@gmail' in additional_recipients must be rejected."""
+        serializer = EnvelopeCreateSerializer(data=self._make_recipients_data(["hamza@gmail"]))
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("additional_recipients", serializer.errors)
+
+    def test_additional_recipients_no_at_sign_rejected(self):
+        """'abc.com' in additional_recipients must be rejected."""
+        serializer = EnvelopeCreateSerializer(data=self._make_recipients_data(["abc.com"]))
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("additional_recipients", serializer.errors)
+
+    def test_additional_recipients_valid_accepted(self):
+        """Valid addresses in additional_recipients must be accepted."""
+        serializer = EnvelopeCreateSerializer(
+            data=self._make_recipients_data(["admin@company.com", "user123@yahoo.com"])
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    # ── RegisterView — email validation ───────────────────────────────────────
+
+    def test_register_invalid_email_returns_400(self):
+        """RegisterView must return 400 when an invalid email is provided."""
+        from django.test import RequestFactory
+        from .views import RegisterView
+
+        factory = RequestFactory()
+        request = factory.post(
+            "/api/auth/register/",
+            {"username": "newuser_invalid_email", "password": "securepass123", "email": "notanemail"},
+            content_type="application/json",
+        )
+        view = RegisterView.as_view()
+        response = view(request)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("email", response.data)
+
+    def test_register_missing_at_email_returns_400(self):
+        """RegisterView must reject 'hamza@' as email."""
+        from django.test import RequestFactory
+        from .views import RegisterView
+
+        factory = RequestFactory()
+        request = factory.post(
+            "/api/auth/register/",
+            {"username": "newuser_missing_at", "password": "securepass123", "email": "hamza@"},
+            content_type="application/json",
+        )
+        view = RegisterView.as_view()
+        response = view(request)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("email", response.data)
+
+    def test_register_valid_email_accepted(self):
+        """RegisterView must accept a valid email and create the user."""
+        from django.test import RequestFactory
+        from .views import RegisterView
+
+        factory = RequestFactory()
+        request = factory.post(
+            "/api/auth/register/",
+            {"username": "newuser_valid_email", "password": "securepass123", "email": "test@gmail.com"},
+            content_type="application/json",
+        )
+        view = RegisterView.as_view()
+        response = view(request)
+        self.assertEqual(response.status_code, 201)
+        self.assertIn("token", response.data)
+
+    def test_register_no_email_accepted(self):
+        """RegisterView must accept registration with no email (email is optional)."""
+        from django.test import RequestFactory
+        from .views import RegisterView
+
+        factory = RequestFactory()
+        request = factory.post(
+            "/api/auth/register/",
+            {"username": "newuser_no_email", "password": "securepass123"},
+            content_type="application/json",
+        )
+        view = RegisterView.as_view()
+        response = view(request)
+        self.assertEqual(response.status_code, 201)
+
+    # ── Error response format ──────────────────────────────────────────────────
+
+    def test_invalid_participant_email_error_message_format(self):
+        """Validation error for participant email must not expose a stack trace."""
+        serializer = EnvelopeCreateSerializer(data=self._make_participant_data("hamza"))
+        is_valid = serializer.is_valid()
+        self.assertFalse(is_valid)
+        # Errors must be a plain dict — no 500, no traceback
+        self.assertIsInstance(serializer.errors, dict)
+        self.assertIn("participants", serializer.errors)
+
+    def test_invalid_additional_recipients_error_message_format(self):
+        """Validation error for additional_recipients must contain a meaningful message."""
+        serializer = EnvelopeCreateSerializer(data=self._make_recipients_data(["hamza@"]))
+        self.assertFalse(serializer.is_valid())
+        error_msg = str(serializer.errors["additional_recipients"])
+        # Must mention email validity, not a raw Python exception
+        self.assertIn("valid email", error_msg.lower())
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SMTP Failure Resilience Verification
+# Verifies that SMTP failures never crash the application or corrupt
+# business state across all workflow scenarios and exception types.
+# ══════════════════════════════════════════════════════════════════════════════
+
+from unittest.mock import patch, MagicMock
+from smtplib import SMTPAuthenticationError, SMTPConnectError
+import fitz
+from rest_framework.test import APIClient as _APIClient
+
+
+def _smtp_make_pdf():
+    doc = fitz.open()
+    doc.new_page()
+    b = doc.tobytes()
+    doc.close()
+    return b
+
+
+def _smtp_make_envelope(owner, participants_def):
+    from django.core.files.base import ContentFile
+    from .models import Document
+    from .serializers import EnvelopeCreateSerializer
+    document = Document.objects.create(file_hash=f"smtptest_{owner.username}")
+    document.file.save(f"smtptest_{owner.username}.pdf", ContentFile(_smtp_make_pdf()))
+    data = {
+        "document_id": document.id,
+        "participants": participants_def,
+        "signature_page": 1,
+        "signature_x_ratio": 0.5,
+        "signature_y_ratio": 0.5,
+    }
+    s = EnvelopeCreateSerializer(data=data)
+    assert s.is_valid(), s.errors
+    return s.save(owner=owner)
+
+
+_SMTP_EXCEPTIONS = [
+    ("SMTPAuthError",   SMTPAuthenticationError(535, b"Authentication failed")),
+    ("SMTPConnectErr",  SMTPConnectError(111, b"Connection refused")),
+    ("TimeoutError",    TimeoutError("SMTP timed out")),
+    ("GenericError",    Exception("SMTP server unavailable")),
+]
+
+
+class SmtpResilienceVerificationTest(TestCase):
+    """
+    Verification suite for SMTP failure resilience.
+
+    Scenarios:
+      S1 — Send Package: SMTP failure must not block envelope becoming 'sent'.
+      S2 — Workflow Advance: SMTP failure must not block step progression.
+      S3 — Completion: SMTP failure must not block envelope completing or
+           certificate generation.
+      S4 — Full multi-step (Approver -> Reviewer -> Signer) with SMTP always broken.
+
+    Each scenario is exercised with four realistic exception types:
+      SMTPAuthenticationError, SMTPConnectError, TimeoutError, generic Exception.
+    """
+
+    # ── Scenario 1: Send Package ──────────────────────────────────────────────
+
+    def _s1_body(self, error_label, smtp_exc):
+        from django.contrib.auth.models import User
+        owner = User.objects.create_user(
+            username=f"s1_{error_label}", password="pass",
+            email=f"s1_{error_label}@example.com"
+        )
+        client = _APIClient()
+        client.force_authenticate(user=owner)
+        envelope = _smtp_make_envelope(owner, [
+            {"name": "Alice", "email": "alice_s1@example.com", "role": "signer", "step_number": 1}
+        ])
+        with patch("django.core.mail.send_mail", side_effect=smtp_exc):
+            response = client.post(f"/api/envelopes/{envelope.id}/send/")
+        envelope.refresh_from_db()
+        self.assertEqual(response.status_code, 200,
+            f"[S1/{error_label}] Expected HTTP 200, got {response.status_code}")
+        self.assertEqual(envelope.status, "sent",
+            f"[S1/{error_label}] Envelope should be 'sent', got '{envelope.status}'")
+
+    def test_s1_smtp_auth_error(self):   self._s1_body(*_SMTP_EXCEPTIONS[0])
+    def test_s1_smtp_connect_error(self): self._s1_body(*_SMTP_EXCEPTIONS[1])
+    def test_s1_timeout(self):           self._s1_body(*_SMTP_EXCEPTIONS[2])
+    def test_s1_generic_exception(self): self._s1_body(*_SMTP_EXCEPTIONS[3])
+
+    # ── Scenario 2: Workflow Advancement ─────────────────────────────────────
+
+    def _s2_body(self, error_label, smtp_exc):
+        from django.contrib.auth.models import User
+        from .models import ParticipantToken
+        owner = User.objects.create_user(
+            username=f"s2_{error_label}", password="pass",
+            email=f"s2_{error_label}@example.com"
+        )
+        client = _APIClient()
+        client.force_authenticate(user=owner)
+        envelope = _smtp_make_envelope(owner, [
+            {"name": "Alice Approver", "email": "alice_s2@example.com", "role": "approver", "step_number": 1},
+            {"name": "Bob Signer",     "email": "bob_s2@example.com",   "role": "signer",   "step_number": 2},
+        ])
+        client.post(f"/api/envelopes/{envelope.id}/send/")
+        p_alice = envelope.participants.get(email="alice_s2@example.com")
+        token_alice = ParticipantToken.objects.get(participant=p_alice)
+        with patch("django.core.mail.send_mail", side_effect=smtp_exc):
+            response = client.post(
+                f"/api/sign/{token_alice.token}/", {"action": "approve"}, format="json"
+            )
+        p_bob = envelope.participants.get(email="bob_s2@example.com")
+        p_bob.refresh_from_db()
+        envelope.refresh_from_db()
+        self.assertEqual(response.status_code, 200,
+            f"[S2/{error_label}] Expected HTTP 200, got {response.status_code}")
+        self.assertEqual(p_bob.status, "active",
+            f"[S2/{error_label}] Bob should be 'active', got '{p_bob.status}'")
+        self.assertEqual(envelope.status, "sent",
+            f"[S2/{error_label}] Envelope should remain 'sent', got '{envelope.status}'")
+
+    def test_s2_smtp_auth_error(self):   self._s2_body(*_SMTP_EXCEPTIONS[0])
+    def test_s2_smtp_connect_error(self): self._s2_body(*_SMTP_EXCEPTIONS[1])
+    def test_s2_timeout(self):           self._s2_body(*_SMTP_EXCEPTIONS[2])
+    def test_s2_generic_exception(self): self._s2_body(*_SMTP_EXCEPTIONS[3])
+
+    # ── Scenario 3: Completion ────────────────────────────────────────────────
+
+    def _s3_body(self, error_label, smtp_exc):
+        from django.contrib.auth.models import User
+        from .models import ParticipantToken, CompletionCertificate, AuditLog
+        owner = User.objects.create_user(
+            username=f"s3_{error_label}", password="pass",
+            email=f"s3_{error_label}@example.com"
+        )
+        client = _APIClient()
+        client.force_authenticate(user=owner)
+        envelope = _smtp_make_envelope(owner, [
+            {"name": "Alice Signer", "email": "alice_s3@example.com", "role": "signer", "step_number": 1}
+        ])
+        client.post(f"/api/envelopes/{envelope.id}/send/")
+        p_alice = envelope.participants.get(email="alice_s3@example.com")
+        token_alice = ParticipantToken.objects.get(participant=p_alice)
+        mock_em = MagicMock()
+        mock_em.send.side_effect = smtp_exc
+        with patch("django.core.mail.send_mail", side_effect=smtp_exc), \
+             patch("django.core.mail.EmailMessage", return_value=mock_em):
+            response = client.post(
+                f"/api/sign/{token_alice.token}/",
+                {"signature_type": "typed", "signature_text": "Alice Sig"},
+                format="json"
+            )
+        envelope.refresh_from_db()
+        self.assertEqual(response.status_code, 201,
+            f"[S3/{error_label}] Expected HTTP 201, got {response.status_code}")
+        self.assertEqual(envelope.status, "completed",
+            f"[S3/{error_label}] Envelope should be 'completed', got '{envelope.status}'")
+        self.assertTrue(
+            CompletionCertificate.objects.filter(envelope=envelope).exists(),
+            f"[S3/{error_label}] CompletionCertificate was not generated"
+        )
+        self.assertTrue(
+            AuditLog.objects.filter(envelope=envelope, event="Workflow Completed").exists(),
+            f"[S3/{error_label}] 'Workflow Completed' audit log missing"
+        )
+        self.assertTrue(
+            AuditLog.objects.filter(envelope=envelope, event="Signed Document Generated").exists(),
+            f"[S3/{error_label}] 'Signed Document Generated' audit log missing"
+        )
+
+    def test_s3_smtp_auth_error(self):   self._s3_body(*_SMTP_EXCEPTIONS[0])
+    def test_s3_smtp_connect_error(self): self._s3_body(*_SMTP_EXCEPTIONS[1])
+    def test_s3_timeout(self):           self._s3_body(*_SMTP_EXCEPTIONS[2])
+    def test_s3_generic_exception(self): self._s3_body(*_SMTP_EXCEPTIONS[3])
+
+    # ── Scenario 4: Full multi-step (Approver -> Reviewer -> Signer) ─────────
+
+    def test_s4_full_multistep_smtp_always_broken(self):
+        """Approver -> Reviewer -> Signer with SMTP broken at every single step."""
+        from django.contrib.auth.models import User
+        from .models import ParticipantToken, CompletionCertificate
+        smtp_exc = SMTPAuthenticationError(535, b"Authentication credentials invalid")
+        owner = User.objects.create_user(
+            username="s4_owner", password="pass",
+            email="s4_owner@example.com"
+        )
+        client = _APIClient()
+        client.force_authenticate(user=owner)
+        envelope = _smtp_make_envelope(owner, [
+            {"name": "Alice Approver", "email": "alice_s4@example.com",   "role": "approver", "step_number": 1},
+            {"name": "Bob Reviewer",   "email": "bob_s4@example.com",     "role": "reviewer", "step_number": 2},
+            {"name": "Charlie Signer", "email": "charlie_s4@example.com", "role": "signer",   "step_number": 3},
+        ])
+
+        with patch("django.core.mail.send_mail", side_effect=smtp_exc):
+            r = client.post(f"/api/envelopes/{envelope.id}/send/")
+        self.assertEqual(r.status_code, 200, f"Send failed: {r.status_code}")
+        envelope.refresh_from_db()
+        self.assertEqual(envelope.status, "sent")
+
+        p_alice = envelope.participants.get(email="alice_s4@example.com")
+        token_alice = ParticipantToken.objects.get(participant=p_alice)
+        with patch("django.core.mail.send_mail", side_effect=smtp_exc):
+            r = client.post(f"/api/sign/{token_alice.token}/", {"action": "approve"}, format="json")
+        self.assertEqual(r.status_code, 200, f"Approver failed: {r.status_code}")
+        p_bob = envelope.participants.get(email="bob_s4@example.com")
+        p_bob.refresh_from_db()
+        self.assertEqual(p_bob.status, "active", f"Bob should be active, got '{p_bob.status}'")
+
+        token_bob = ParticipantToken.objects.get(participant=p_bob)
+        with patch("django.core.mail.send_mail", side_effect=smtp_exc):
+            r = client.post(f"/api/sign/{token_bob.token}/", {"action": "approve"}, format="json")
+        self.assertEqual(r.status_code, 200, f"Reviewer failed: {r.status_code}")
+        p_charlie = envelope.participants.get(email="charlie_s4@example.com")
+        p_charlie.refresh_from_db()
+        self.assertEqual(p_charlie.status, "active", f"Charlie should be active, got '{p_charlie.status}'")
+
+        token_charlie = ParticipantToken.objects.get(participant=p_charlie)
+        mock_em = MagicMock()
+        mock_em.send.side_effect = smtp_exc
+        with patch("django.core.mail.send_mail", side_effect=smtp_exc), \
+             patch("django.core.mail.EmailMessage", return_value=mock_em):
+            r = client.post(
+                f"/api/sign/{token_charlie.token}/",
+                {"signature_type": "typed", "signature_text": "Charlie"},
+                format="json"
+            )
+        self.assertEqual(r.status_code, 201, f"Final signer failed: {r.status_code}")
+        envelope.refresh_from_db()
+        self.assertEqual(envelope.status, "completed",
+            f"Envelope should be 'completed', got '{envelope.status}'")
+        self.assertTrue(
+            CompletionCertificate.objects.filter(envelope=envelope).exists(),
+            "CompletionCertificate not generated on multi-step completion with broken SMTP"
+        )
