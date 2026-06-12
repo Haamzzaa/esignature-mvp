@@ -616,6 +616,8 @@ export default function UploadPage() {
       }
       loadPackage()
     }
+  }, [packageId, backendOrigin])
+
   // ── Load draft from URL param ──────────────────────────────────────────────
   useEffect(() => {
     if (draftIdParam) {
@@ -665,7 +667,6 @@ export default function UploadPage() {
     }
   }, [draftIdParam, backendOrigin])
 
-  }, [packageId, backendOrigin])
 
   // ── Save Draft handler ────────────────────────────────────────────────────
   async function handleSaveDraft() {
@@ -758,7 +759,10 @@ export default function UploadPage() {
     } finally {
       setIsSavingDraft(false)
     }
-}
+  }
+
+  // ── Send Package (form submit) handler ───────────────────────────────────
+  async function handleSubmit(e) {
     e.preventDefault()
     setError('')
 
@@ -828,7 +832,7 @@ export default function UploadPage() {
       if (!envelopeId) throw new Error('Envelope created but no envelope_id returned.')
 
       await sendEnvelope(envelopeId)
-      
+
       setSentPackageInfo({
         id: envelopeId,
         documentName: file ? file.name : (existingDocName || 'document.pdf'),
@@ -841,24 +845,24 @@ export default function UploadPage() {
         })
       })
     } catch (err) {
-      let message = '';
+      let message = ''
       if (err?.response?.data) {
         if (typeof err.response.data === 'string') {
-          message = err.response.data;
+          message = err.response.data
         } else if (err.response.data.detail) {
-          message = err.response.data.detail;
+          message = err.response.data.detail
         } else if (err.response.data.file) {
-          message = Array.isArray(err.response.data.file) ? err.response.data.file[0] : err.response.data.file;
+          message = Array.isArray(err.response.data.file) ? err.response.data.file[0] : err.response.data.file
         } else {
-          const firstKey = Object.keys(err.response.data)[0];
+          const firstKey = Object.keys(err.response.data)[0]
           if (firstKey) {
-            const val = err.response.data[firstKey];
-            message = Array.isArray(val) ? val[0] : val;
+            const val = err.response.data[firstKey]
+            message = Array.isArray(val) ? val[0] : val
           }
         }
       }
       if (!message) {
-        message = err?.message || 'Something went wrong. Please try again.';
+        message = err?.message || 'Something went wrong. Please try again.'
       }
       setError(message)
     } finally {
@@ -1165,7 +1169,15 @@ export default function UploadPage() {
                   )}
                 </div>
 
-                <div className="flex justify-end pt-4">
+                <div className="flex justify-between pt-4">
+                  <button
+                    type="button"
+                    disabled={!isDocumentValid || isSavingDraft}
+                    onClick={handleSaveDraft}
+                    className="inline-flex items-center gap-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed px-5 py-3.5 text-sm font-semibold text-zinc-300 transition-all cursor-pointer"
+                  >
+                    {isSavingDraft ? 'Saving…' : draftSaved ? '✓ Saved' : 'Save Draft'}
+                  </button>
                   <button
                     type="button"
                     disabled={!isDocumentValid}
@@ -1398,14 +1410,24 @@ export default function UploadPage() {
 
                 {/* Back and Continue Buttons */}
                 <div className="flex justify-between pt-6 border-t border-white/5">
-                  <button
-                    type="button"
-                    onClick={() => setCurrentTab('documents')}
-                    className="inline-flex items-center gap-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 px-6 py-3.5 text-sm font-semibold text-zinc-300 transition-all cursor-pointer"
-                  >
-                    Back
-                  </button>
-                  
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentTab('documents')}
+                      className="inline-flex items-center gap-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 px-6 py-3.5 text-sm font-semibold text-zinc-300 transition-all cursor-pointer"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSavingDraft}
+                      onClick={handleSaveDraft}
+                      className="inline-flex items-center gap-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed px-5 py-3.5 text-sm font-semibold text-zinc-300 transition-all cursor-pointer"
+                    >
+                      {isSavingDraft ? 'Saving…' : draftSaved ? '✓ Saved' : 'Save Draft'}
+                    </button>
+                  </div>
+
                   <div className="flex flex-col items-end gap-1">
                     <button
                       type="button"
@@ -1613,13 +1635,23 @@ export default function UploadPage() {
 
                 {/* Back and Continue Buttons */}
                 <div className="flex justify-between pt-6 border-t border-white/5">
-                  <button
-                    type="button"
-                    onClick={() => setCurrentTab('workflow')}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 px-6 py-3.5 text-sm font-semibold text-zinc-300 transition-all cursor-pointer"
-                  >
-                    Back
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentTab('workflow')}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 px-6 py-3.5 text-sm font-semibold text-zinc-300 transition-all cursor-pointer"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSavingDraft}
+                      onClick={handleSaveDraft}
+                      className="inline-flex items-center gap-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed px-5 py-3.5 text-sm font-semibold text-zinc-300 transition-all cursor-pointer"
+                    >
+                      {isSavingDraft ? 'Saving…' : draftSaved ? '✓ Saved' : 'Save Draft'}
+                    </button>
+                  </div>
                   <button
                     type="button"
                     onClick={() => setCurrentTab('review')}
@@ -1775,14 +1807,24 @@ export default function UploadPage() {
 
                 {/* Back and Send buttons */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-6 border-t border-white/5">
-                  <button
-                    type="button"
-                    onClick={() => setCurrentTab(templateId ? 'workflow' : 'settings')}
-                    disabled={isSubmitting}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 px-6 py-3.5 text-sm font-semibold text-zinc-300 transition-all cursor-pointer disabled:opacity-50"
-                  >
-                    Back
-                  </button>
+                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentTab(templateId ? 'workflow' : 'settings')}
+                      disabled={isSubmitting}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 px-6 py-3.5 text-sm font-semibold text-zinc-300 transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSavingDraft}
+                      onClick={handleSaveDraft}
+                      className="inline-flex items-center gap-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed px-5 py-3.5 text-sm font-semibold text-zinc-300 transition-all cursor-pointer"
+                    >
+                      {isSavingDraft ? 'Saving…' : draftSaved ? '✓ Saved' : 'Save Draft'}
+                    </button>
+                  </div>
 
                   <div className="flex flex-col items-end gap-2">
                     <button

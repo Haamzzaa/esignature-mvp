@@ -409,7 +409,7 @@ export default function InboxPage() {
                         return (
                           <tr 
                             key={pkg.id} 
-                            onClick={() => navigate(`/packages/${pkg.id}`)}
+                            onClick={() => navigate(isDraft ? `/create-request?draftId=${pkg.id}` : `/packages/${pkg.id}`)}
                             className="hover:bg-white/[0.015] transition-colors group/row cursor-pointer"
                           >
                             {/* Title */}
@@ -517,10 +517,10 @@ export default function InboxPage() {
                                   </>
                                 ) : null}
                                 <Link 
-                                  to={`/packages/${pkg.id}`}
+                                  to={isDraft ? `/create-request?draftId=${pkg.id}` : `/packages/${pkg.id}`}
                                   className="inline-flex items-center gap-1 rounded-lg bg-zinc-800 hover:bg-cyan-500 hover:text-black border border-white/5 hover:border-cyan-400 px-3 py-1.5 text-[11px] font-bold text-zinc-300 transition-all cursor-pointer shrink-0"
                                 >
-                                  Details
+                                  {isDraft ? 'Resume' : 'Details'}
                                   <ArrowUpRight className="h-3 w-3" />
                                 </Link>
                               </div>
