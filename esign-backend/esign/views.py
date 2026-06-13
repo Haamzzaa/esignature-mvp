@@ -618,108 +618,117 @@ class SigningView(APIView):
                 return Response({"detail": f"Invalid action '{action}' for role '{role}'."}, status=status.HTTP_400_BAD_REQUEST)
 
             with transaction.atomic():
+                # Acquire locks: Token -> Participant -> Envelope
+                locked_token = ParticipantToken.objects.select_for_update().get(id=token_obj.id)
+                locked_participant = Participant.objects.select_for_update().get(id=participant.id)
+                locked_envelope = Envelope.objects.select_for_update().get(id=envelope.id)
+
+                # Re-verify lock eligibility under lock
+                if locked_token.is_used or locked_envelope.status in ('completed', 'declined'):
+                    return Response({"detail": "Envelope already processed or declined."}, status=status.HTTP_400_BAD_REQUEST)
+
                 if role == "reviewer":
                     if action == "approve":
-                        participant.status = "completed"
-                        participant.completed_at = timezone.now()
-                        participant.save(update_fields=["status", "completed_at"])
+                        locked_participant.status = "completed"
+                        locked_participant.completed_at = timezone.now()
+                        locked_participant.save(update_fields=["status", "completed_at"])
                         
                         AuditLog.objects.create(
-                            envelope=envelope,
+                            envelope=locked_envelope,
                             event="Reviewer Approved",
                             ip_address=ip_address,
                             user_agent=user_agent,
                         )
                         AuditLog.objects.create(
-                            envelope=envelope,
+                            envelope=locked_envelope,
                             event="Participant Approved",
                             ip_address=ip_address,
                             user_agent=user_agent,
                         )
                     elif action == "return":
-                        participant.status = "returned"
-                        participant.completed_at = timezone.now()
-                        participant.save(update_fields=["status", "completed_at"])
+                        locked_participant.status = "returned"
+                        locked_participant.completed_at = timezone.now()
+                        locked_participant.save(update_fields=["status", "completed_at"])
                         
-                        envelope.status = "declined"
-                        envelope.save(update_fields=["status"])
+                        locked_envelope.status = "declined"
+                        locked_envelope.save(update_fields=["status"])
                         
                         AuditLog.objects.create(
-                            envelope=envelope,
+                            envelope=locked_envelope,
                             event="Reviewer Returned",
                             ip_address=ip_address,
                             user_agent=user_agent,
                         )
                         AuditLog.objects.create(
-                            envelope=envelope,
+                            envelope=locked_envelope,
                             event="Participant Returned",
                             ip_address=ip_address,
                             user_agent=user_agent,
                         )
                 elif role == "approver":
                     if action == "approve":
-                        participant.status = "completed"
-                        participant.completed_at = timezone.now()
-                        participant.save(update_fields=["status", "completed_at"])
+                        locked_participant.status = "completed"
+                        locked_participant.completed_at = timezone.now()
+                        locked_participant.save(update_fields=["status", "completed_at"])
                         
                         AuditLog.objects.create(
-                            envelope=envelope,
+                            envelope=locked_envelope,
                             event="Approver Approved",
                             ip_address=ip_address,
                             user_agent=user_agent,
                         )
                         AuditLog.objects.create(
-                            envelope=envelope,
+                            envelope=locked_envelope,
                             event="Participant Approved",
                             ip_address=ip_address,
                             user_agent=user_agent,
                         )
                     elif action == "reject":
-                        participant.status = "declined"
-                        participant.completed_at = timezone.now()
-                        participant.save(update_fields=["status", "completed_at"])
+                        locked_participant.status = "declined"
+                        locked_participant.completed_at = timezone.now()
+                        locked_participant.save(update_fields=["status", "completed_at"])
                         
-                        envelope.status = "declined"
-                        envelope.save(update_fields=["status"])
+                        locked_envelope.status = "declined"
+                        locked_envelope.save(update_fields=["status"])
                         
                         AuditLog.objects.create(
-                            envelope=envelope,
+                            envelope=locked_envelope,
                             event="Approver Rejected",
                             ip_address=ip_address,
                             user_agent=user_agent,
                         )
                         AuditLog.objects.create(
-                            envelope=envelope,
+                            envelope=locked_envelope,
                             event="Participant Rejected",
                             ip_address=ip_address,
                             user_agent=user_agent,
                         )
                 elif role == "cc":
                     if action == "acknowledge":
-                        participant.status = "completed"
-                        participant.completed_at = timezone.now()
-                        participant.save(update_fields=["status", "completed_at"])
+                        locked_participant.status = "completed"
+                        locked_participant.completed_at = timezone.now()
+                        locked_participant.save(update_fields=["status", "completed_at"])
                         
                         AuditLog.objects.create(
-                            envelope=envelope,
+                            envelope=locked_envelope,
                             event="CC Acknowledged",
                             ip_address=ip_address,
                             user_agent=user_agent,
                         )
                 
                 # Invalidate token
-                token_obj.is_used = True
-                token_obj.save(update_fields=["is_used"])
+                locked_token.is_used = True
+                locked_token.save(update_fields=["is_used"])
 
                 # Check and advance step if not declined
-                if envelope.status != "declined":
-                    check_and_advance_step(envelope, participant.step_number, request)
+                if locked_envelope.status != "declined":
+                    check_and_advance_step(locked_envelope, locked_participant.step_number, request)
 
             return Response(
                 {
                     "message": f"Action {action} processed successfully.",
-                    "envelope_id": envelope.id,
-                    "status": envelope.status,
+                    "envelope_id": locked_envelope.id,
+                    "status": locked_envelope.status,
                 },
                 status=status.HTTP_200_OK,
             )
@@ -796,58 +805,76 @@ class SigningView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # 1. Read document bytes (outside transaction)
+        document.file.open("rb")
+        try:
+            original_bytes = document.file.read()
+        finally:
+            document.file.close()
+
+        final_hash    = hashlib.sha256(original_bytes).hexdigest()
+        original_name = document.file.name.rsplit("/", 1)[-1] or "signed.pdf"
+
+        # 2. PDF Signing (outside transaction)
+        from services.pdf_service import sign_document
+
+        participant_rec = participant if is_participant else Participant.objects.filter(envelope=envelope, email=email).first()
+        fields_payload = request.data.get('fields', {})
+
+        try:
+            pdf_bytes = sign_document(
+                envelope=envelope,
+                participant_rec=participant_rec,
+                name=name,
+                sig_type=sig_type,
+                signature_text=signature_text,
+                signature_image_b64=signature_image_b64,
+                fields_payload=fields_payload,
+                original_bytes=original_bytes,
+            )
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Image/PDF processing failed: {str(e)}", exc_info=True)
+            return Response(
+                {"detail": "Unable to process uploaded signature image."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # 3. Database mutations under lock
         with transaction.atomic():
-            document.file.open("rb")
-            try:
-                original_bytes = document.file.read()
-            finally:
-                document.file.close()
+            # Acquire locks: Token -> Participant -> Envelope
+            if is_participant:
+                locked_token = ParticipantToken.objects.select_for_update().get(id=token_obj.id)
+                locked_participant = Participant.objects.select_for_update().get(id=participant.id)
+                locked_envelope = Envelope.objects.select_for_update().get(id=envelope.id)
+            else:
+                locked_token = SigningToken.objects.select_for_update().get(id=token_obj.id)
+                locked_signer = Signer.objects.select_for_update().get(id=signer.id)
+                locked_envelope = Envelope.objects.select_for_update().get(id=envelope.id)
 
-            final_hash    = hashlib.sha256(original_bytes).hexdigest()
-            original_name = document.file.name.rsplit("/", 1)[-1] or "signed.pdf"
+            # Re-verify lock eligibility under lock
+            if locked_token.is_used or locked_envelope.status in ('completed', 'declined'):
+                return Response({"detail": "Envelope already processed or declined."}, status=status.HTTP_400_BAD_REQUEST)
 
-            from services.pdf_service import sign_document
-
-            participant_rec = participant if is_participant else Participant.objects.filter(envelope=envelope, email=email).first()
-            fields_payload = request.data.get('fields', {})
-
-            try:
-                pdf_bytes = sign_document(
-                    envelope=envelope,
-                    participant_rec=participant_rec,
-                    name=name,
-                    sig_type=sig_type,
-                    signature_text=signature_text,
-                    signature_image_b64=signature_image_b64,
-                    fields_payload=fields_payload,
-                    original_bytes=original_bytes,
-                )
-            except Exception as e:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(f"Image/PDF processing failed: {str(e)}", exc_info=True)
-                return Response(
-                    {"detail": "Unable to process uploaded signature image."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            signed_doc = SignedDocument(envelope=envelope, final_hash=final_hash)
+            signed_doc = SignedDocument(envelope=locked_envelope, final_hash=final_hash)
             signed_doc.file.save(original_name, ContentFile(pdf_bytes), save=True)
 
-            token_obj.is_used   = True
-            token_obj.expires_at = timezone.now() + timedelta(minutes=15)
-            token_obj.save(update_fields=["is_used", "expires_at"])
+            locked_token.is_used   = True
+            locked_token.expires_at = timezone.now() + timedelta(minutes=15)
+            locked_token.save(update_fields=["is_used", "expires_at"])
 
             if is_participant:
-                participant.has_completed = True
-                participant.status = 'completed'
-                participant.completed_at = timezone.now()
-                participant.save(update_fields=["has_completed", "status", "completed_at"])
-                current_step = participant.step_number
+                locked_participant.has_completed = True
+                locked_participant.status = 'completed'
+                locked_participant.completed_at = timezone.now()
+                locked_participant.save(update_fields=["has_completed", "status", "completed_at"])
+                current_step = locked_participant.step_number
             else:
-                p_rec = Participant.objects.filter(envelope=envelope, email=email).first()
                 current_step = 1
+                p_rec = Participant.objects.filter(envelope=locked_envelope, email=email).first()
                 if p_rec:
+                    p_rec = Participant.objects.select_for_update().get(pk=p_rec.pk)
                     p_rec.has_completed = True
                     p_rec.status = 'completed'
                     p_rec.completed_at = timezone.now()
@@ -855,39 +882,39 @@ class SigningView(APIView):
                     current_step = p_rec.step_number
 
             AuditLog.objects.create(
-                envelope=envelope,
+                envelope=locked_envelope,
                 event="signed",
                 ip_address=ip_address,
                 user_agent=user_agent,
             )
             AuditLog.objects.create(
-                envelope=envelope,
+                envelope=locked_envelope,
                 event="Signer Completed",
                 ip_address=ip_address,
                 user_agent=user_agent,
             )
             AuditLog.objects.create(
-                envelope=envelope,
+                envelope=locked_envelope,
                 event="Participant Signed",
                 ip_address=ip_address,
                 user_agent=user_agent,
             )
             
-            p_name = participant.name if is_participant else (p_rec.name if p_rec else name)
+            p_name = locked_participant.name if is_participant else (p_rec.name if p_rec else name)
             AuditLog.objects.create(
-                envelope=envelope,
+                envelope=locked_envelope,
                 event=f"Participant {p_name} Completed",
                 ip_address=ip_address,
                 user_agent=user_agent,
             )
 
-            check_and_advance_step(envelope, current_step, request)
+            check_and_advance_step(locked_envelope, current_step, request)
 
         return Response(
             {
                 "message": "Document signed successfully.",
-                "envelope_id": envelope.id,
-                "status": envelope.status,
+                "envelope_id": locked_envelope.id,
+                "status": locked_envelope.status,
                 "signed_document_id": signed_doc.id,
                 "signed_document_url": request.build_absolute_uri(
                     reverse('signing-signed', kwargs={'token': token})

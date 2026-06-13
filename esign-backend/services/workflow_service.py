@@ -2,7 +2,7 @@ import logging
 from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
-from esign.models import ParticipantToken, Signer, SigningToken, AuditLog
+from esign.models import Envelope, ParticipantToken, Signer, SigningToken, AuditLog
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,9 @@ def check_and_advance_step(envelope, current_step, request=None):
     ip_address = request.META.get("REMOTE_ADDR") if request else None
     user_agent = request.META.get("HTTP_USER_AGENT") if request else None
 
-    step_participants = envelope.participants.filter(step_number=current_step)
+    # Acquire row-level locks
+    envelope = Envelope.objects.select_for_update().get(id=envelope.id)
+    step_participants = envelope.participants.select_for_update().filter(step_number=current_step)
     
     all_step_completed = True
     for p in step_participants:
