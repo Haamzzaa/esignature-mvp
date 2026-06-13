@@ -16,13 +16,13 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 
 // ── Style constants ───────────────────────────────────────────────
 const inputClass =
-  'w-full rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3.5 pl-11 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none backdrop-blur-xl transition-all duration-300 focus:border-cyan-500/50 focus:bg-cyan-950/10 focus:ring-2 focus:ring-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60'
+  'w-full rounded-2xl border border-border-color bg-card-bg px-4 py-3.5 pl-11 text-sm text-text-primary placeholder:text-text-secondary/60 outline-none backdrop-blur-xl transition-all duration-300 focus:border-cyan-500/50 focus:bg-cyan-950/10 focus:ring-2 focus:ring-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60'
 
 const selectClass =
-  'w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3.5 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none backdrop-blur-xl transition-all duration-300 focus:border-cyan-500/50 focus:bg-cyan-950/10 focus:ring-2 focus:ring-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60'
+  'w-full rounded-2xl border border-border-color bg-card-bg px-4 py-3.5 text-sm text-text-primary placeholder:text-text-secondary/60 outline-none backdrop-blur-xl transition-all duration-300 focus:border-cyan-500/50 focus:bg-cyan-950/10 focus:ring-2 focus:ring-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60'
 
 const cellInputClass =
-  'w-full bg-white/[0.01] border border-white/5 rounded-xl px-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none transition-all duration-200 focus:border-cyan-500/30 focus:bg-cyan-950/5 focus:ring-1 focus:ring-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60'
+  'w-full bg-card-bg border border-border-color rounded-xl px-3 py-2.5 text-sm text-text-primary placeholder:text-text-secondary/60 outline-none transition-all duration-200 focus:border-cyan-500/30 focus:bg-cyan-950/5 focus:ring-1 focus:ring-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60'
 
 function CustomSelect({ value, onChange, options, disabled }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -48,10 +48,10 @@ function CustomSelect({ value, onChange, options, disabled }) {
         type="button"
         disabled={disabled}
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full rounded-2xl border border-white/10 bg-[#050505]/60 px-4 py-3.5 text-sm text-zinc-100 text-left outline-none backdrop-blur-xl transition-all duration-300 focus:border-cyan-500/50 focus:bg-cyan-950/10 focus:ring-2 focus:ring-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60 flex items-center justify-between cursor-pointer"
+        className="w-full rounded-2xl border border-border-color bg-card-bg px-4 py-3.5 text-sm text-text-primary text-left outline-none backdrop-blur-xl transition-all duration-300 focus:border-cyan-500/50 focus:bg-cyan-950/10 focus:ring-2 focus:ring-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60 flex items-center justify-between cursor-pointer"
       >
         <span className="truncate">{selectedOption ? selectedOption.label : 'Select role'}</span>
-        <ChevronDown className={`h-4 w-4 text-zinc-500 transition-transform duration-300 ${isOpen ? 'rotate-180 text-cyan-400' : ''}`} />
+        <ChevronDown className={`h-4 w-4 text-text-secondary transition-transform duration-300 ${isOpen ? 'rotate-180 text-cyan-400' : ''}`} />
       </button>
 
       <AnimatePresence>
@@ -61,7 +61,7 @@ function CustomSelect({ value, onChange, options, disabled }) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.15, ease: "easeOut" }}
-            className="absolute mt-2 w-full z-[100] rounded-2xl border border-white/10 bg-[#0B1220] overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.95),0_0_30px_rgba(34,211,238,0.2)] p-2"
+            className="glass-panel absolute mt-2 w-full z-[100] rounded-2xl overflow-hidden p-2"
           >
             <div className="max-h-60 overflow-y-auto custom-scrollbar space-y-1">
               {options.map((opt) => {
@@ -77,7 +77,7 @@ function CustomSelect({ value, onChange, options, disabled }) {
                     className={`w-full text-left px-4 py-3 rounded-xl text-sm transition-all duration-200 flex items-center justify-between cursor-pointer ${
                       isSelected 
                         ? 'bg-cyan-500 text-black font-semibold border border-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.25)]' 
-                        : 'text-white hover:bg-cyan-500 hover:text-black border border-transparent'
+                        : 'text-text-primary hover:bg-cyan-500 hover:text-black border border-transparent'
                     }`}
                   >
                     <span className="font-medium">{opt.label}</span>
@@ -109,7 +109,7 @@ function SuccessScreen({ sentPackageInfo, onTrackProgress, onViewDetails, onRetu
         </div>
       </div>
 
-      <h2 className="text-3xl font-light tracking-tight text-white sm:text-4xl neon-text-glow">
+      <h2 className="text-3xl font-bold tracking-tight text-text-primary sm:text-4xl">
         Workflow Dispatched
       </h2>
       <p className="mt-2 text-sm text-zinc-400 max-w-md">
@@ -117,9 +117,9 @@ function SuccessScreen({ sentPackageInfo, onTrackProgress, onViewDetails, onRetu
       </p>
 
       {/* Details Receipt Card */}
-      <div className="w-full max-w-md mt-8 p-6 rounded-2xl border border-white/5 bg-white/[0.02] backdrop-blur-xl text-left space-y-4 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-white/5 pb-3">
-          <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">Envelope Details</span>
+      <div className="w-full max-w-md mt-8 p-6 rounded-2xl glass-panel text-left space-y-4 shadow-lg">
+        <div className="flex items-center justify-between border-b border-border-color pb-3">
+          <span className="text-xs font-bold uppercase tracking-wider text-text-secondary">Envelope Details</span>
           <span className="inline-flex items-center gap-1 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-mono font-bold uppercase text-cyan-400 tracking-wider animate-pulse">
             <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-ping mr-1" />
             In Progress
@@ -128,38 +128,38 @@ function SuccessScreen({ sentPackageInfo, onTrackProgress, onViewDetails, onRetu
 
         <div className="space-y-3">
           <div className="flex items-start justify-between gap-4">
-            <span className="text-xs text-zinc-500 shrink-0">Document</span>
-            <span className="text-xs font-medium text-zinc-200 truncate flex items-center gap-1.5 max-w-[240px]">
-              <FileText className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
+            <span className="text-xs text-text-secondary shrink-0">Document</span>
+            <span className="text-xs font-medium text-text-primary truncate flex items-center gap-1.5 max-w-[240px]">
+              <FileText className="h-3.5 w-3.5 text-text-secondary shrink-0" />
               <span className="truncate" title={sentPackageInfo.documentName}>{sentPackageInfo.documentName}</span>
             </span>
           </div>
 
           <div className="flex items-center justify-between">
-            <span className="text-xs text-zinc-500">Active Routing Step</span>
+            <span className="text-xs text-text-secondary">Active Routing Step</span>
             <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border bg-cyan-500/10 text-cyan-400 border-cyan-500/20">
               Step 1 - {sentPackageInfo.firstStepRole}
             </span>
           </div>
 
           <div className="flex items-center justify-between">
-            <span className="text-xs text-zinc-500">Total Participants</span>
-            <span className="text-xs font-semibold text-zinc-300 font-mono">
+            <span className="text-xs text-text-secondary">Total Participants</span>
+            <span className="text-xs font-semibold text-text-primary font-mono">
               {sentPackageInfo.totalParticipants} enrolled
             </span>
           </div>
 
           <div className="flex items-center justify-between">
-            <span className="text-xs text-zinc-500">Dispatched Date</span>
-            <span className="text-xs font-semibold text-zinc-300 font-mono">
+            <span className="text-xs text-text-secondary">Dispatched Date</span>
+            <span className="text-xs font-semibold text-text-primary font-mono">
               {sentPackageInfo.createdDate}
             </span>
           </div>
         </div>
 
-        <div className="border-t border-white/5 pt-3 flex justify-between items-center text-[10px] text-zinc-500">
+        <div className="border-t border-border-color pt-3 flex justify-between items-center text-[10px] text-text-secondary">
           <span>Envelope ID</span>
-          <span className="font-mono text-zinc-400 select-all truncate max-w-[200px]" title={sentPackageInfo.id}>
+          <span className="font-mono text-text-primary select-all truncate max-w-[200px]" title={sentPackageInfo.id}>
             {sentPackageInfo.id}
           </span>
         </div>
@@ -171,7 +171,7 @@ function SuccessScreen({ sentPackageInfo, onTrackProgress, onViewDetails, onRetu
           <button
             type="button"
             onClick={onTrackProgress}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-3.5 text-xs font-bold transition-all duration-300 shadow-[0_0_15px_rgba(34,211,238,0.15)] hover:shadow-[0_0_20px_rgba(34,211,238,0.3)] uppercase tracking-wider cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-3.5 text-xs font-bold transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.45)] uppercase tracking-wider cursor-pointer"
           >
             <Activity className="h-4 w-4" />
             Track Progress
@@ -180,7 +180,7 @@ function SuccessScreen({ sentPackageInfo, onTrackProgress, onViewDetails, onRetu
           <button
             type="button"
             onClick={onViewDetails}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/10 text-white px-4 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-primary hover:text-cyan-400 px-4 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
           >
             <Eye className="h-4 w-4" />
             View Package
@@ -190,7 +190,7 @@ function SuccessScreen({ sentPackageInfo, onTrackProgress, onViewDetails, onRetu
         <button
           type="button"
           onClick={onReturn}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-zinc-900/50 hover:bg-zinc-900 border border-white/5 text-zinc-400 hover:text-white px-4 py-3 text-xs font-medium transition-all duration-300 cursor-pointer"
+          className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-4 py-3 text-xs font-medium transition-all duration-300 cursor-pointer"
         >
           Return to Workspace
           <ArrowRight className="h-3.5 w-3.5" />
@@ -199,6 +199,34 @@ function SuccessScreen({ sentPackageInfo, onTrackProgress, onViewDetails, onRetu
     </motion.div>
   )
 }
+
+const steps = [
+  {
+    id: "documents",
+    title: "Documents",
+    description: "Upload document"
+  },
+  {
+    id: "recipients",
+    title: "Recipients",
+    description: "Configure signers"
+  },
+  {
+    id: "prepare",
+    title: "Prepare",
+    description: "Place fields"
+  },
+  {
+    id: "settings",
+    title: "Settings",
+    description: "Package settings"
+  },
+  {
+    id: "review",
+    title: "Review",
+    description: "Final review"
+  }
+];
 
 export default function UploadPage() {
   const navigate = useNavigate()
@@ -232,12 +260,13 @@ export default function UploadPage() {
 
   // ── Form / workflow state ─────────────────────────────────────
   const [file, setFile] = useState(null)
-  const [steps, setSteps] = useState([
+  const [workflowSteps, setWorkflowSteps] = useState([
     {
       stepNumber: 1,
       participants: [{ id: '1', name: '', email: '', role: 'signer' }]
     }
   ])
+  const [settingsValid, setSettingsValid] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSavingDraft, setIsSavingDraft] = useState(false)
   const [draftSaved, setDraftSaved] = useState(false)
@@ -309,11 +338,11 @@ export default function UploadPage() {
   }, [file, existingDocUrl, isPdf, uploadError, isValidating])
 
   const allParticipants = useMemo(() => {
-    return steps.flatMap(s => s.participants.map(p => ({
+    return workflowSteps.flatMap(s => s.participants.map(p => ({
       ...p,
       stepNumber: s.stepNumber
     }))).filter(p => p.name?.trim() && p.email?.trim())
-  }, [steps])
+  }, [workflowSteps])
 
   useEffect(() => {
     if (allParticipants.length > 0 && !activeParticipantEmail) {
@@ -322,34 +351,72 @@ export default function UploadPage() {
   }, [allParticipants, activeParticipantEmail])
 
   const isWorkflowValid = useMemo(() => {
-    const allParticipants = steps.flatMap(s => s.participants)
-    if (steps.length === 0 || allParticipants.length === 0) return false
+    const allParticipants = workflowSteps.flatMap(s => s.participants)
+    if (workflowSteps.length === 0 || allParticipants.length === 0) return false
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     return allParticipants.every(p => p.name?.trim() && p.email?.trim() && emailRegex.test(p.email.trim()))
-  }, [steps])
+  }, [workflowSteps])
 
   const hasSignerRole = useMemo(() => {
-    return steps.flatMap(s => s.participants).some(p => p.role === 'signer')
-  }, [steps])
+    return workflowSteps.flatMap(s => s.participants).some(p => p.role === 'signer')
+  }, [workflowSteps])
 
   const isSignaturePlaced = useMemo(() => {
     return (!!sigPosition && !!sigPosition.page && sigPosition.x_ratio != null && sigPosition.y_ratio != null) || (placedFields.length > 0)
   }, [sigPosition, placedFields])
 
+  const getStepCompletion = (stepId) => {
+    switch (stepId) {
+      case 'documents':
+        return isDocumentValid;
+      case 'recipients':
+        return isWorkflowValid && hasSignerRole;
+      case 'prepare':
+        return isSignaturePlaced;
+      case 'settings':
+        return settingsValid;
+      case 'review':
+        return isDocumentValid && isWorkflowValid && hasSignerRole && isSignaturePlaced && settingsValid;
+      default:
+        return false;
+    }
+  }
+
+  const getStepClickable = (stepId) => {
+    if (stepId === 'documents') return true;
+    const idx = steps.findIndex(s => s.id === stepId);
+    if (idx === -1) return false;
+    return steps.slice(0, idx).every(s => getStepCompletion(s.id));
+  }
+
+  const progressPercent = useMemo(() => {
+    const idx = steps.findIndex(s => s.id === currentTab)
+    if (idx === -1) return 0
+    return ((idx + 1) / steps.length) * 100
+  }, [currentTab])
+
+  const currentStepInfo = useMemo(() => {
+    const idx = steps.findIndex(s => s.id === currentTab)
+    return {
+      num: idx !== -1 ? idx + 1 : 1,
+      title: idx !== -1 ? steps[idx].title : ''
+    }
+  }, [currentTab])
+
   // ── Participant / Step Actions ───────────────────────────────────────────
   const addStep = () => {
-    const nextStepNum = steps.length + 1
+    const nextStepNum = workflowSteps.length + 1
     const newStep = {
       stepNumber: nextStepNum,
       participants: [
         { id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(), name: '', email: '', role: 'signer' }
       ]
     }
-    setSteps(prev => [...prev, newStep])
+    setWorkflowSteps(prev => [...prev, newStep])
   }
 
   const removeStep = (stepNumber) => {
-    setSteps(prev => {
+    setWorkflowSteps(prev => {
       const filtered = prev.filter(s => s.stepNumber !== stepNumber)
       return filtered.map((s, idx) => ({
         ...s,
@@ -359,7 +426,7 @@ export default function UploadPage() {
   }
 
   const addParticipantToStep = (stepNumber) => {
-    setSteps(prev =>
+    setWorkflowSteps(prev =>
       prev.map(s => {
         if (s.stepNumber === stepNumber) {
           return {
@@ -376,7 +443,7 @@ export default function UploadPage() {
   }
 
   const removeParticipant = (stepNumber, participantId) => {
-    setSteps(prev =>
+    setWorkflowSteps(prev =>
       prev.map(s => {
         if (s.stepNumber === stepNumber) {
           const filtered = s.participants.filter(p => p.id !== participantId)
@@ -391,7 +458,7 @@ export default function UploadPage() {
   }
 
   const updateParticipant = (stepNumber, participantId, field, value) => {
-    setSteps(prev =>
+    setWorkflowSteps(prev =>
       prev.map(s => {
         if (s.stepNumber === stepNumber) {
           return {
@@ -407,12 +474,12 @@ export default function UploadPage() {
   }
 
   const moveStep = (stepNumber, direction) => {
-    const index = steps.findIndex(s => s.stepNumber === stepNumber)
+    const index = workflowSteps.findIndex(s => s.stepNumber === stepNumber)
     if (index === -1) return
     const newIndex = direction === 'up' ? index - 1 : index + 1
-    if (newIndex < 0 || newIndex >= steps.length) return
+    if (newIndex < 0 || newIndex >= workflowSteps.length) return
 
-    setSteps(prev => {
+    setWorkflowSteps(prev => {
       const updated = [...prev]
       const temp = updated[index]
       updated[index] = updated[newIndex]
@@ -458,7 +525,7 @@ export default function UploadPage() {
     setTemplateModalError('')
     setIsSavingTemplate(true)
     try {
-      const workflowDef = steps.flatMap(s => 
+      const workflowDef = workflowSteps.flatMap(s => 
         s.participants.map(p => ({
           step: s.stepNumber,
           role: p.role
@@ -532,7 +599,7 @@ export default function UploadPage() {
                 }))
               
               if (sortedSteps.length > 0) {
-                setSteps(sortedSteps)
+                setWorkflowSteps(sortedSteps)
               }
             }
           }
@@ -591,7 +658,7 @@ export default function UploadPage() {
                 }))
               
               if (sortedSteps.length > 0) {
-                setSteps(sortedSteps)
+                setWorkflowSteps(sortedSteps)
               }
             }
 
@@ -647,7 +714,7 @@ export default function UploadPage() {
               })
               const sortedSteps = Object.keys(grouped).map(Number).sort((a, b) => a - b)
                 .map((stepNum, idx) => ({ stepNumber: idx + 1, participants: grouped[stepNum] }))
-              if (sortedSteps.length > 0) setSteps(sortedSteps)
+              if (sortedSteps.length > 0) setWorkflowSteps(sortedSteps)
             }
             if (res.fields && Array.isArray(res.fields)) {
               setPlacedFields(res.fields.map(f => ({
@@ -692,7 +759,7 @@ export default function UploadPage() {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       const preparedParticipants = []
       let globalOrder = 1
-      steps.forEach(step => {
+      workflowSteps.forEach(step => {
         step.participants.forEach(p => {
           if (p.name?.trim() && p.email?.trim() && emailRegex.test(p.email.trim())) {
             preparedParticipants.push({
@@ -770,10 +837,10 @@ export default function UploadPage() {
     if (file && !isPdf) return setError('Only PDF files are supported.')
 
     // VALIDATION
-    if (steps.length === 0) {
+    if (workflowSteps.length === 0) {
       return setError('At least one step is required to create a workflow.')
     }
-    const allParticipants = steps.flatMap(s => s.participants)
+    const allParticipants = workflowSteps.flatMap(s => s.participants)
     if (allParticipants.length === 0) {
       return setError('At least one participant is required to create a package.')
     }
@@ -806,7 +873,7 @@ export default function UploadPage() {
 
       const preparedParticipants = []
       let globalOrder = 1
-      steps.forEach(step => {
+      workflowSteps.forEach(step => {
         step.participants.forEach(p => {
           preparedParticipants.push({
             name: p.name.trim(),
@@ -922,11 +989,11 @@ export default function UploadPage() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="mx-auto w-full max-w-4xl px-4 py-12 sm:py-20 relative z-10">
+    <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:py-20 relative z-10">
 
-      {/* Return link */}
+      {/* Return link & UserNav wrapper */}
       {!sentPackageInfo && (
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-8 flex justify-between items-center w-full">
           <Link
             to="/"
             className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-400 hover:text-cyan-400 transition-colors"
@@ -934,6 +1001,7 @@ export default function UploadPage() {
             <ArrowLeft className="h-4 w-4" />
             Back to Dashboard
           </Link>
+          <UserNav />
         </motion.div>
       )}
 
@@ -942,10 +1010,10 @@ export default function UploadPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
       >
-        {/* ── Upload / signer form card ── */}
-        <div className="glass-panel rounded-[2rem] p-8 sm:p-12 relative overflow-hidden group">
-          {/* Subtle gradient glow behind the card content */}
-          <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 via-transparent to-violet-500/5 opacity-50 pointer-events-none group-hover:opacity-100 transition-opacity duration-700" />
+            {/* ── Upload / signer form card ── */}
+            <div className="glass-panel rounded-3xl p-8 sm:p-12 relative overflow-hidden">
+          {/* Subtle gradient background behind the card content */}
+          <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/[0.02] via-transparent to-violet-500/[0.02] opacity-50 pointer-events-none" />
 
           {sentPackageInfo ? (
             <SuccessScreen
@@ -954,7 +1022,7 @@ export default function UploadPage() {
               onViewDetails={() => navigate(`/packages/${sentPackageInfo.id}`)}
               onReturn={() => {
                 setFile(null)
-                setSteps([
+                setWorkflowSteps([
                   {
                     stepNumber: 1,
                     participants: [{ id: '1', name: '', email: '', role: 'signer' }]
@@ -968,58 +1036,50 @@ export default function UploadPage() {
             />
           ) : (
             <>
-              <div className="relative z-10 mb-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-white/5 pb-6">
-            <div className="space-y-3">
-              {loadedTemplate && (
-                <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-semibold text-violet-400 backdrop-blur-md mb-2">
-                  <SparkleIcon className="h-3 w-3 animate-pulse text-violet-400" />
-                  Template: {loadedTemplate.name}
+              <div className="relative z-10 mb-10 flex flex-col justify-between items-start gap-4 border-b border-border-color pb-6">
+                <div className="space-y-3">
+                  {loadedTemplate && (
+                    <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-semibold text-violet-400 backdrop-blur-md mb-2">
+                      <SparkleIcon className="h-3 w-3 animate-pulse text-violet-400" />
+                      Template: {loadedTemplate.name}
+                    </div>
+                  )}
+                  <h1 className="text-4xl font-bold tracking-tight text-text-primary sm:text-[60px] sm:leading-none">
+                    Create Package
+                  </h1>
+                  <p className="text-sm font-medium text-text-secondary sm:text-base">
+                    Upload, configure, and send documents for signature.
+                  </p>
                 </div>
-              )}
-              <h1 className="text-3xl font-light tracking-tight text-white sm:text-5xl neon-text-glow">
-                Create Package
-              </h1>
-              <p className="text-sm font-medium text-zinc-400 sm:text-base">
-                Upload, configure, and send documents for signature.
-              </p>
-            </div>
+              </div>
 
-            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-              <UserNav />
-              <button
-                type="button"
-                onClick={openTemplateModal}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-2.5 text-xs font-bold transition-all duration-300 shadow-[0_0_15px_rgba(34,211,238,0.15)] hover:shadow-[0_0_20px_rgba(34,211,238,0.3)] uppercase tracking-wider cursor-pointer shrink-0"
-              >
-                <SparkleIcon className="h-4 w-4" />
-                Save as Template
-              </button>
-            </div>
+
+          {/* Progress Bar */}
+          <div className="relative w-full bg-border-color/30 rounded-full h-1.5 mb-6 overflow-hidden z-10">
+            <div
+              className="bg-cyan-500 h-full rounded-full transition-all duration-500 ease-out shadow-[0_0_8px_#22d3ee]"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+
+          {/* Promoted Step Header */}
+          <div className="flex flex-col gap-1 mb-6 z-10 relative">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-accent">
+              STEP {currentStepInfo.num} OF {steps.length}
+            </span>
+            <h2 className="text-3xl font-extrabold tracking-tight text-text-primary sm:text-4xl">
+              {currentStepInfo.title}
+            </h2>
           </div>
 
           {/* Stepper Header */}
-          <div className="relative z-10 mb-12 border-b border-white/5 pb-8">
-            <div className="relative flex flex-col md:flex-row items-stretch justify-between w-full gap-4 md:gap-2">
-              {[
-                { id: 'documents', label: '1. Documents', desc: 'Upload PDF payload' },
-                { id: 'workflow', label: '2. Workflow', desc: 'Configure recipients' },
-                { id: 'settings', label: '3. Settings', desc: 'Reminders & permissions' },
-                { id: 'review', label: '4. Review & Prepare', desc: 'Preflight checklist' }
-              ].map((tab, idx) => {
-                const isCompleted = 
-                  tab.id === 'documents' ? isDocumentValid :
-                  tab.id === 'workflow' ? (isWorkflowValid && hasSignerRole) :
-                  tab.id === 'settings' ? true : // optional/always completed
-                  (isDocumentValid && isWorkflowValid && hasSignerRole && isSignaturePlaced);
-                
-                const isActive = currentTab === tab.id;
-                
-                const isClickable = templateId ? true : (
-                  tab.id === 'documents' ? true :
-                  tab.id === 'workflow' ? isDocumentValid :
-                  tab.id === 'settings' ? (isDocumentValid && isWorkflowValid && hasSignerRole) :
-                  (isDocumentValid && isWorkflowValid && hasSignerRole)
-                );
+          <div className="relative z-10 mb-8 border-b border-border-color pb-6">
+            <div className="relative flex flex-col md:flex-row items-stretch justify-between w-full gap-6 md:gap-6">
+              {steps.map((tab, idx) => {
+                const currentStepIdx = steps.findIndex(s => s.id === currentTab);
+                const isCompleted = idx < currentStepIdx;
+                const isActive = idx === currentStepIdx;
+                const isClickable = getStepClickable(tab.id);
 
                 return (
                   <button
@@ -1030,33 +1090,33 @@ export default function UploadPage() {
                       setCurrentTab(tab.id);
                       setError('');
                     }}
-                    className={`flex-1 text-left rounded-2xl p-4 border transition-all duration-300 relative overflow-hidden group ${
+                    className={`flex-1 text-left glass-panel rounded-2xl py-7 px-6 min-h-[110px] transition-all duration-200 relative overflow-hidden group hover:-translate-y-[2px] ${
                       isActive 
-                        ? 'bg-cyan-500/10 border-cyan-500/50 shadow-[0_0_20px_rgba(34,211,238,0.15)]'
+                        ? 'bg-cyan-500/5 border-cyan-500/30 shadow-md'
                         : isCompleted
-                          ? 'bg-emerald-500/5 border-emerald-500/30 hover:border-emerald-500/60'
-                          : 'bg-white/[0.01] border-white/5 hover:border-white/10'
+                          ? 'bg-emerald-500/5 border-emerald-500/25'
+                          : 'hover:bg-text-primary/[0.01]'
                     } disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
                     {/* Tiny side accent color bar */}
                     <div className={`absolute left-0 top-0 bottom-0 w-1 transition-all ${
-                      isActive ? 'bg-cyan-400' : isCompleted ? 'bg-emerald-400' : 'bg-transparent'
+                      isActive ? 'bg-accent' : isCompleted ? 'bg-emerald-400' : 'bg-transparent'
                     }`} />
                     
                     <div className="flex items-center justify-between mb-1.5 pl-1.5">
-                      <span className={`text-xs font-bold uppercase tracking-wider ${
-                        isActive ? 'text-cyan-400' : isCompleted ? 'text-emerald-400' : 'text-zinc-400'
+                      <span className={`text-[10px] font-bold uppercase tracking-widest ${
+                        isActive ? 'text-accent' : isCompleted ? 'text-emerald-400' : 'text-text-secondary'
                       }`}>
-                        {tab.label}
+                        {idx + 1}. {tab.title}
                       </span>
                       {isCompleted ? (
                         <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
                       ) : isActive ? (
-                        <div className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
+                        <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
                       ) : null}
                     </div>
-                    <p className="text-[11px] font-medium text-zinc-500 pl-1.5 truncate group-hover:text-zinc-400 transition-colors">
-                      {tab.desc}
+                    <p className="text-[10px] font-normal text-text-secondary/70 pl-1.5 truncate group-hover:text-accent transition-colors">
+                      {tab.description}
                     </p>
                   </button>
                 )
@@ -1070,9 +1130,10 @@ export default function UploadPage() {
             {currentTab === 'documents' && (
               <div className="space-y-6">
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-zinc-300">
+                  <h3 className="text-base font-semibold text-text-primary flex items-center gap-2 mb-2">
+                    <FileText className="h-4.5 w-4.5 text-accent" />
                     Encrypted Payload (PDF)
-                  </label>
+                  </h3>
                   <div className="relative group/upload">
                     <input
                       id="pdf-upload"
@@ -1100,7 +1161,7 @@ export default function UploadPage() {
                             setUploadError('')
                             if (templateId) {
                               setTimeout(() => {
-                                setCurrentTab('workflow')
+                                setCurrentTab('recipients')
                               }, 400)
                             }
                           } catch (err) {
@@ -1134,30 +1195,32 @@ export default function UploadPage() {
                       disabled={isSubmitting || isValidating}
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-20"
                     />
-                    <div className={`flex flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-all duration-300 p-8 sm:p-10 ${(file || existingDocName) ? 'border-cyan-500/50 bg-cyan-950/10' : 'border-white/10 bg-white/[0.02] group-hover/upload:border-cyan-500/30 group-hover/upload:bg-white/[0.04]'}`}>
+                    <div className={`flex flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-all duration-300 p-8 sm:p-10 ${(file || existingDocName) ? 'border-cyan-500/50 bg-cyan-500/10' : 'border-border-color bg-card-bg group-hover/upload:border-cyan-500/30 group-hover/upload:bg-cyan-500/5'}`}>
                       <motion.div
                         animate={(file || existingDocName) ? { y: 0, scale: 1 } : { y: [0, -5, 0] }}
                         transition={(file || existingDocName) ? {} : { repeat: Infinity, duration: 3, ease: "easeInOut" }}
-                        className={`mb-4 rounded-full p-4 ${(file || existingDocName) ? 'bg-cyan-500/20 text-cyan-400' : 'bg-white/5 text-zinc-400 group-hover/upload:text-cyan-400 group-hover/upload:bg-cyan-500/10 transition-colors'}`}
+                        className={`mb-4 rounded-full p-4 ${(file || existingDocName) ? 'bg-cyan-500/20 text-accent' : 'bg-border-color text-text-secondary group-hover/upload:text-accent group-hover/upload:bg-cyan-500/10 transition-colors'}`}
                       >
                         {(file || existingDocName) ? <FileText className="h-8 w-8" /> : <UploadCloud className="h-8 w-8" />}
                       </motion.div>
                       {(file || existingDocName) ? (
                         <div className="text-center">
-                          <p className="text-sm font-medium text-cyan-300">{file ? file.name : existingDocName}</p>
-                          <p className="mt-1 text-xs text-cyan-500/70">Ready for processing</p>
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-accent/70 mb-1.5 block">PDF Document • Secure upload</span>
+                          <p className="text-sm font-medium text-accent">{file ? file.name : existingDocName}</p>
+                          <p className="mt-1 text-xs text-accent/75">Ready for processing</p>
                         </div>
                       ) : (
                         <div className="text-center">
-                          <p className="text-sm font-medium text-zinc-300">Drag & drop or click to browse</p>
-                          <p className="mt-1 text-xs text-zinc-500">Only PDF files are supported</p>
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/70 mb-1.5 block">PDF Document • Secure upload</span>
+                          <p className="text-sm font-medium text-text-primary">Drag & drop or click to browse</p>
+                          <p className="mt-1 text-xs text-text-secondary">Only PDF files are supported</p>
                         </div>
                       )}
                     </div>
                   </div>
                   {isValidating && (
-                    <div className="mt-3 flex items-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-4 py-2.5 text-xs text-cyan-400">
-                      <span className="h-3.5 w-3.5 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin shrink-0" />
+                    <div className="mt-3 flex items-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-4 py-2.5 text-xs text-accent">
+                      <span className="h-3.5 w-3.5 rounded-full border-2 border-accent border-t-transparent animate-spin shrink-0" />
                       <span>Validating document payload...</span>
                     </div>
                   )}
@@ -1169,38 +1232,48 @@ export default function UploadPage() {
                   )}
                 </div>
 
-                <div className="flex justify-between pt-4">
-                  <button
-                    type="button"
-                    disabled={!isDocumentValid || isSavingDraft}
-                    onClick={handleSaveDraft}
-                    className="inline-flex items-center gap-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed px-5 py-3.5 text-sm font-semibold text-zinc-300 transition-all cursor-pointer"
-                  >
-                    {isSavingDraft ? 'Saving…' : draftSaved ? '✓ Saved' : 'Save Draft'}
-                  </button>
+                <div className="flex justify-between items-center pt-6 border-t border-border-color">
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      disabled={!isDocumentValid || isSavingDraft}
+                      onClick={handleSaveDraft}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isSavingDraft ? 'Saving…' : draftSaved ? '✓ Saved' : 'Save Draft'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openTemplateModal}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
+                    >
+                      <SparkleIcon className="h-4 w-4 shrink-0 text-text-secondary" />
+                      Save as Template
+                    </button>
+                  </div>
                   <button
                     type="button"
                     disabled={!isDocumentValid}
-                    onClick={() => setCurrentTab('workflow')}
-                    className="inline-flex items-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed px-6 py-3.5 text-sm font-semibold text-black transition-all cursor-pointer shadow-[0_0_15px_rgba(34,211,238,0.15)]"
+                    onClick={() => setCurrentTab('recipients')}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-6 py-3.5 text-xs font-bold transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.45)] uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Continue to Workflow
-                    <ArrowRight className="h-4 w-4" />
+                    Continue to Recipients
+                    <ArrowRight className="h-4 w-4 stroke-[2.5]" />
                   </button>
                 </div>
               </div>
             )}
 
             {/* Step 2 Panel: Participants & Workflow */}
-            {currentTab === 'workflow' && (
+            {currentTab === 'recipients' && (
               <div className="space-y-6 pt-2">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <h3 className="text-lg font-light text-white flex items-center gap-2">
-                      <UserPlus className="h-5 w-5 text-cyan-400" />
+                    <h3 className="text-base font-semibold tracking-wide text-text-primary flex items-center gap-2">
+                      <UserPlus className="h-5 w-5 text-accent" />
                       Workflow Builder
                     </h3>
-                    <p className="text-xs text-zinc-500 mt-1">
+                    <p className="text-xs text-text-secondary mt-1">
                       Design a sequential routing workflow. Participants in each step will receive the document in order.
                     </p>
                   </div>
@@ -1209,7 +1282,7 @@ export default function UploadPage() {
                     type="button"
                     onClick={addStep}
                     disabled={isSubmitting}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 hover:bg-cyan-500 hover:text-black hover:border-cyan-400 px-4 py-2.5 text-xs font-semibold text-cyan-400 transition-all duration-300 shadow-[0_0_15px_rgba(34,211,238,0.05)] cursor-pointer shrink-0 self-start sm:self-auto"
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 hover:bg-cyan-500 hover:text-black hover:border-cyan-400 px-4 py-2.5 text-xs font-semibold text-accent transition-all duration-300 shadow-[0_0_15px_rgba(34,211,238,0.05)] cursor-pointer shrink-0 self-start sm:self-auto"
                   >
                     <Plus className="h-4 w-4" />
                     Add Workflow Step
@@ -1217,21 +1290,21 @@ export default function UploadPage() {
                 </div>
 
                 <div className="space-y-4">
-                  {steps.map((step, stepIdx) => (
+                  {workflowSteps.map((step, stepIdx) => (
                     <div key={step.stepNumber} className="flex flex-col items-center w-full">
                       {/* Step Card */}
-                      <div className="w-full glass-panel rounded-3xl overflow-visible border border-white/5 shadow-2xl p-6 relative">
+                      <div className="w-full glass-panel rounded-2xl overflow-visible p-6 relative hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
                         {/* Step Header */}
-                        <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/5">
+                        <div className="flex items-center justify-between mb-4 pb-3 border-b border-border-color">
                           <div className="flex items-center gap-3">
-                            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-cyan-500/20 border border-cyan-500/30 text-xs font-bold text-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.1)]">
+                            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-cyan-500/10 border border-cyan-500/30 text-xs font-bold text-accent">
                               {step.stepNumber}
                             </span>
                             <div>
-                              <h4 className="text-sm font-semibold text-white uppercase tracking-wider">
+                              <h4 className="text-sm font-semibold text-text-primary uppercase tracking-wider">
                                 Step {step.stepNumber} Recipients
                               </h4>
-                              <p className="text-[10px] text-zinc-500">Executes in parallel at this sequence number</p>
+                              <p className="text-[10px] text-text-secondary">Executes in parallel at this sequence number</p>
                             </div>
                           </div>
 
@@ -1241,7 +1314,7 @@ export default function UploadPage() {
                               type="button"
                               disabled={isSubmitting || stepIdx === 0}
                               onClick={() => moveStep(step.stepNumber, 'up')}
-                              className="rounded-lg p-1.5 text-zinc-500 hover:text-cyan-400 hover:bg-cyan-500/10 transition-all disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed animate-none"
+                              className="rounded-lg p-1.5 text-text-secondary hover:text-accent hover:bg-cyan-500/10 transition-all disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed animate-none"
                               title="Move Step Up"
                             >
                               <ChevronDown className="h-4 w-4 rotate-180" />
@@ -1250,9 +1323,9 @@ export default function UploadPage() {
                             {/* Move Down */}
                             <button
                               type="button"
-                              disabled={isSubmitting || stepIdx === steps.length - 1}
+                              disabled={isSubmitting || stepIdx === workflowSteps.length - 1}
                               onClick={() => moveStep(step.stepNumber, 'down')}
-                              className="rounded-lg p-1.5 text-zinc-500 hover:text-cyan-400 hover:bg-cyan-500/10 transition-all disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed animate-none"
+                              className="rounded-lg p-1.5 text-text-secondary hover:text-accent hover:bg-cyan-500/10 transition-all disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed animate-none"
                               title="Move Step Down"
                             >
                               <ChevronDown className="h-4 w-4" />
@@ -1261,9 +1334,9 @@ export default function UploadPage() {
                             {/* Delete Step */}
                             <button
                               type="button"
-                              disabled={isSubmitting || steps.length <= 1}
+                              disabled={isSubmitting || workflowSteps.length <= 1}
                               onClick={() => removeStep(step.stepNumber)}
-                              className="rounded-lg p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed animate-none"
+                              className="rounded-lg p-1.5 text-text-secondary hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed animate-none"
                               title="Delete Step"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -1275,24 +1348,24 @@ export default function UploadPage() {
                         <div className="overflow-visible">
                           <table className="w-full text-left border-collapse text-sm">
                             <thead>
-                              <tr className="text-zinc-500 uppercase text-[9px] font-bold tracking-wider bg-white/[0.002] border-b border-white/5">
+                              <tr className="text-text-secondary uppercase text-[9px] font-bold tracking-wider bg-bg-primary/5 border-b border-border-color">
                                 <th className="px-4 py-2 min-w-[200px]">Name</th>
                                 <th className="px-4 py-2 min-w-[220px]">Email Address</th>
                                 <th className="px-4 py-2 min-w-[200px]">Role</th>
                                 <th className="px-4 py-2 text-center w-[80px]">Actions</th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-white/5">
+                            <tbody className="divide-y divide-border-color">
                               {step.participants.length === 0 ? (
                                 <tr>
-                                  <td colSpan="4" className="px-4 py-8 text-center text-zinc-500">
+                                  <td colSpan="4" className="px-4 py-8 text-center text-text-secondary">
                                     <div className="flex flex-col items-center justify-center">
-                                      <User className="h-6 w-6 text-zinc-700 mb-1 stroke-[1.5]" />
-                                      <p className="text-xs font-medium text-zinc-400">No participants in this step.</p>
+                                      <User className="h-6 w-6 text-text-secondary/55 mb-1 stroke-[1.5]" />
+                                      <p className="text-xs font-medium text-text-secondary">No participants in this step.</p>
                                       <button
                                         type="button"
                                         onClick={() => addParticipantToStep(step.stepNumber)}
-                                        className="mt-2 text-[10px] text-cyan-400 hover:underline font-semibold"
+                                        className="mt-2 text-[10px] text-accent hover:underline font-semibold"
                                       >
                                         + Add Participant
                                       </button>
@@ -1301,10 +1374,10 @@ export default function UploadPage() {
                                 </tr>
                               ) : (
                                 step.participants.map((p) => (
-                                  <tr key={p.id} className="hover:bg-white/[0.005] transition-colors group/row">
+                                  <tr key={p.id} className="hover:bg-bg-primary/30 transition-colors group/row">
                                     <td className="px-3 py-2.5 align-middle">
                                       <div className="relative">
-                                        <User className="absolute left-3 h-4 w-4 text-zinc-600 top-1/2 -translate-y-1/2" />
+                                        <User className="absolute left-3 h-4 w-4 text-text-secondary/60 top-1/2 -translate-y-1/2" />
                                         <input
                                           type="text"
                                           value={p.name}
@@ -1317,7 +1390,7 @@ export default function UploadPage() {
                                     </td>
                                     <td className="px-3 py-2.5 align-middle">
                                       <div className="relative">
-                                        <Mail className={`absolute left-3 h-4 w-4 top-1/2 -translate-y-1/2 ${participantErrors[p.id] ? 'text-red-400' : 'text-zinc-600'}`} />
+                                        <Mail className={`absolute left-3 h-4 w-4 top-1/2 -translate-y-1/2 ${participantErrors[p.id] ? 'text-red-400' : 'text-text-secondary/60'}`} />
                                         <input
                                           type="email"
                                           value={p.email}
@@ -1365,7 +1438,7 @@ export default function UploadPage() {
                                         type="button"
                                         onClick={() => removeParticipant(step.stepNumber, p.id)}
                                         disabled={isSubmitting}
-                                        className="rounded-lg p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer inline-flex items-center justify-center cursor-pointer"
+                                        className="rounded-lg p-2 text-text-secondary hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer inline-flex items-center justify-center cursor-pointer"
                                         title="Remove Recipient"
                                       >
                                         <Trash2 className="h-4 w-4" />
@@ -1385,7 +1458,7 @@ export default function UploadPage() {
                               type="button"
                               onClick={() => addParticipantToStep(step.stepNumber)}
                               disabled={isSubmitting}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-zinc-800 hover:bg-cyan-500 hover:text-black border border-white/10 hover:border-cyan-400 text-zinc-300 transition-all duration-200 cursor-pointer"
+                              className="inline-flex items-center gap-1.5 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-primary hover:text-cyan-400 px-3 py-1.5 text-xs font-semibold transition-all duration-200 cursor-pointer"
                             >
                               <Plus className="h-3 w-3" />
                               Add Recipient to Step {step.stepNumber}
@@ -1395,10 +1468,10 @@ export default function UploadPage() {
                       </div>
 
                       {/* Down Arrow separator between steps */}
-                      {stepIdx < steps.length - 1 && (
+                      {stepIdx < workflowSteps.length - 1 && (
                         <div className="flex flex-col items-center my-3 relative">
                           <div className="h-8 w-[1px] bg-gradient-to-b from-cyan-500/50 to-transparent" />
-                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-cyan-950/40 border border-cyan-500/30 text-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.15)] backdrop-blur-md">
+                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-cyan-500/10 border border-cyan-500/30 text-accent shadow-[0_0_10px_rgba(34,211,238,0.15)] backdrop-blur-md">
                             <ChevronDown className="h-4 w-4 animate-pulse" />
                           </div>
                           <div className="h-8 w-[1px] bg-gradient-to-t from-cyan-500/50 to-transparent" />
@@ -1409,12 +1482,12 @@ export default function UploadPage() {
                 </div>
 
                 {/* Back and Continue Buttons */}
-                <div className="flex justify-between pt-6 border-t border-white/5">
-                  <div className="flex items-center gap-3">
+                <div className="flex justify-between pt-6 border-t border-border-color">
+                  <div className="flex flex-wrap items-center gap-3">
                     <button
                       type="button"
                       onClick={() => setCurrentTab('documents')}
-                      className="inline-flex items-center gap-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 px-6 py-3.5 text-sm font-semibold text-zinc-300 transition-all cursor-pointer"
+                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-6 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
                     >
                       Back
                     </button>
@@ -1422,9 +1495,17 @@ export default function UploadPage() {
                       type="button"
                       disabled={isSavingDraft}
                       onClick={handleSaveDraft}
-                      className="inline-flex items-center gap-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed px-5 py-3.5 text-sm font-semibold text-zinc-300 transition-all cursor-pointer"
+                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isSavingDraft ? 'Saving…' : draftSaved ? '✓ Saved' : 'Save Draft'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openTemplateModal}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
+                    >
+                      <SparkleIcon className="h-4 w-4 shrink-0 text-text-secondary" />
+                      Save as Template
                     </button>
                   </div>
 
@@ -1435,7 +1516,7 @@ export default function UploadPage() {
                         // Validate all participant emails inline before advancing
                         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
                         const errors = {}
-                        steps.forEach(step => {
+                        workflowSteps.forEach(step => {
                           step.participants.forEach(p => {
                             const email = p.email.trim()
                             if (!email) {
@@ -1451,12 +1532,12 @@ export default function UploadPage() {
                         }
                         setParticipantErrors({})
                         if (!hasSignerRole) return
-                        setCurrentTab(templateId ? 'review' : 'settings')
+                        setCurrentTab('prepare')
                       }}
-                      className="inline-flex items-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 px-6 py-3.5 text-sm font-semibold text-black transition-all cursor-pointer shadow-[0_0_15px_rgba(34,211,238,0.15)]"
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-6 py-3.5 text-xs font-bold transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.45)] uppercase tracking-wider cursor-pointer"
                     >
-                      {templateId ? 'Continue to Review' : 'Continue to Settings'}
-                      <ArrowRight className="h-4 w-4" />
+                      Continue to Prepare
+                      <ArrowRight className="h-4 w-4 stroke-[2.5]" />
                     </button>
                     {!hasSignerRole && (
                       <p className="text-[10px] text-amber-400 font-semibold mt-1">
@@ -1468,30 +1549,169 @@ export default function UploadPage() {
               </div>
             )}
 
-            {/* Step 3 Panel: Request Settings */}
+            {/* Step 3 Panel: Prepare */}
+            {currentTab === 'prepare' && (
+              <div className="space-y-6 pt-2">
+                <div>
+                  <h3 className="text-base font-semibold tracking-wide text-text-primary flex items-center gap-2">
+                    <Crosshair className="h-5 w-5 text-accent" />
+                    Place Fields on Document
+                  </h3>
+                  <p className="text-xs text-text-secondary mt-1">
+                    Select a recipient, choose the field type, and click directly on the PDF pages below to position signature fields.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Summary Card 1: Fields Count */}
+                  <div className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[140px] relative hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
+                    <div className="flex justify-between items-start">
+                      <span className="text-[10px] uppercase font-bold tracking-widest text-text-secondary">Summary</span>
+                      <FileText className="h-5 w-5 text-accent" />
+                    </div>
+                    <div className="mt-4 space-y-1">
+                      <h4 className="text-sm font-bold text-text-primary">Total Placed Fields</h4>
+                      <p className="text-[10px] text-text-secondary">Signature fields placed on document pages.</p>
+                      <div className="text-3xl font-light text-accent font-mono mt-2">
+                        {placedFields.length}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Summary Card 2: Instructions */}
+                  <div className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[140px] md:col-span-2 relative hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
+                    <div className="flex justify-between items-start">
+                      <span className="text-[10px] uppercase font-bold tracking-widest text-text-secondary">Instructions</span>
+                      <SparkleIcon className="h-5 w-5 text-violet-400" />
+                    </div>
+                    <div className="mt-4 space-y-1">
+                      <h4 className="text-sm font-bold text-text-primary">How to position signature zones</h4>
+                      <p className="text-xs text-text-secondary leading-relaxed">
+                        1. Select a recipient from the dropdown below or in the document editor.<br />
+                        2. Scroll down to the document editor below.<br />
+                        3. Click on any page where you want the signer to sign.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Placed Fields List / Summary */}
+                <div className="glass-panel rounded-2xl p-6 space-y-4 hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
+                  <div>
+                    <h4 className="text-sm font-bold uppercase tracking-wider text-text-primary flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-accent" />
+                      Placed Fields Summary
+                    </h4>
+                    <p className="text-[10px] text-text-secondary mt-0.5">List of all active signature zones placed on the document.</p>
+                  </div>
+
+                  {placedFields.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border-color bg-card-bg/40 p-8 text-center text-xs text-text-secondary">
+                      No fields placed yet. Scroll down to position your first signature zone on the PDF page.
+                    </div>
+                  ) : (
+                    <div className="max-h-60 overflow-y-auto custom-scrollbar divide-y divide-border-color">
+                      {placedFields.map((field) => (
+                        <div key={field.id} className="py-3 flex items-center justify-between text-xs hover:bg-cyan-500/[0.02] px-2 rounded-xl transition-all">
+                          <div className="flex items-center gap-4">
+                            <span className="flex h-5 w-5 items-center justify-center rounded bg-cyan-500/10 text-[10px] font-bold text-accent">
+                              P{field.page}
+                            </span>
+                            <div>
+                              <span className="font-semibold text-text-primary">{field.participant_name || 'Signer'}</span>
+                              <span className="text-[10px] text-text-secondary font-mono ml-2">({field.participant_email})</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <span className="text-[10px] font-mono text-text-secondary">
+                              X: {field.x_ratio.toFixed(2)} Y: {field.y_ratio.toFixed(2)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeField(field.id)}
+                              className="rounded-lg p-1 text-text-secondary hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
+                              title="Delete Field"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Back and Continue Buttons */}
+                <div className="flex justify-between pt-6 border-t border-border-color">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentTab('recipients')}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-6 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSavingDraft}
+                      onClick={handleSaveDraft}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isSavingDraft ? 'Saving…' : draftSaved ? '✓ Saved' : 'Save Draft'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openTemplateModal}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
+                    >
+                      <SparkleIcon className="h-4 w-4 shrink-0 text-text-secondary" />
+                      Save as Template
+                    </button>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <button
+                      type="button"
+                      disabled={!isSignaturePlaced}
+                      onClick={() => setCurrentTab('settings')}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-6 py-3.5 text-xs font-bold transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.45)] uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Continue to Settings
+                      <ArrowRight className="h-4 w-4 stroke-[2.5]" />
+                    </button>
+                    {!isSignaturePlaced && (
+                      <p className="text-[10px] text-amber-400 font-semibold mt-1">
+                        Please scroll down and place at least one signature zone.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Step 4 Panel: Request Settings */}
             {currentTab === 'settings' && (
               <div className="space-y-6 pt-2">
                 <div>
-                  <h3 className="text-lg font-light text-white flex items-center gap-2">
-                    <Settings className="h-5 w-5 text-cyan-400" />
+                  <h3 className="text-base font-semibold tracking-wide text-text-primary flex items-center gap-2">
+                    <Settings className="h-5 w-5 text-accent" />
                     Request Settings
                   </h3>
-                  <p className="text-xs text-zinc-500 mt-1">
+                  <p className="text-xs text-text-secondary mt-1">
                     Configure request alerts, document distribution, and delivery settings before dispatching.
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {/* Switch 1: Reminders */}
-                  <div className="glass-panel rounded-2xl p-5 border border-white/5 bg-white/[0.01] flex flex-col justify-between min-h-[140px] relative transition-all duration-300 hover:border-cyan-500/20">
+                  <div className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[140px] relative hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
                     <div className="flex justify-between items-start">
-                      <span className="text-[10px] uppercase font-bold tracking-widest text-zinc-500">Alerts</span>
-                      <Bell className={`h-5 w-5 ${sendReminders ? 'text-cyan-400' : 'text-zinc-500'}`} />
+                      <span className="text-[10px] uppercase font-bold tracking-widest text-text-secondary">Alerts</span>
+                      <Bell className={`h-5 w-5 ${sendReminders ? 'text-accent' : 'text-text-secondary'}`} />
                     </div>
                     <div className="mt-4 space-y-3">
                       <div>
-                        <h4 className="text-sm font-bold text-white">Automatic Reminders</h4>
-                        <p className="text-[10px] text-zinc-500 mt-0.5">Send status email alerts to pending signers.</p>
+                        <h4 className="text-sm font-bold text-text-primary">Automatic Reminders</h4>
+                        <p className="text-[10px] text-text-secondary mt-0.5">Send status email alerts to pending signers.</p>
                       </div>
                       <label className="flex items-center gap-2 cursor-pointer select-none">
                         <input
@@ -1501,8 +1721,8 @@ export default function UploadPage() {
                           disabled={isSubmitting}
                           className="sr-only peer"
                         />
-                        <div className="relative w-10 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-zinc-400 after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-black peer-checked:after:border-cyan-400 shadow-[0_0_10px_rgba(0,0,0,0.5)]" />
-                        <span className="text-xs text-zinc-400 peer-checked:text-cyan-400 font-medium">
+                        <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
+                        <span className="text-xs text-text-secondary peer-checked:text-accent font-medium">
                           {sendReminders ? 'Enabled' : 'Disabled'}
                         </span>
                       </label>
@@ -1510,15 +1730,15 @@ export default function UploadPage() {
                   </div>
 
                   {/* Switch 2: Final Document Delivery */}
-                  <div className="glass-panel rounded-2xl p-5 border border-white/5 bg-white/[0.01] flex flex-col justify-between min-h-[140px] relative transition-all duration-300 hover:border-cyan-500/20">
+                  <div className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[140px] relative hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
                     <div className="flex justify-between items-start">
-                      <span className="text-[10px] uppercase font-bold tracking-widest text-zinc-500">Distribution</span>
-                      <Share2 className={`h-5 w-5 ${sendFinalEmail ? 'text-cyan-400' : 'text-zinc-500'}`} />
+                      <span className="text-[10px] uppercase font-bold tracking-widest text-text-secondary">Distribution</span>
+                      <Share2 className={`h-5 w-5 ${sendFinalEmail ? 'text-accent' : 'text-text-secondary'}`} />
                     </div>
                     <div className="mt-4 space-y-3">
                       <div>
-                        <h4 className="text-sm font-bold text-white">Final Delivery</h4>
-                        <p className="text-[10px] text-zinc-500 mt-0.5">Deliver completed copy to all participants.</p>
+                        <h4 className="text-sm font-bold text-text-primary">Final Delivery</h4>
+                        <p className="text-[10px] text-text-secondary mt-0.5">Deliver completed copy to all participants.</p>
                       </div>
                       <label className="flex items-center gap-2 cursor-pointer select-none">
                         <input
@@ -1528,8 +1748,8 @@ export default function UploadPage() {
                           disabled={isSubmitting}
                           className="sr-only peer"
                         />
-                        <div className="relative w-10 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-zinc-400 after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-black peer-checked:after:border-cyan-400 shadow-[0_0_10px_rgba(0,0,0,0.5)]" />
-                        <span className="text-xs text-zinc-400 peer-checked:text-cyan-400 font-medium">
+                        <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
+                        <span className="text-xs text-text-secondary peer-checked:text-accent font-medium">
                           {sendFinalEmail ? 'Deliver' : 'Do Not Deliver'}
                         </span>
                       </label>
@@ -1537,15 +1757,15 @@ export default function UploadPage() {
                   </div>
 
                   {/* Switch 3: Allow Printing */}
-                  <div className="glass-panel rounded-2xl p-5 border border-white/5 bg-white/[0.01] flex flex-col justify-between min-h-[140px] relative transition-all duration-300 hover:border-cyan-500/20">
+                  <div className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[140px] relative hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
                     <div className="flex justify-between items-start">
-                      <span className="text-[10px] uppercase font-bold tracking-widest text-zinc-500">Permissions</span>
-                      <Printer className={`h-5 w-5 ${allowPrinting ? 'text-cyan-400' : 'text-zinc-500'}`} />
+                      <span className="text-[10px] uppercase font-bold tracking-widest text-text-secondary">Permissions</span>
+                      <Printer className={`h-5 w-5 ${allowPrinting ? 'text-accent' : 'text-text-secondary'}`} />
                     </div>
                     <div className="mt-4 space-y-3">
                       <div>
-                        <h4 className="text-sm font-bold text-white">Allow Printing</h4>
-                        <p className="text-[10px] text-zinc-500 mt-0.5">Allow recipients to download or print copies.</p>
+                        <h4 className="text-sm font-bold text-text-primary">Allow Printing</h4>
+                        <p className="text-[10px] text-text-secondary mt-0.5">Allow recipients to download or print copies.</p>
                       </div>
                       <label className="flex items-center gap-2 cursor-pointer select-none">
                         <input
@@ -1555,8 +1775,8 @@ export default function UploadPage() {
                           disabled={isSubmitting}
                           className="sr-only peer"
                         />
-                        <div className="relative w-10 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-zinc-400 after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-black peer-checked:after:border-cyan-400 shadow-[0_0_10px_rgba(0,0,0,0.5)]" />
-                        <span className="text-xs text-zinc-400 peer-checked:text-cyan-400 font-medium">
+                        <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
+                        <span className="text-xs text-text-secondary peer-checked:text-accent font-medium">
                           {allowPrinting ? 'Allowed' : 'Restricted'}
                         </span>
                       </label>
@@ -1565,18 +1785,18 @@ export default function UploadPage() {
                 </div>
 
                 {/* 4. Additional Recipients Input Section */}
-                <div className="glass-panel rounded-3xl p-6 border border-white/5 bg-white/[0.005] space-y-4">
+                <div className="glass-panel rounded-2xl p-6 space-y-4 hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
                   <div>
-                    <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-cyan-400" />
+                    <h4 className="text-base font-semibold text-text-primary flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-accent" />
                       Additional Recipients
                     </h4>
-                    <p className="text-[10px] text-zinc-500 mt-0.5">Receive a carbon copy (CC) of the completed transaction record.</p>
+                    <p className="text-[10px] text-text-secondary mt-0.5">Receive a carbon copy (CC) of the completed transaction record.</p>
                   </div>
 
                   <div className="flex flex-col sm:flex-row gap-3">
                     <div className="flex-1 relative">
-                      <Mail className="absolute left-3 h-4 w-4 text-zinc-600 top-1/2 -translate-y-1/2" />
+                      <Mail className="absolute left-3 h-4 w-4 text-text-secondary/60 top-1/2 -translate-y-1/2" />
                       <input
                         type="email"
                         value={newRecipientEmail}
@@ -1599,7 +1819,7 @@ export default function UploadPage() {
                       type="button"
                       onClick={addRecipientEmail}
                       disabled={isSubmitting || !newRecipientEmail.trim()}
-                      className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-zinc-800 hover:bg-cyan-500 hover:text-black border border-white/10 hover:border-cyan-400 px-5 py-3.5 text-xs font-semibold text-zinc-300 transition-all duration-300 cursor-pointer shrink-0"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-card-bg hover:bg-cyan-500 hover:text-black border border-border-color hover:border-cyan-400 px-5 py-3.5 text-xs font-semibold text-text-primary transition-all duration-300 cursor-pointer shrink-0"
                     >
                       <Plus className="h-4 w-4" />
                       Add Recipient
@@ -1634,12 +1854,12 @@ export default function UploadPage() {
                 </div>
 
                 {/* Back and Continue Buttons */}
-                <div className="flex justify-between pt-6 border-t border-white/5">
-                  <div className="flex items-center gap-3">
+                <div className="flex justify-between pt-6 border-t border-border-color">
+                  <div className="flex flex-wrap items-center gap-3">
                     <button
                       type="button"
-                      onClick={() => setCurrentTab('workflow')}
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 px-6 py-3.5 text-sm font-semibold text-zinc-300 transition-all cursor-pointer"
+                      onClick={() => setCurrentTab('prepare')}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-6 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
                     >
                       Back
                     </button>
@@ -1647,18 +1867,26 @@ export default function UploadPage() {
                       type="button"
                       disabled={isSavingDraft}
                       onClick={handleSaveDraft}
-                      className="inline-flex items-center gap-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed px-5 py-3.5 text-sm font-semibold text-zinc-300 transition-all cursor-pointer"
+                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isSavingDraft ? 'Saving…' : draftSaved ? '✓ Saved' : 'Save Draft'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openTemplateModal}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
+                    >
+                      <SparkleIcon className="h-4 w-4 shrink-0 text-text-secondary" />
+                      Save as Template
                     </button>
                   </div>
                   <button
                     type="button"
                     onClick={() => setCurrentTab('review')}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 px-6 py-3.5 text-sm font-semibold text-black transition-all cursor-pointer shadow-[0_0_15px_rgba(34,211,238,0.15)]"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-6 py-3.5 text-xs font-bold transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.45)] uppercase tracking-wider cursor-pointer"
                   >
                     Continue to Review
-                    <ArrowRight className="h-4 w-4" />
+                    <ArrowRight className="h-4 w-4 stroke-[2.5]" />
                   </button>
                 </div>
               </div>
@@ -1668,46 +1896,52 @@ export default function UploadPage() {
             {currentTab === 'review' && (
               <div className="space-y-6 pt-2">
                 <div>
-                  <h3 className="text-xl font-light text-white flex items-center gap-2">
-                    <Sparkles className="h-5 w-5 text-cyan-400" />
+                  <h3 className="text-base font-semibold tracking-wide text-text-primary flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-accent" />
                     Review & Prepare
                   </h3>
-                  <p className="text-xs text-zinc-500 mt-1">
+                  <p className="text-xs text-text-secondary mt-1">
                     Preflight checklist validation and configuration summary before dispatch.
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Grid Item 1: Workflow Ready Summary */}
-                  <div className="glass-panel rounded-2xl p-6 border border-white/5 bg-white/[0.01] flex flex-col justify-between transition-all duration-300 hover:border-cyan-500/20">
+                  <div className="glass-panel rounded-2xl p-6 flex flex-col justify-between hover:-translate-y-1 transition-all duration-200 hover:shadow-lg">
                     <div className="space-y-4">
-                      <div className="flex items-center gap-2 border-b border-white/5 pb-2.5">
-                        <Sparkles className="h-4 w-4 text-cyan-400 animate-pulse" />
-                        <h4 className="text-sm font-semibold text-white">Workflow Ready</h4>
+                      <div className="flex items-center justify-between border-b border-border-color pb-3">
+                        <h4 className="text-sm font-bold uppercase tracking-wider text-text-primary flex items-center gap-2">
+                          <Sparkles className="h-4 w-4 text-violet-400" />
+                          Workflow Ready
+                        </h4>
+                        <span className="text-[10px] text-text-secondary font-mono uppercase">Routing Overview</span>
                       </div>
                       
-                      <div className="flex justify-between items-center bg-white/[0.02] border border-white/5 rounded-xl px-4 py-2.5 text-xs">
-                        <span className="text-zinc-500">Participants Enrolled</span>
-                        <span className="text-cyan-400 font-bold font-mono text-sm">
-                          {steps.flatMap(s => s.participants).length}
+                      <div className="flex items-center justify-between bg-card-bg border border-border-color rounded-2xl p-4 shadow-sm hover:-translate-y-0.5 hover:shadow-md transition-all duration-200">
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] text-text-secondary uppercase tracking-widest font-bold">Participants Enrolled</span>
+                          <h4 className="text-xs font-bold text-text-primary">Enrolled routing sequence</h4>
+                        </div>
+                        <span className="text-2xl font-light text-violet-400 font-mono">
+                          {workflowSteps.flatMap(s => s.participants).length}
                         </span>
                       </div>
 
                       {/* Step-by-step visual routing timeline */}
                       <div className="space-y-3 pt-2">
-                        {steps.map((step, stepIdx) => {
+                        {workflowSteps.map((step, stepIdx) => {
                           const isFirst = step.stepNumber === 1;
                           return (
-                            <div key={step.stepNumber} className="relative pl-6 border-l border-white/10 space-y-1">
+                            <div key={step.stepNumber} className="relative pl-6 border-l border-border-color space-y-1">
                               {/* Indicator dot */}
-                              <div className={`absolute -left-[5.5px] top-1.5 h-2.5 w-2.5 rounded-full border border-black ${
-                                isFirst ? 'bg-cyan-400 shadow-[0_0_10px_#22d3ee]' : 'bg-zinc-700'
+                              <div className={`absolute -left-[5.5px] top-1.5 h-2.5 w-2.5 rounded-full border border-bg-primary ${
+                                isFirst ? 'bg-violet-400 shadow-[0_0_8px_rgba(167,139,250,0.5)]' : 'bg-zinc-700'
                               }`} />
                               
                               <div className="flex items-center justify-between text-xs">
-                                <span className="font-semibold text-white">Step {step.stepNumber}</span>
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold uppercase ${
-                                  isFirst ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' : 'bg-zinc-800 text-zinc-500 border border-white/5'
+                                <span className="font-semibold text-text-primary">Step {step.stepNumber}</span>
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold uppercase ${
+                                  isFirst ? 'bg-violet-500/10 text-violet-400 border border-violet-500/20' : 'bg-card-bg text-text-secondary border border-border-color'
                                 }`}>
                                   {isFirst ? 'Active on launch' : 'Pending'}
                                 </span>
@@ -1715,10 +1949,10 @@ export default function UploadPage() {
                               <div className="flex flex-wrap gap-1.5 pt-0.5">
                                 {step.participants.map(p => (
                                   <span key={p.id} className={`inline-flex px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${
-                                    p.role === 'signer' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' :
+                                    p.role === 'signer' ? 'bg-cyan-500/10 text-accent border-cyan-500/20' :
                                     p.role === 'approver' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
                                     p.role === 'reviewer' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' :
-                                    'bg-zinc-800 text-zinc-300 border-white/5'
+                                    'bg-card-bg text-text-primary border-border-color'
                                   }`}>
                                     {p.name || 'Unnamed'} ({p.role})
                                   </span>
@@ -1729,9 +1963,9 @@ export default function UploadPage() {
                         })}
                       </div>
 
-                      <div className="flex justify-between items-center bg-cyan-950/20 border border-cyan-500/10 rounded-xl px-4 py-3 text-xs mt-4">
-                        <span className="text-zinc-400 font-semibold">Launch Status</span>
-                        <span className="text-cyan-400 font-bold uppercase tracking-wider animate-pulse">
+                      <div className="flex justify-between items-center bg-violet-500/10 border border-violet-500/20 rounded-xl px-4 py-3 text-xs mt-4">
+                        <span className="text-text-secondary font-semibold">Launch Status</span>
+                        <span className="text-violet-400 font-bold uppercase tracking-wider animate-pulse">
                           Ready To Launch
                         </span>
                       </div>
@@ -1739,10 +1973,13 @@ export default function UploadPage() {
                   </div>
 
                   {/* Grid Item 2: Launch Checklist */}
-                  <div className="glass-panel rounded-2xl p-6 border border-white/5 bg-white/[0.01] transition-all duration-300 hover:border-cyan-500/20">
-                    <div className="flex items-center gap-2 border-b border-white/5 pb-2.5 mb-4">
-                      <CheckCircle2 className="h-4 w-4 text-cyan-400" />
-                      <h4 className="text-sm font-semibold text-white font-sans">Launch Checklist</h4>
+                  <div className="glass-panel rounded-2xl p-6 hover:-translate-y-1 transition-all duration-200 hover:shadow-lg">
+                    <div className="flex items-center justify-between border-b border-border-color pb-3 mb-4">
+                      <h4 className="text-sm font-bold uppercase tracking-wider text-text-primary flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-accent" />
+                        Launch Checklist
+                      </h4>
+                      <span className="text-[10px] text-text-secondary font-mono uppercase">Preflight Check</span>
                     </div>
 
                     <div className="space-y-3">
@@ -1764,7 +2001,7 @@ export default function UploadPage() {
                         },
                         { 
                           label: 'Request Settings Configured', 
-                          isValid: true, 
+                          isValid: settingsValid, 
                           desc: 'Delivery settings and notifications set to default.' 
                         },
                         { 
@@ -1774,16 +2011,16 @@ export default function UploadPage() {
                         },
                         { 
                           label: 'Ready To Send', 
-                          isValid: isDocumentValid && isWorkflowValid && hasSignerRole && isSignaturePlaced, 
+                          isValid: isDocumentValid && isWorkflowValid && hasSignerRole && isSignaturePlaced && settingsValid, 
                           desc: 'Workflow is verified and ready for dispatch.' 
                         }
                       ].map((item, idx) => (
                         <div 
                           key={idx} 
-                          className={`flex items-start gap-3 rounded-xl p-3 border transition-colors ${
+                          className={`flex items-start gap-3 rounded-xl p-3 border transition-all duration-200 hover:-translate-y-0.5 ${
                             item.isValid 
-                              ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-300' 
-                              : 'bg-red-500/5 border-red-500/20 text-red-300'
+                              ? 'bg-emerald-500/[0.02] border-emerald-500/10 text-emerald-400 hover:border-emerald-500/20' 
+                              : 'bg-red-500/[0.02] border-red-500/10 text-red-400 hover:border-red-500/20'
                           }`}
                         >
                           <div className="mt-0.5">
@@ -1794,10 +2031,10 @@ export default function UploadPage() {
                             )}
                           </div>
                           <div>
-                            <div className={`text-xs font-bold ${item.isValid ? 'text-emerald-400' : 'text-zinc-400'}`}>
+                            <div className={`text-xs font-semibold ${item.isValid ? 'text-emerald-400' : 'text-text-secondary'}`}>
                               {item.label}
                             </div>
-                            <p className="text-[10px] text-zinc-500 mt-0.5">{item.desc}</p>
+                            <p className="text-[10px] text-text-secondary mt-0.5">{item.desc}</p>
                           </div>
                         </div>
                       ))}
@@ -1806,13 +2043,13 @@ export default function UploadPage() {
                 </div>
 
                 {/* Back and Send buttons */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-6 border-t border-white/5">
-                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-6 border-t border-border-color">
+                  <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
                     <button
                       type="button"
-                      onClick={() => setCurrentTab(templateId ? 'workflow' : 'settings')}
+                      onClick={() => setCurrentTab('settings')}
                       disabled={isSubmitting}
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 px-6 py-3.5 text-sm font-semibold text-zinc-300 transition-all cursor-pointer disabled:opacity-50"
+                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-6 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer disabled:opacity-50"
                     >
                       Back
                     </button>
@@ -1820,17 +2057,25 @@ export default function UploadPage() {
                       type="button"
                       disabled={isSavingDraft}
                       onClick={handleSaveDraft}
-                      className="inline-flex items-center gap-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed px-5 py-3.5 text-sm font-semibold text-zinc-300 transition-all cursor-pointer"
+                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isSavingDraft ? 'Saving…' : draftSaved ? '✓ Saved' : 'Save Draft'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openTemplateModal}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
+                    >
+                      <SparkleIcon className="h-4 w-4 shrink-0 text-text-secondary" />
+                      Save as Template
                     </button>
                   </div>
 
                   <div className="flex flex-col items-end gap-2">
                     <button
                       type="submit"
-                      disabled={isSubmitting || !isDocumentValid || !isWorkflowValid || !hasSignerRole || !isSignaturePlaced}
-                      className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-2xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed px-8 py-3.5 text-sm font-semibold text-black transition-all shadow-[0_0_25px_rgba(34,211,238,0.2)] cursor-pointer"
+                      disabled={isSubmitting || !isDocumentValid || !isWorkflowValid || !hasSignerRole || !isSignaturePlaced || !settingsValid}
+                      className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed px-8 py-3.5 text-xs font-bold text-black transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.45)] uppercase tracking-wider cursor-pointer"
                     >
                       <span className="relative z-10 flex items-center gap-2">
                         {isSubmitting ? 'Launching Workflow…' : 'Send Package'}
@@ -1872,13 +2117,13 @@ export default function UploadPage() {
 
       {/* ── Signature position selector ── */}
       <AnimatePresence>
-        {!sentPackageInfo && previewUrl && (
+        {!sentPackageInfo && previewUrl && currentTab === 'prepare' && (
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 40 }}
             transition={{ duration: 0.6, delay: 0.1, ease: "easeOut" }}
-            className="mt-8 glass-panel rounded-[2rem] p-8 sm:p-12"
+            className="mt-8 glass-panel rounded-3xl p-8 sm:p-12"
           >
             <div className="mb-8 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-6 items-end">
               <div>
@@ -1886,16 +2131,16 @@ export default function UploadPage() {
                   <Crosshair className="h-3.5 w-3.5" />
                   Spatial Placement
                 </div>
-                <h2 className="text-2xl font-light text-white font-sans">Place Fields on Document</h2>
-                <p className="mt-1 text-xs text-zinc-400">Select recipient and field type, then click on the PDF to place fields.</p>
+                <h2 className="text-base font-semibold tracking-wide text-text-primary font-sans">Place Fields on Document</h2>
+                <p className="mt-1 text-xs text-text-secondary">Select recipient and field type, then click on the PDF to place fields.</p>
               </div>
 
               {/* Selectors and Toolbar */}
               <div className="flex flex-wrap gap-4 lg:justify-end items-stretch sm:items-center">
                 {/* Coordinate readout */}
                 {sigPosition && (
-                  <div className="flex items-center gap-3 rounded-2xl border border-cyan-500/30 bg-cyan-950/20 px-3 py-2 backdrop-blur-md self-end lg:self-center">
-                    <div className="flex gap-3 text-[10px] font-mono text-cyan-300">
+                  <div className="flex items-center gap-3 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 backdrop-blur-md self-end lg:self-center">
+                    <div className="flex gap-3 text-[10px] font-mono text-accent">
                       <div><span className="text-cyan-600">P:</span>{sigPosition.page}</div>
                       <div><span className="text-cyan-600">X:</span>{sigPosition.x_ratio.toFixed(2)}</div>
                       <div><span className="text-cyan-600">Y:</span>{sigPosition.y_ratio.toFixed(2)}</div>
@@ -1905,11 +2150,11 @@ export default function UploadPage() {
 
                 {/* Participant Selector */}
                 <div className="flex flex-col gap-1">
-                  <span className="text-[9px] uppercase font-bold tracking-widest text-zinc-500">Recipient</span>
+                  <span className="text-[9px] uppercase font-bold tracking-widest text-text-secondary">Recipient</span>
                   <select
                     value={activeParticipantEmail}
                     onChange={(e) => setActiveParticipantEmail(e.target.value)}
-                    className="rounded-xl border border-white/10 bg-[#0c1220] text-xs text-zinc-300 px-3 py-2 outline-none focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20 max-w-[200px]"
+                    className="rounded-xl border border-border-color bg-card-bg text-xs text-text-primary px-3 py-2 outline-none focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20 max-w-[200px] cursor-pointer"
                   >
                     <option value="">-- Choose Recipient --</option>
                     {allParticipants.map((p) => (
@@ -1922,8 +2167,8 @@ export default function UploadPage() {
 
                 {/* Field Type Toolbar */}
                 <div className="flex flex-col gap-1">
-                  <span className="text-[9px] uppercase font-bold tracking-widest text-zinc-500">Field Type</span>
-                  <div className="flex rounded-xl bg-white/[0.02] border border-white/10 p-0.5">
+                  <span className="text-[9px] uppercase font-bold tracking-widest text-text-secondary">Field Type</span>
+                  <div className="flex rounded-xl bg-bg-primary/5 border border-border-color p-0.5">
                     {/* Note: Current MVP supports only signature placement.
                         Future planned field types:
                         - date
@@ -1939,8 +2184,8 @@ export default function UploadPage() {
                         onClick={() => setSelectedFieldType(t.id)}
                         className={`px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${
                           selectedFieldType === t.id
-                            ? 'text-cyan-300 bg-cyan-500/10 border border-cyan-500/20'
-                            : 'text-zinc-500 hover:text-zinc-300'
+                            ? 'text-accent bg-cyan-500/10 border border-cyan-500/20'
+                            : 'text-text-secondary hover:text-text-primary'
                         }`}
                       >
                         {t.label}
@@ -1951,13 +2196,13 @@ export default function UploadPage() {
               </div>
             </div>
 
-            <div className="relative overflow-auto rounded-2xl border border-white/10 bg-black/50 py-8 custom-scrollbar shadow-inner max-h-[700px]">
+            <div className="relative overflow-auto rounded-2xl border border-border-color bg-bg-primary py-8 custom-scrollbar shadow-inner max-h-[700px]">
               <Document
                 file={previewUrl}
                 onLoadSuccess={({ numPages: n }) => setNumPages(n)}
                 loading={
-                  <div className="flex h-64 flex-col items-center justify-center gap-4 text-cyan-500">
-                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
+                  <div className="flex h-64 flex-col items-center justify-center gap-4 text-accent">
+                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
                     <span className="text-sm font-medium animate-pulse tracking-widest uppercase">Rendering Data…</span>
                   </div>
                 }
@@ -1975,7 +2220,7 @@ export default function UploadPage() {
                     return (
                       <div
                         key={pageNumber}
-                        className="relative mx-auto mb-8 w-fit cursor-crosshair shadow-[0_0_50px_rgba(0,0,0,0.8)] last:mb-0 transition-transform hover:scale-[1.01] duration-500"
+                        className="relative mx-auto mb-8 w-fit cursor-crosshair shadow-lg border border-border-color last:mb-0 transition-transform hover:scale-[1.01] duration-500"
                         style={{ userSelect: 'none' }}
                         onClick={(e) => handlePageClick(pageNumber, e)}
                       >
@@ -1984,7 +2229,7 @@ export default function UploadPage() {
                           <div className="absolute inset-0 border-2 border-cyan-500 shadow-[0_0_30px_rgba(34,211,238,0.3)] z-0 pointer-events-none" />
                         )}
 
-                        <div className="absolute left-4 top-4 z-10 rounded-lg border border-white/10 bg-black/60 px-3 py-1.5 text-xs font-mono text-zinc-400 backdrop-blur-md">
+                        <div className="absolute left-4 top-4 z-10 rounded-lg border border-border-color bg-card-bg/85 px-3 py-1.5 text-xs font-mono text-text-primary backdrop-blur-md">
                           {pageNumber} / {numPages}
                         </div>
 
@@ -2014,17 +2259,17 @@ export default function UploadPage() {
                                   <div className="absolute inset-0 rounded-full bg-cyan-500 animate-ping opacity-30" />
                                   <div className="relative h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_10px_#22d3ee]" />
                                 </div>
-                                <div className="absolute left-0 top-3 -translate-x-1/2 pt-1 flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-cyan-500/50 bg-cyan-950/90 px-2.5 py-1 text-[9px] font-bold tracking-wider text-cyan-300 shadow-[0_0_20px_rgba(34,211,238,0.4)] backdrop-blur-md uppercase">
+                                <div className="absolute left-0 top-3 -translate-x-1/2 pt-1 flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-cyan-500/50 bg-card-bg/95 px-2.5 py-1 text-[9px] font-bold tracking-wider text-accent shadow-[0_0_20px_rgba(34,211,238,0.25)] backdrop-blur-md uppercase">
                                   <span>{f.field_type}</span>
                                   <span className="text-zinc-500">|</span>
-                                  <span className="text-zinc-300 max-w-[80px] truncate" title={f.participant_name}>{f.participant_name}</span>
+                                  <span className="text-text-primary max-w-[80px] truncate" title={f.participant_name}>{f.participant_name}</span>
                                   <button
                                     type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       removeField(f.id);
                                     }}
-                                    className="ml-1 rounded-full p-0.5 hover:bg-white/10 text-zinc-400 hover:text-red-400 transition-colors pointer-events-auto cursor-pointer"
+                                    className="ml-1 rounded-full p-0.5 hover:bg-white/10 text-text-secondary hover:text-red-400 transition-colors pointer-events-auto cursor-pointer"
                                   >
                                     <X className="h-2.5 w-2.5" />
                                   </button>
@@ -2055,7 +2300,7 @@ export default function UploadPage() {
                                 </div>
                               </div>
                               <div className="absolute left-0 top-3 -translate-x-1/2 pt-1">
-                                <div className="whitespace-nowrap rounded-lg border border-cyan-500/50 bg-cyan-950/80 px-3 py-1 text-[10px] font-bold tracking-widest text-cyan-300 shadow-[0_0_20px_rgba(34,211,238,0.4)] backdrop-blur-md uppercase">
+                                <div className="whitespace-nowrap rounded-lg border border-cyan-500/50 bg-card-bg/95 px-3 py-1 text-[10px] font-bold tracking-widest text-accent shadow-[0_0_20px_rgba(34,211,238,0.25)] backdrop-blur-md uppercase">
                                   Sign Here
                                 </div>
                               </div>
@@ -2082,79 +2327,79 @@ export default function UploadPage() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsTemplateModalOpen(false)}
-              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             />
 
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="relative w-full max-w-lg overflow-hidden rounded-[2rem] border border-white/10 bg-[#0B1220] p-6 sm:p-8 shadow-[0_25px_60px_rgba(0,0,0,0.95),0_0_30px_rgba(34,211,238,0.15)] z-10"
+              className="relative w-full max-w-lg overflow-hidden rounded-3xl glass-panel p-6 sm:p-8 z-10"
             >
               <button
                 type="button"
                 onClick={() => setIsTemplateModalOpen(false)}
-                className="absolute right-6 top-6 rounded-full bg-white/5 p-1 text-zinc-400 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                className="absolute right-6 top-6 rounded-full bg-border-color p-1 text-text-secondary hover:bg-bg-primary/20 hover:text-text-primary transition-colors cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
 
               <div className="mb-6 space-y-1">
-                <div className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-cyan-400">
+                <div className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent animate-none">
                   <SparkleIcon className="h-3 w-3" />
                   Save Workflow Blueprint
                 </div>
-                <h3 className="text-xl font-light text-white sm:text-2xl">Save as Reusable Template</h3>
-                <p className="text-xs text-zinc-500">Persist the current workflow steps, roles, and settings configuration as a blueprint template.</p>
+                <h3 className="text-xl font-light text-text-primary sm:text-2xl">Save as Reusable Template</h3>
+                <p className="text-xs text-text-secondary">Persist the current workflow steps, roles, and settings configuration as a blueprint template.</p>
               </div>
 
               <form onSubmit={handleSaveTemplateSubmit} className="space-y-4">
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide">Template Name</label>
+                  <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wide">Template Name</label>
                   <input
                     type="text"
                     value={templateName}
                     onChange={(e) => setTemplateName(e.target.value)}
                     placeholder="Standard NDA, Employment Offer, etc."
-                    className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-xs text-zinc-200 outline-none transition-all focus:border-cyan-500/40 focus:bg-cyan-950/5 focus:ring-1 focus:ring-cyan-500/20"
+                    className="w-full rounded-xl border border-border-color bg-card-bg px-4 py-3 text-xs text-text-primary outline-none transition-all focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20"
                     required
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide">Description</label>
+                  <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wide">Description</label>
                   <textarea
                     rows="3"
                     value={templateDescription}
                     onChange={(e) => setTemplateDescription(e.target.value)}
                     placeholder="Describe this reusable business workflow template..."
-                    className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-xs text-zinc-200 outline-none transition-all focus:border-cyan-500/40 resize-none focus:bg-cyan-950/5 focus:ring-1 focus:ring-cyan-500/20"
+                    className="w-full rounded-xl border border-border-color bg-card-bg px-4 py-3 text-xs text-text-primary outline-none transition-all focus:border-cyan-500/40 resize-none focus:ring-1 focus:ring-cyan-500/20"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide">Category</label>
+                    <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wide">Category</label>
                     <select
                       value={templateCategory}
                       onChange={(e) => setTemplateCategory(e.target.value)}
-                      className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-xs text-zinc-200 outline-none cursor-pointer focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20"
+                      className="w-full rounded-xl border border-border-color bg-card-bg px-4 py-3 text-xs text-text-primary outline-none cursor-pointer focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20"
                     >
                       {['General', 'Legal', 'HR', 'Finance', 'Operations'].map(c => (
-                        <option key={c} value={c} className="bg-[#0B1220]">{c}</option>
+                        <option key={c} value={c} className="bg-card-bg text-text-primary">{c}</option>
                       ))}
                     </select>
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wide">Visibility</label>
+                    <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wide">Visibility</label>
                     <select
                       value={templateVisibility}
                       onChange={(e) => setTemplateVisibility(e.target.value)}
-                      className="w-full rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-xs text-zinc-200 outline-none cursor-pointer focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20"
+                      className="w-full rounded-xl border border-border-color bg-card-bg px-4 py-3 text-xs text-text-primary outline-none cursor-pointer focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20"
                     >
-                      <option value="private" className="bg-[#0B1220]">Private (Self)</option>
-                      <option value="public" className="bg-[#0B1220]">Public / Shared</option>
+                      <option value="private" className="bg-card-bg text-text-primary">Private (Self)</option>
+                      <option value="public" className="bg-card-bg text-text-primary">Public / Shared</option>
                     </select>
                   </div>
                 </div>
@@ -2163,12 +2408,12 @@ export default function UploadPage() {
                   <p className="text-xs font-semibold text-red-400 mt-2">{templateModalError}</p>
                 )}
 
-                <div className="flex justify-end gap-3 pt-4 border-t border-white/5">
+                <div className="flex justify-end gap-3 pt-4 border-t border-border-color">
                   <button
                     type="button"
                     onClick={() => setIsTemplateModalOpen(false)}
                     disabled={isSavingTemplate}
-                    className="rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/5 px-4 py-2.5 text-xs font-semibold text-zinc-300 transition-all cursor-pointer"
+                    className="rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-4 py-2.5 text-xs font-semibold transition-all cursor-pointer"
                   >
                     Cancel
                   </button>

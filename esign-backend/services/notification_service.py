@@ -254,8 +254,8 @@ The E-Signature Team
             content = signed_doc.file.read()
             filename = os.path.basename(signed_doc.file.name) or f"signed_{envelope.id}.pdf"
             attachments_list.append((filename, content, "application/pdf"))
-        except Exception as e:
-            logger.error(f"Failed to read signed document for attachment: {str(e)}", exc_info=True)
+        except Exception:
+            logger.exception("Failed to read signed document for attachment")
         finally:
             signed_doc.file.close()
             
@@ -267,8 +267,8 @@ The E-Signature Team
             content = cert_doc.file.read()
             filename = os.path.basename(cert_doc.file.name) or f"certificate_{envelope.id}.pdf"
             attachments_list.append((filename, content, "application/pdf"))
-        except Exception as e:
-            logger.error(f"Failed to read certificate for attachment: {str(e)}", exc_info=True)
+        except Exception:
+            logger.exception("Failed to read certificate for attachment")
         finally:
             cert_doc.file.close()
 
@@ -286,5 +286,5 @@ The E-Signature Team
                 email_message.attach(filename, content, mimetype)
                 
             email_message.send(fail_silently=False)
-        except Exception as e:
-            logger.error(f"Failed to send completion email with attachments to {email}: {str(e)}", exc_info=True)
+        except Exception:
+            logger.exception("Failed to send completion email with attachments to %s", email)

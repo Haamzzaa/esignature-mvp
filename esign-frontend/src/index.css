@@ -1,20 +1,75 @@
 @import "tailwindcss";
 
+:root {
+  --bg-primary: #050505;
+  --card-bg: rgba(255, 255, 255, 0.02);
+  --text-primary: #f4f4f5; /* zinc-100 */
+  --text-secondary: #a1a1aa; /* zinc-400 */
+  --border-color: rgba(255, 255, 255, 0.05);
+  --accent: #22d3ee; /* cyan-400 */
+  
+  --scrollbar-track: rgba(255, 255, 255, 0.02);
+  --scrollbar-thumb: rgba(34, 211, 238, 0.2);
+  
+  --glass-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
+  --glass-hover-shadow: 0 10px 40px -10px rgba(34, 211, 238, 0.15);
+  
+  --table-header-bg: rgba(255, 255, 255, 0.02);
+}
+
+.light {
+  --bg-primary: #EEF2F7;
+  --card-bg: #FFFFFF;
+  --text-primary: #111827;
+  --text-secondary: #6B7280;
+  --border-color: #E2E8F0;
+  --accent: #06b6d4; /* cyan-500 */
+  
+  --scrollbar-track: rgba(0, 0, 0, 0.02);
+  --scrollbar-thumb: rgba(34, 211, 238, 0.3);
+  
+  --glass-shadow: 0 8px 30px rgba(15, 23, 42, 0.05);
+  --glass-hover-shadow: 0 12px 35px rgba(15, 23, 42, 0.08);
+  
+  --table-header-bg: rgba(15, 23, 42, 0.02);
+}
+
 @layer base {
   body {
-    @apply antialiased text-zinc-100 bg-[#050505] selection:bg-cyan-500/30 selection:text-cyan-100;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    @apply antialiased selection:bg-cyan-500/30 selection:text-cyan-100;
+  }
+
+  /* Form elements global styling to consume semantic variables */
+  input, select, textarea {
+    background-color: var(--card-bg) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-primary) !important;
+  }
+  
+  option {
+    background-color: var(--bg-primary) !important;
+    color: var(--text-primary) !important;
   }
 }
 
 @layer utilities {
   .glass-panel {
-    @apply bg-white/[0.02] backdrop-blur-2xl border border-white/[0.05] shadow-[0_0_40px_-10px_rgba(0,0,0,0.5)];
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--glass-shadow);
+    @apply backdrop-blur-2xl;
   }
   .glass-panel-hover {
-    @apply hover:bg-white/[0.04] hover:border-white/[0.1] hover:shadow-[0_0_40px_-10px_rgba(34,211,238,0.15)] transition-all duration-500;
+    @apply transition-all duration-500;
+  }
+  .glass-panel-hover:hover {
+    border-color: var(--border-color);
+    box-shadow: var(--glass-hover-shadow);
   }
   .neon-text-glow {
-    text-shadow: 0 0 20px rgba(34, 211, 238, 0.4);
+    text-shadow: 0 0 20px var(--glass-hover-shadow);
   }
   
   .custom-scrollbar::-webkit-scrollbar {
@@ -22,15 +77,15 @@
     height: 6px;
   }
   .custom-scrollbar::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--scrollbar-track);
     border-radius: 10px;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(34, 211, 238, 0.2);
+    background: var(--scrollbar-thumb);
     border-radius: 10px;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(34, 211, 238, 0.4);
+    background: var(--accent);
   }
 }
 
@@ -41,4 +96,11 @@
       transform: translateX(100%);
     }
   }
+  --color-bg-primary: var(--bg-primary);
+  --color-card-bg: var(--card-bg);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-border-color: var(--border-color);
+  --color-accent: var(--accent);
+  --color-table-header-bg: var(--table-header-bg);
 }

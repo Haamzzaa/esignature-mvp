@@ -200,13 +200,13 @@ export default function InboxPage() {
       </motion.div>
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 border-b border-white/5 pb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 border-b border-border-color pb-6">
         <div className="space-y-2">
-          <h1 className="text-3xl font-light tracking-tight text-white sm:text-5xl neon-text-glow flex items-center gap-3">
+          <h1 className="text-3xl font-light tracking-tight text-text-primary sm:text-5xl neon-text-glow flex items-center gap-3">
             <Inbox className="h-10 w-10 text-cyan-400 stroke-[1.5]" />
             Inbox Command Center
           </h1>
-          <p className="text-sm font-medium text-zinc-400">
+          <p className="text-sm font-medium text-text-secondary">
             Monitor pending approvals, track routing status, check audit logs, and manage drafts from your work queue.
           </p>
         </div>
@@ -226,8 +226,8 @@ export default function InboxPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
         
         {/* Category Sidebar Navigation */}
-        <div className="glass-panel rounded-3xl p-4 border border-white/5 bg-[#0B1220] space-y-1 lg:col-span-1 shadow-2xl">
-          <span className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 px-3 pb-3 border-b border-white/5 mb-2">
+        <div className="glass-panel rounded-3xl p-4 space-y-1 lg:col-span-1">
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-text-secondary px-3 pb-3 border-b border-border-color mb-2">
             Work Queues
           </span>
           {[
@@ -249,20 +249,20 @@ export default function InboxPage() {
                 className={`w-full flex items-center justify-between px-3 py-3 rounded-2xl text-left transition-all duration-200 cursor-pointer border ${
                   isActive 
                     ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.05)]' 
-                    : 'text-zinc-400 hover:text-white hover:bg-white/[0.02] border-transparent'
+                    : 'text-text-secondary hover:text-text-primary hover:bg-text-primary/5 border-transparent'
                 }`}
               >
                 <div className="space-y-0.5">
                   <span className="text-xs font-bold uppercase tracking-wider block">{cat.label}</span>
-                  <span className="text-[10px] text-zinc-600 block group-hover:text-zinc-500 truncate max-w-[160px]">{cat.desc}</span>
+                  <span className="text-[10px] text-text-secondary block group-hover:text-text-primary truncate max-w-[160px]">{cat.desc}</span>
                 </div>
                 
                 <span className={`h-5 min-w-5 px-1.5 flex items-center justify-center rounded-full text-[10px] font-bold font-mono ${
                   isActive
                     ? 'bg-cyan-500 text-black shadow-[0_0_8px_rgba(34,211,238,0.3)]'
                     : count > 0 
-                      ? 'bg-white/10 text-zinc-300' 
-                      : 'bg-white/5 text-zinc-600'
+                      ? 'bg-text-primary/10 text-text-primary' 
+                      : 'bg-text-primary/5 text-text-secondary'
                 }`}>
                   {count}
                 </span>
@@ -275,23 +275,23 @@ export default function InboxPage() {
         <div className="lg:col-span-3 space-y-6">
           
           {/* Search, Filter, Sort Controls panel */}
-          <div className="glass-panel rounded-3xl p-5 border border-white/5 bg-[#0B1220] flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
+          <div className="glass-panel rounded-3xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
             
             {/* Search Box */}
             <div className="relative flex-1 max-w-md w-full">
-              <Search className="absolute left-3.5 h-4 w-4 text-zinc-500 top-1/2 -translate-y-1/2" />
+              <Search className="absolute left-3.5 h-4 w-4 text-text-secondary top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 placeholder="Search by package name, signer, approver name or email..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3.5 pl-11 text-xs text-zinc-200 placeholder:text-zinc-600 outline-none transition-all focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20"
+                className="w-full rounded-2xl border border-border-color bg-card-bg px-4 py-3.5 pl-11 text-xs text-text-primary placeholder:text-text-secondary/60 outline-none transition-all focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20"
               />
               {searchTerm && (
                 <button
                   type="button"
                   onClick={() => setSearchTerm('')}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -306,14 +306,14 @@ export default function InboxPage() {
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-xs text-zinc-300 outline-none cursor-pointer focus:border-cyan-500/40 transition-all"
+                  className="rounded-xl border border-border-color bg-card-bg px-3 py-2 text-xs text-text-primary outline-none cursor-pointer focus:border-cyan-500/40 transition-all"
                 >
-                  <option value="all" className="bg-[#0B1220]">All Statuses</option>
-                  <option value="draft" className="bg-[#0B1220]">Draft</option>
-                  <option value="sent" className="bg-[#0B1220]">Sent</option>
-                  <option value="viewed" className="bg-[#0B1220]">Viewed</option>
-                  <option value="completed" className="bg-[#0B1220]">Completed</option>
-                  <option value="declined" className="bg-[#0B1220]">Declined</option>
+                  <option value="all">All Statuses</option>
+                  <option value="draft">Draft</option>
+                  <option value="sent">Sent</option>
+                  <option value="viewed">Viewed</option>
+                  <option value="completed">Completed</option>
+                  <option value="declined">Declined</option>
                 </select>
               </div>
 
@@ -322,13 +322,13 @@ export default function InboxPage() {
                 <select
                   value={roleFilter}
                   onChange={(e) => setRoleFilter(e.target.value)}
-                  className="rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-xs text-zinc-300 outline-none cursor-pointer focus:border-cyan-500/40 transition-all"
+                  className="rounded-xl border border-border-color bg-card-bg px-3 py-2 text-xs text-text-primary outline-none cursor-pointer focus:border-cyan-500/40 transition-all"
                 >
-                  <option value="all" className="bg-[#0B1220]">All Roles</option>
-                  <option value="signer" className="bg-[#0B1220]">Signers Only</option>
-                  <option value="approver" className="bg-[#0B1220]">Approvers Only</option>
-                  <option value="reviewer" className="bg-[#0B1220]">Reviewers Only</option>
-                  <option value="cc" className="bg-[#0B1220]">CC Only</option>
+                  <option value="all">All Roles</option>
+                  <option value="signer">Signers Only</option>
+                  <option value="approver">Approvers Only</option>
+                  <option value="reviewer">Reviewers Only</option>
+                  <option value="cc">CC Only</option>
                 </select>
               </div>
 
@@ -337,11 +337,11 @@ export default function InboxPage() {
                 <select
                   value={sortField}
                   onChange={(e) => setSortField(e.target.value)}
-                  className="rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-xs text-zinc-300 outline-none cursor-pointer focus:border-cyan-500/40 transition-all"
+                  className="rounded-xl border border-border-color bg-card-bg px-3 py-2 text-xs text-text-primary outline-none cursor-pointer focus:border-cyan-500/40 transition-all"
                 >
-                  <option value="newest" className="bg-[#0B1220]">Newest Created</option>
-                  <option value="oldest" className="bg-[#0B1220]">Oldest Created</option>
-                  <option value="activity" className="bg-[#0B1220]">Last Active</option>
+                  <option value="newest">Newest Created</option>
+                  <option value="oldest">Oldest Created</option>
+                  <option value="activity">Last Active</option>
                 </select>
               </div>
 
@@ -357,7 +357,7 @@ export default function InboxPage() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="flex flex-col items-center justify-center py-32 text-cyan-500 bg-white/[0.005] border border-white/5 rounded-3xl"
+                className="flex flex-col items-center justify-center py-32 text-cyan-500 bg-card-bg border border-border-color rounded-3xl"
               >
                 <RefreshCw className="h-8 w-8 animate-spin" />
                 <span className="mt-4 text-xs font-semibold tracking-widest uppercase animate-pulse">Syncing Work Queue...</span>
@@ -372,8 +372,8 @@ export default function InboxPage() {
               >
                 <AlertCircle className="h-6 w-6 text-red-400 shrink-0" />
                 <div>
-                  <h3 className="font-semibold text-lg">Failed to Synchronize Inbox</h3>
-                  <p className="text-zinc-400 mt-1">{error}</p>
+                  <h3 className="font-semibold text-lg text-text-primary">Failed to Synchronize Inbox</h3>
+                  <p className="text-text-secondary mt-1">{error}</p>
                   <button onClick={loadInboxPackages} className="mt-3 text-xs font-semibold uppercase tracking-wider text-red-400 hover:text-red-300">Retry Fetch</button>
                 </div>
               </motion.div>
@@ -383,12 +383,12 @@ export default function InboxPage() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="glass-panel rounded-3xl overflow-hidden border border-white/5 shadow-2xl"
+                className="glass-panel rounded-3xl overflow-hidden"
               >
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse text-sm">
                     <thead>
-                      <tr className="border-b border-white/5 text-zinc-500 uppercase text-[9px] font-bold tracking-wider bg-white/[0.002]">
+                      <tr className="border-b border-border-color text-text-secondary uppercase text-[9px] font-bold tracking-wider bg-bg-primary/10">
                         <th className="px-6 py-4 min-w-[200px]">Package Name</th>
                         <th className="px-6 py-4">Status</th>
                         <th className="px-6 py-4 text-center">Progress</th>
@@ -398,7 +398,7 @@ export default function InboxPage() {
                         <th className="px-6 py-4 text-right">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/5">
+                    <tbody className="divide-y divide-border-color">
                       {processedPackages.map(pkg => {
                         const isCompleted = pkg.status === 'completed'
                         const isSent = pkg.status === 'sent'
@@ -410,12 +410,12 @@ export default function InboxPage() {
                           <tr 
                             key={pkg.id} 
                             onClick={() => navigate(isDraft ? `/create-request?draftId=${pkg.id}` : `/packages/${pkg.id}`)}
-                            className="hover:bg-white/[0.015] transition-colors group/row cursor-pointer"
+                            className="hover:bg-text-primary/[0.015] transition-colors group/row cursor-pointer"
                           >
                             {/* Title */}
-                            <td className="px-6 py-4 font-semibold text-white max-w-[200px] align-middle">
+                            <td className="px-6 py-4 font-semibold text-text-primary max-w-[200px] align-middle">
                               <div className="flex items-center gap-2">
-                                <FileText className="h-4 w-4 text-zinc-500 group-hover:text-cyan-400 transition-colors shrink-0" />
+                                <FileText className="h-4 w-4 text-text-secondary group-hover:text-cyan-400 transition-colors shrink-0" />
                                 <span className="truncate group-hover:text-cyan-400 transition-colors" title={pkg.title}>
                                   {pkg.title}
                                 </span>
@@ -443,35 +443,35 @@ export default function InboxPage() {
                             </td>
 
                             {/* Current Step Progress */}
-                            <td className="px-6 py-4 text-center font-mono font-bold text-zinc-300 align-middle">
-                              <span className="inline-flex items-center justify-center bg-black/40 px-2.5 py-1 rounded-lg border border-white/5 text-[10px]">
+                            <td className="px-6 py-4 text-center font-mono font-bold text-text-primary align-middle">
+                              <span className="inline-flex items-center justify-center bg-bg-primary/50 px-2.5 py-1 rounded-lg border border-border-color text-[10px]">
                                 Step {pkg.current_step} of {pkg.total_steps}
                               </span>
                             </td>
 
                             {/* Active Participant */}
-                            <td className="px-6 py-4 text-xs font-medium text-zinc-400 align-middle">
+                            <td className="px-6 py-4 text-xs font-medium text-text-secondary align-middle">
                               {pkg.active_participant ? (
                                 <div className="space-y-0.5">
-                                  <span className="text-zinc-200 font-bold block">{pkg.active_participant.name}</span>
+                                  <span className="text-text-primary font-bold block">{pkg.active_participant.name}</span>
                                   <span className={`inline-flex items-center px-1 rounded text-[8px] font-bold uppercase tracking-wider border ${
                                     pkg.active_participant.role === 'signer' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' :
                                     pkg.active_participant.role === 'approver' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
                                     pkg.active_participant.role === 'reviewer' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' :
-                                    'bg-zinc-800 text-zinc-400 border-white/5'
+                                    'bg-bg-primary text-text-secondary border-border-color'
                                   }`}>
                                     {pkg.active_participant.role}
                                   </span>
                                 </div>
                               ) : (
-                                <span className="text-zinc-600 font-mono text-[10px]">--</span>
+                                <span className="text-text-secondary font-mono text-[10px]">--</span>
                               )}
                             </td>
 
                             {/* Created Date */}
-                            <td className="px-6 py-4 text-zinc-500 text-xs font-semibold align-middle">
+                            <td className="px-6 py-4 text-text-secondary text-xs font-semibold align-middle">
                               <div className="flex items-center gap-1.5">
-                                <Calendar className="h-3 w-3 text-zinc-600" />
+                                <Calendar className="h-3 w-3 text-text-secondary" />
                                 {new Date(pkg.created_at).toLocaleDateString(undefined, {
                                   month: 'short',
                                   day: 'numeric',
@@ -481,9 +481,9 @@ export default function InboxPage() {
                             </td>
 
                             {/* Last Activity */}
-                            <td className="px-6 py-4 text-zinc-400 text-xs font-medium align-middle">
+                            <td className="px-6 py-4 text-text-secondary text-xs font-medium align-middle">
                               <div className="flex items-center gap-1.5">
-                                <Clock className="h-3.5 w-3.5 text-zinc-500" />
+                                <Clock className="h-3.5 w-3.5 text-text-secondary" />
                                 <span>{formatTimeAgo(pkg.last_activity)}</span>
                               </div>
                             </td>
@@ -508,7 +508,7 @@ export default function InboxPage() {
                                     <a 
                                       href={pkg.signed_document.download_url}
                                       download
-                                      className="inline-flex items-center gap-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/5 px-2.5 py-1.5 text-[11px] font-bold text-zinc-300 transition-all cursor-pointer shrink-0"
+                                      className="inline-flex items-center gap-1 rounded-lg bg-bg-primary hover:bg-text-primary/10 border border-border-color px-2.5 py-1.5 text-[11px] font-bold text-text-primary transition-all cursor-pointer shrink-0"
                                       title="Download signed document"
                                     >
                                       <Download className="h-3.5 w-3.5" />
@@ -518,7 +518,7 @@ export default function InboxPage() {
                                 ) : null}
                                 <Link 
                                   to={isDraft ? `/create-request?draftId=${pkg.id}` : `/packages/${pkg.id}`}
-                                  className="inline-flex items-center gap-1 rounded-lg bg-zinc-800 hover:bg-cyan-500 hover:text-black border border-white/5 hover:border-cyan-400 px-3 py-1.5 text-[11px] font-bold text-zinc-300 transition-all cursor-pointer shrink-0"
+                                  className="inline-flex items-center gap-1 rounded-lg bg-bg-primary hover:bg-cyan-500 hover:text-black border border-border-color hover:border-cyan-400 px-3 py-1.5 text-[11px] font-bold text-text-primary transition-all cursor-pointer shrink-0"
                                 >
                                   {isDraft ? 'Resume' : 'Details'}
                                   <ArrowUpRight className="h-3 w-3" />
@@ -539,16 +539,16 @@ export default function InboxPage() {
                 initial={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0 }}
-                className="flex flex-col items-center justify-center py-24 text-center space-y-4 bg-white/[0.005] border border-dashed border-white/10 rounded-[2rem] px-4 shadow-xl"
+                className="flex flex-col items-center justify-center py-24 text-center space-y-4 bg-card-bg border border-dashed border-border-color rounded-[2rem] px-4 shadow-sm text-text-primary"
               >
                 <div className="rounded-full bg-cyan-500/10 border border-cyan-500/20 p-5 text-cyan-400 animate-pulse">
                   <Inbox className="h-10 w-10" />
                 </div>
                 <div className="space-y-1 max-w-sm">
-                  <h3 className="text-base font-semibold text-white">
+                  <h3 className="text-base font-semibold text-text-primary">
                     {searchTerm ? 'No Search Results Match' : `No ${currentCategoryLabel} Requests Found`}
                   </h3>
-                  <p className="text-xs text-zinc-500">
+                  <p className="text-xs text-text-secondary">
                     {searchTerm 
                       ? 'Adjust your query, names, or email parameters and try searching again.' 
                       : categoryParam === 'completed' 
@@ -567,7 +567,7 @@ export default function InboxPage() {
                   </Link>
                   <Link 
                     to="/"
-                    className="inline-flex items-center gap-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/10 text-zinc-300 px-5 py-3 text-xs font-bold transition-all"
+                    className="inline-flex items-center gap-2 rounded-xl bg-bg-primary hover:bg-text-primary/10 border border-border-color text-text-primary px-5 py-3 text-xs font-bold transition-all"
                   >
                     Dashboard Home
                   </Link>

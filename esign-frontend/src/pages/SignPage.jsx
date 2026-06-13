@@ -3,8 +3,17 @@ import { useParams, useNavigate } from 'react-router-dom'
 import SignatureCanvas from 'react-signature-canvas'
 import { motion, AnimatePresence } from 'framer-motion'
 import { PenTool, Type, Upload, FileSignature, ShieldCheck, CheckCircle2, AlertCircle, RefreshCw, ChevronRight, Download, X, User, Clock } from 'lucide-react'
+import { Document, Page, pdfjs } from 'react-pdf'
+import 'react-pdf/dist/Page/AnnotationLayer.css'
+import 'react-pdf/dist/Page/TextLayer.css'
 
 import { apiClient, completeSigning, getSigningSession, API_URL } from '../services/api.js'
+
+// ── Configure pdf.js worker ──────────────────────────────────────────────────
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url,
+).toString()
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -27,7 +36,7 @@ function toAbsoluteUrl(maybeRelativeUrl, origin) {
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const inputClass =
-  'w-full rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3.5 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none backdrop-blur-xl transition-all duration-300 focus:border-cyan-500/50 focus:bg-cyan-950/10 focus:ring-2 focus:ring-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60'
+  'w-full rounded-2xl border border-border-color bg-card-bg px-4 py-3.5 text-sm text-text-primary placeholder:text-text-secondary/60 outline-none backdrop-blur-xl transition-all duration-300 focus:border-cyan-500/50 focus:bg-cyan-950/10 focus:ring-2 focus:ring-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60'
 
 const SIGNATURE_METHODS = [
   { id: 'typed', label: 'Keyboard', icon: Type },
@@ -50,7 +59,7 @@ function WorkflowPendingScreen({ session }) {
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.5, ease: "easeOut" }}
-      className="max-w-xl mx-auto glass-panel rounded-[2rem] p-8 sm:p-12 text-center relative overflow-hidden group shadow-2xl mt-10 font-sans"
+      className="max-w-xl mx-auto glass-panel rounded-[2rem] p-8 sm:p-12 text-center relative overflow-hidden group mt-10 font-sans"
     >
       {/* Glow */}
       <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-transparent opacity-50 pointer-events-none" />
@@ -63,17 +72,17 @@ function WorkflowPendingScreen({ session }) {
         </div>
       </div>
 
-      <h2 className="text-2xl sm:text-3xl font-light tracking-tight text-white neon-text-glow">
+      <h2 className="text-2xl sm:text-3xl font-light tracking-tight text-text-primary neon-text-glow">
         Workflow Not Yet Available
       </h2>
-      <p className="mt-3 text-sm text-zinc-400 leading-relaxed">
+      <p className="mt-3 text-sm text-text-secondary leading-relaxed">
         This document is currently waiting for a previous workflow participant to complete their action.
       </p>
 
       {/* Info Grid */}
-      <div className="w-full mt-8 p-6 rounded-2xl border border-white/5 bg-black/40 text-left space-y-4">
-        <div className="flex items-center justify-between border-b border-white/5 pb-3">
-          <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">Your Action Details</span>
+      <div className="w-full mt-8 p-6 rounded-2xl border border-border-color bg-bg-primary/5 text-left space-y-4">
+        <div className="flex items-center justify-between border-b border-border-color pb-3">
+          <span className="text-xs font-bold uppercase tracking-wider text-text-secondary">Your Action Details</span>
           <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/5 px-2.5 py-0.5 text-[10px] font-bold uppercase text-amber-500 tracking-wider">
             Pending
           </span>
@@ -81,21 +90,21 @@ function WorkflowPendingScreen({ session }) {
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-zinc-500">Your Role</span>
-            <span className="text-xs font-semibold text-zinc-200 capitalize">
+            <span className="text-xs text-text-secondary">Your Role</span>
+            <span className="text-xs font-semibold text-text-primary capitalize">
               {roleName}
             </span>
           </div>
 
           <div className="flex items-center justify-between">
-            <span className="text-xs text-zinc-500">Your Step</span>
-            <span className="text-xs font-semibold text-zinc-200 font-mono">
+            <span className="text-xs text-text-secondary">Your Step</span>
+            <span className="text-xs font-semibold text-text-primary font-mono">
               {session.participant_step} of {session.total_steps}
             </span>
           </div>
 
           <div className="flex items-center justify-between">
-            <span className="text-xs text-zinc-500">Current Workflow Status</span>
+            <span className="text-xs text-text-secondary">Current Workflow Status</span>
             <span className="text-xs font-semibold text-amber-400">
               Waiting For Previous Step
             </span>
@@ -103,7 +112,7 @@ function WorkflowPendingScreen({ session }) {
         </div>
       </div>
 
-      <p className="mt-8 text-xs text-zinc-500 max-w-sm mx-auto leading-normal">
+      <p className="mt-8 text-xs text-text-secondary max-w-sm mx-auto leading-normal">
         You will be able to review and complete actions on this document once the workflow reaches your assigned step.
       </p>
     </motion.div>
@@ -127,6 +136,7 @@ export default function SignPage() {
   const [typedSignature, setTypedSignature] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [signedDocumentUrl, setSignedDocumentUrl] = useState('')
+  const [numPages, setNumPages] = useState(null)
 
   // ── Signature method ──────────────────────────────────────────────────────
   const [signatureMethod, setSignatureMethod] = useState('typed')
@@ -417,17 +427,17 @@ export default function SignPage() {
             {/* Session Metadata */}
             <div className="glass-panel rounded-3xl p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-2xl bg-cyan-500/20 flex items-center justify-center border border-cyan-500/30">
-                  <span className="text-xl font-light text-cyan-300">
+                <div className="h-12 w-12 rounded-2xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/30">
+                  <span className="text-xl font-light text-accent">
                     {session.signer_name?.charAt(0).toUpperCase() || 'U'}
                   </span>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-white">{session.signer_name || 'Unknown User'}</p>
+                  <p className="text-sm font-medium text-text-primary">{session.signer_name || 'Unknown User'}</p>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-xs text-zinc-400">{session.signer_email || 'No email provided'}</span>
+                    <span className="text-xs text-text-secondary">{session.signer_email || 'No email provided'}</span>
                     {session.participant_role && (
-                      <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-zinc-800 text-zinc-300 border border-white/5">
+                      <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-card-bg text-text-primary border border-border-color">
                         {session.participant_role}
                       </span>
                     )}
@@ -435,8 +445,8 @@ export default function SignPage() {
                 </div>
               </div>
               <div className="flex flex-col items-start sm:items-end">
-                <span className="text-[10px] uppercase tracking-widest text-zinc-500">Status</span>
-                <span className={`text-sm font-medium uppercase tracking-wider ${isCompleted ? 'text-emerald-400' : 'text-cyan-400'}`}>
+                <span className="text-[10px] uppercase tracking-widest text-text-secondary">Status</span>
+                <span className={`text-sm font-medium uppercase tracking-wider ${isCompleted ? 'text-emerald-500' : 'text-accent'}`}>
                   {session.status || 'Active'}
                 </span>
               </div>
@@ -446,30 +456,101 @@ export default function SignPage() {
             {documentUrl ? (
               <div className="glass-panel rounded-3xl overflow-hidden relative group">
                 <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/5 to-transparent opacity-50 pointer-events-none" />
-                <div className="flex items-center justify-between border-b border-white/5 bg-white/[0.02] px-6 py-4">
-                  <div className="flex items-center gap-2 text-zinc-300">
-                    <FileSignature className="h-5 w-5 text-cyan-400" />
+                <div className="flex items-center justify-between border-b border-border-color bg-bg-primary/5 px-6 py-4">
+                  <div className="flex items-center gap-2 text-text-primary">
+                    <FileSignature className="h-5 w-5 text-accent" />
                     <h2 className="text-sm font-semibold tracking-wide">Document Viewport</h2>
                   </div>
                   <a
                     href={documentUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex items-center gap-2 text-xs font-medium text-cyan-400 hover:text-cyan-300 transition-colors bg-cyan-500/10 px-3 py-1.5 rounded-lg hover:bg-cyan-500/20"
+                    className="flex items-center gap-2 text-xs font-medium text-accent hover:text-accent/80 transition-colors bg-cyan-500/10 px-3 py-1.5 rounded-lg hover:bg-cyan-500/20"
                   >
                     External View <ChevronRight className="h-3 w-3" />
                   </a>
                 </div>
-                <div className="p-2 sm:p-4 bg-black/40">
-                  <iframe
-                    title="Document Preview"
-                    src={documentUrl}
-                    className="h-[min(600px,70vh)] w-full rounded-2xl border border-white/5 bg-zinc-950"
-                  />
+                <div className="relative overflow-auto bg-bg-primary py-8 custom-scrollbar shadow-inner max-h-[700px] p-2 sm:p-4">
+                  <Document
+                    file={documentUrl}
+                    onLoadSuccess={({ numPages: n }) => setNumPages(n)}
+                    loading={
+                      <div className="flex h-64 flex-col items-center justify-center gap-4 text-accent">
+                        <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                        <span className="text-sm font-medium animate-pulse tracking-widest uppercase">Rendering Data…</span>
+                      </div>
+                    }
+                    error={
+                      <div className="flex h-64 items-center justify-center text-sm text-red-400">
+                        Failed to decode document.
+                      </div>
+                    }
+                  >
+                    {numPages
+                      ? Array.from({ length: numPages }, (_, i) => {
+                          const pageNumber = i + 1
+
+                          return (
+                            <div
+                              key={pageNumber}
+                              className="relative mx-auto mb-8 w-fit shadow-lg border border-border-color last:mb-0"
+                              style={{ userSelect: 'none' }}
+                            >
+                              <div className="absolute left-4 top-4 z-10 rounded-lg border border-border-color bg-card-bg/85 px-3 py-1.5 text-xs font-mono text-text-primary backdrop-blur-md">
+                                {pageNumber} / {numPages}
+                              </div>
+
+                              <Page
+                                pageNumber={pageNumber}
+                                renderTextLayer={true}
+                                renderAnnotationLayer={true}
+                                className="block relative z-0"
+                              />
+
+                              {/* Render overlays for this page */}
+                              {!isCompleted && session?.fields && session.fields.filter(f => f.page === pageNumber).map((f) => {
+                                if (f.field_type !== 'signature') return null
+
+                                return (
+                                  <div
+                                    key={f.id}
+                                    style={{
+                                      position: 'absolute',
+                                      left: `${f.x_ratio * 100}%`,
+                                      top: `${f.y_ratio * 100}%`,
+                                      zIndex: 20,
+                                    }}
+                                    className="-translate-x-1/2 -translate-y-1/2 pointer-events-auto"
+                                  >
+                                    <div 
+                                      onClick={() => {
+                                        const panel = document.querySelector('input[type="text"]') || document.querySelector('.SignatureCanvas') || document.querySelector('input[type="file"]')
+                                        panel?.focus()
+                                      }}
+                                      className="flex items-center justify-center cursor-pointer group/field active:scale-95 transition-transform"
+                                    >
+                                      <div className="relative flex h-5 w-5 items-center justify-center">
+                                        <div className="absolute inset-0 rounded-full bg-cyan-500 animate-ping opacity-30" />
+                                        <div className="relative h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_10px_#22d3ee]" />
+                                      </div>
+                                      <div className="absolute left-0 top-3 -translate-x-1/2 pt-1 flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-cyan-500/50 bg-card-bg/95 px-2.5 py-1 text-[9px] font-bold tracking-wider text-accent shadow-[0_0_20px_rgba(34,211,238,0.25)] backdrop-blur-md uppercase">
+                                        <span>↓ SIGN HERE</span>
+                                        <span className="text-text-secondary/60">|</span>
+                                        <span className="text-text-primary max-w-[100px] truncate" title={session.signer_name}>{session.signer_name}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )
+                        })
+                      : null}
+                  </Document>
                 </div>
               </div>
             ) : (
-              <div className="glass-panel rounded-3xl p-8 text-center text-zinc-500">
+              <div className="glass-panel rounded-3xl p-8 text-center text-text-secondary">
                 No document payload available for this session.
               </div>
             )}
@@ -485,13 +566,13 @@ export default function SignPage() {
               <div className="glass-panel rounded-3xl p-8 text-center relative overflow-hidden group">
                 <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-50" />
                 <CheckCircle2 className="h-16 w-16 text-emerald-400 mx-auto mb-4" />
-                <h3 className="text-xl font-light text-emerald-300 mb-2">
+                <h3 className="text-xl font-light text-emerald-500 mb-2">
                   {session?.participant_role === 'cc' ? 'Document Viewed' : 
                    session?.participant_role === 'reviewer' ? 'Review Completed' :
                    session?.participant_role === 'approver' ? 'Approval Completed' :
                    'Signature Verified'}
                 </h3>
-                <p className="text-sm text-zinc-400 mb-6">
+                <p className="text-sm text-text-secondary mb-6">
                   {session?.participant_role === 'cc' ? 'You have successfully viewed this document.' :
                    session?.participant_role === 'reviewer' ? 'Your review action has been registered and advanced.' :
                    session?.participant_role === 'approver' ? 'Your approval action has been registered and advanced.' :
@@ -502,7 +583,7 @@ export default function SignPage() {
                     href={signedDocumentUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center justify-center gap-2 w-full rounded-2xl bg-emerald-500/20 border border-emerald-500/30 px-4 py-3 text-sm font-semibold text-emerald-300 transition-all hover:bg-emerald-500/30"
+                    className="inline-flex items-center justify-center gap-2 w-full rounded-2xl bg-emerald-500/20 border border-emerald-500/30 px-4 py-3 text-sm font-semibold text-emerald-500 transition-all hover:bg-emerald-500/30"
                   >
                     <Download className="h-4 w-4" /> Access Sealed Payload
                   </a>
@@ -511,9 +592,9 @@ export default function SignPage() {
             ) : session?.participant_role === 'cc' ? (
               <div className="glass-panel rounded-3xl p-8 text-center relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-30" />
-                <User className="h-16 w-16 text-cyan-400 mx-auto mb-4" />
-                <h3 className="text-xl font-light text-cyan-300 mb-2">View-Only Access</h3>
-                <p className="text-sm text-zinc-400 mb-6">
+                <User className="h-16 w-16 text-accent mx-auto mb-4" />
+                <h3 className="text-xl font-light text-accent mb-2">View-Only Access</h3>
+                <p className="text-sm text-text-secondary mb-6">
                   You are a CC recipient on this workflow step. You have view-only authorization, and no further action is required from you.
                 </p>
                 <button
@@ -526,11 +607,11 @@ export default function SignPage() {
               </div>
             ) : session?.participant_role === 'reviewer' ? (
               <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8 space-y-6">
-                <h3 className="text-lg font-light text-white mb-2 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                <h3 className="text-lg font-light text-text-primary mb-2 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
                   Reviewer Decisions
                 </h3>
-                <p className="text-xs text-zinc-400">
+                <p className="text-xs text-text-secondary">
                   Please review the document in the viewport and select an action.
                 </p>
 
@@ -546,7 +627,7 @@ export default function SignPage() {
                   <button
                     onClick={() => handleAction('return')}
                     disabled={isSigning}
-                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 hover:shadow-[0_0_20px_rgba(245,158,11,0.1)] px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 disabled:opacity-50"
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 hover:shadow-[0_0_20px_rgba(245,158,11,0.1)] px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 disabled:opacity-50"
                   >
                     {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Return Document'}
                   </button>
@@ -554,11 +635,11 @@ export default function SignPage() {
               </div>
             ) : session?.participant_role === 'approver' ? (
               <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8 space-y-6">
-                <h3 className="text-lg font-light text-white mb-2 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                <h3 className="text-lg font-light text-text-primary mb-2 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
                   Approver Decisions
                 </h3>
-                <p className="text-xs text-zinc-400">
+                <p className="text-xs text-text-secondary">
                   Please review the document in the viewport and select an action.
                 </p>
 
@@ -574,7 +655,7 @@ export default function SignPage() {
                   <button
                     onClick={() => handleAction('reject')}
                     disabled={isSigning}
-                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-500/30 bg-red-500/10 text-red-300 hover:bg-red-500/20 hover:shadow-[0_0_20px_rgba(239,68,68,0.1)] px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 disabled:opacity-50"
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-500/30 bg-red-500/10 text-red-500 hover:bg-red-500/20 hover:shadow-[0_0_20px_rgba(239,68,68,0.1)] px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 disabled:opacity-50"
                   >
                     {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Reject Document'}
                   </button>
@@ -583,21 +664,21 @@ export default function SignPage() {
             ) : (
               <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8">
                 
-                <h3 className="text-lg font-light text-white mb-6 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                <h3 className="text-lg font-light text-text-primary mb-6 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
                   Input Signature
                 </h3>
 
                 {/* Signature Method Tabs */}
-                <div className="flex gap-2 p-1 rounded-2xl bg-white/[0.02] border border-white/5 mb-8">
+                <div className="flex gap-2 p-1 rounded-2xl bg-bg-primary/5 border border-border-color mb-8">
                   {SIGNATURE_METHODS.map(({ id, label, icon: Icon }) => (
                     <button
                       key={id}
                       onClick={() => setSignatureMethod(id)}
                       className={`relative flex-1 flex flex-col items-center justify-center gap-2 py-3 rounded-xl text-xs font-medium transition-all duration-300 ${
                         signatureMethod === id 
-                          ? 'text-cyan-300 bg-cyan-500/10 shadow-[0_0_20px_rgba(34,211,238,0.1)]' 
-                          : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.02]'
+                          ? 'text-accent bg-cyan-500/10' 
+                          : 'text-text-secondary hover:text-text-primary hover:bg-bg-primary/20'
                       }`}
                     >
                       {signatureMethod === id && (
@@ -642,11 +723,11 @@ export default function SignPage() {
                       className="space-y-6"
                     >
                       {!uploadPreview ? (
-                        <label className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-white/10 bg-white/[0.02] p-8 cursor-pointer transition-all hover:border-cyan-500/30 hover:bg-cyan-950/10">
-                          <Upload className="h-8 w-8 text-cyan-500/50" />
+                        <label className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border-color bg-card-bg p-8 cursor-pointer transition-all hover:border-cyan-500/30 hover:bg-cyan-500/5">
+                          <Upload className="h-8 w-8 text-accent/60" />
                           <div className="text-center">
-                            <p className="text-sm text-zinc-300">Select Image File</p>
-                            <p className="text-xs text-zinc-500 mt-1">PNG or JPG formats supported</p>
+                            <p className="text-sm text-text-primary">Select Image File</p>
+                            <p className="text-xs text-text-secondary mt-1">PNG or JPG formats supported</p>
                           </div>
                           <input
                             type="file"
@@ -657,7 +738,7 @@ export default function SignPage() {
                           />
                         </label>
                       ) : (
-                        <div className="relative rounded-2xl border border-white/10 bg-black/50 p-4">
+                        <div className="relative rounded-2xl border border-border-color bg-bg-primary/5 p-4">
                           <img src={uploadPreview} alt="Signature preview" className="mx-auto max-h-32 object-contain" />
                           <button
                             onClick={handleRemoveUpload}
@@ -679,7 +760,7 @@ export default function SignPage() {
                       exit={{ opacity: 0, y: -10 }}
                       className="space-y-4"
                     >
-                      <div className="rounded-2xl border border-white/10 bg-white overflow-hidden shadow-inner relative">
+                      <div className="rounded-2xl border border-border-color bg-white overflow-hidden shadow-inner relative">
                         <SignatureCanvas
                           ref={sigPadRef}
                           penColor="black"
@@ -694,11 +775,11 @@ export default function SignPage() {
                         />
                       </div>
                       <div className="flex justify-between items-center px-1">
-                        <span className="text-xs text-zinc-500">Trace within the bounds</span>
+                        <span className="text-xs text-text-secondary">Trace within the bounds</span>
                         <button
                           onClick={handleClearCanvas}
                           disabled={isSigning || isDrawEmpty}
-                          className="text-xs font-medium text-zinc-400 hover:text-zinc-200 disabled:opacity-50"
+                          className="text-xs font-medium text-text-secondary hover:text-text-primary disabled:opacity-50"
                         >
                           Clear Traces
                         </button>
