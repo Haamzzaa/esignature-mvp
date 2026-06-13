@@ -850,6 +850,10 @@ class SigningView(APIView):
                 locked_envelope = Envelope.objects.select_for_update().get(id=envelope.id)
             else:
                 locked_token = SigningToken.objects.select_for_update().get(id=token_obj.id)
+                if participant_rec:
+                    locked_participant = Participant.objects.select_for_update().get(id=participant_rec.id)
+                else:
+                    locked_participant = None
                 locked_signer = Signer.objects.select_for_update().get(id=signer.id)
                 locked_envelope = Envelope.objects.select_for_update().get(id=envelope.id)
 
@@ -872,14 +876,12 @@ class SigningView(APIView):
                 current_step = locked_participant.step_number
             else:
                 current_step = 1
-                p_rec = Participant.objects.filter(envelope=locked_envelope, email=email).first()
-                if p_rec:
-                    p_rec = Participant.objects.select_for_update().get(pk=p_rec.pk)
-                    p_rec.has_completed = True
-                    p_rec.status = 'completed'
-                    p_rec.completed_at = timezone.now()
-                    p_rec.save(update_fields=["has_completed", "status", "completed_at"])
-                    current_step = p_rec.step_number
+                if locked_participant:
+                    locked_participant.has_completed = True
+                    locked_participant.status = 'completed'
+                    locked_participant.completed_at = timezone.now()
+                    locked_participant.save(update_fields=["has_completed", "status", "completed_at"])
+                    current_step = locked_participant.step_number
 
             AuditLog.objects.create(
                 envelope=locked_envelope,
@@ -900,7 +902,7 @@ class SigningView(APIView):
                 user_agent=user_agent,
             )
             
-            p_name = locked_participant.name if is_participant else (p_rec.name if p_rec else name)
+            p_name = locked_participant.name if locked_participant else name
             AuditLog.objects.create(
                 envelope=locked_envelope,
                 event=f"Participant {p_name} Completed",

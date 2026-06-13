@@ -1,4 +1,4 @@
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 from rest_framework.exceptions import ValidationError
 from .models import Document, Envelope, Signer, Participant
 from .serializers import EnvelopeCreateSerializer
@@ -1342,7 +1342,7 @@ class AuthenticationAndOwnershipTestCase(TestCase):
         self.assertEqual(response.data["signer_name"], "Signer")
 
 
-class EmailNotificationsTestCase(TestCase):
+class EmailNotificationsTestCase(TransactionTestCase):
     def setUp(self):
         from django.contrib.auth.models import User
         from rest_framework.test import APIClient
@@ -1496,7 +1496,7 @@ class EmailNotificationsTestCase(TestCase):
             self.assertEqual(p_bob.status, "active")
 
 
-class CertificateOfCompletionTestCase(TestCase):
+class CertificateOfCompletionTestCase(TransactionTestCase):
     def setUp(self):
         from django.contrib.auth.models import User
         from rest_framework.test import APIClient
@@ -1884,7 +1884,7 @@ _SMTP_EXCEPTIONS = [
 ]
 
 
-class SmtpResilienceVerificationTest(TestCase):
+class SmtpResilienceVerificationTest(TransactionTestCase):
     """
     Verification suite for SMTP failure resilience.
 

@@ -52,9 +52,8 @@ def check_and_advance_step(envelope, current_step, request=None):
     ip_address = request.META.get("REMOTE_ADDR") if request else None
     user_agent = request.META.get("HTTP_USER_AGENT") if request else None
 
-    # Acquire row-level locks
-    envelope = Envelope.objects.select_for_update().get(id=envelope.id)
-    step_participants = envelope.participants.select_for_update().filter(step_number=current_step)
+    # Acquire row-level locks - trust caller to own them to keep lock scope minimal
+    step_participants = envelope.participants.filter(step_number=current_step)
     
     all_step_completed = True
     for p in step_participants:
@@ -65,13 +64,14 @@ def check_and_advance_step(envelope, current_step, request=None):
     if all_step_completed:
         # Check if Step Completed audit has already been logged to avoid double entries
         completed_event = f"Step {current_step} Completed"
-        if not AuditLog.objects.filter(envelope=envelope, event=completed_event).exists():
-            AuditLog.objects.create(
-                envelope=envelope,
-                event=completed_event,
-                ip_address=ip_address,
-                user_agent=user_agent,
-            )
+        AuditLog.objects.get_or_create(
+            envelope=envelope,
+            event=completed_event,
+            defaults={
+                "ip_address": ip_address,
+                "user_agent": user_agent,
+            }
+        )
 
         # Check for next step in sequential routing
         next_participants = envelope.participants.filter(step_number__gt=current_step).order_by('step_number')
@@ -98,17 +98,20 @@ def check_and_advance_step(envelope, current_step, request=None):
             envelope.status = "sent"
             envelope.save(update_fields=["status"])
 
-            # Send next step email notifications.
+            # Send next step email notifications post-commit.
             # A failure here must NOT unwind the workflow advance already committed above.
             from services.notification_service import send_next_step_notifications
-            try:
-                send_next_step_notifications(envelope, next_step, request)
-            except Exception:
-                logger.exception(
-                    "Failed to send step %s notification email for envelope %s",
-                    next_step,
-                    envelope.id,
-                )
+            
+            def _notify_next_step():
+                try:
+                    send_next_step_notifications(envelope, next_step, request)
+                except Exception:
+                    logger.exception(
+                        "Failed to send step %s notification email for envelope %s",
+                        next_step,
+                        envelope.id,
+                    )
+            transaction.on_commit(_notify_next_step)
         else:
             # Final workflow step completed! Mark envelope as completed
             envelope.status = "completed"
