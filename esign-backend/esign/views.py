@@ -125,56 +125,57 @@ class SendEnvelopeView(APIView):
         envelope = get_object_or_404(Envelope, id=envelope_id, owner=request.user)
         expires_at = timezone.now() + timedelta(hours=24)
 
-        # ── Modern participant-based path ──────────────────────────────────
-        # Used when the envelope was created via the wizard (draft or direct send).
-        participants = envelope.participants.all()
-        if participants.exists():
-            has_signer = participants.filter(role='signer').exists()
-            if not has_signer:
-                return Response(
-                    {"detail": "At least one participant must have the 'Signer' role."},
-                    status=status.HTTP_400_BAD_REQUEST,
+        with transaction.atomic():
+            # ── Modern participant-based path ──────────────────────────────────
+            # Used when the envelope was created via the wizard (draft or direct send).
+            participants = envelope.participants.all()
+            if participants.exists():
+                has_signer = participants.filter(role='signer').exists()
+                if not has_signer:
+                    return Response(
+                        {"detail": "At least one participant must have the 'Signer' role."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                # Activate the first workflow step
+                step_numbers = sorted(set(participants.values_list('step_number', flat=True)))
+                min_step = step_numbers[0]
+                activate_workflow_step(envelope, min_step)
+
+                # Ensure a legacy Signer record exists (required for token resolution)
+                first_signer_p = (
+                    participants.filter(role='signer')
+                    .order_by('step_number', 'order', 'id')
+                    .first()
+                )
+                signer, _ = Signer.objects.get_or_create(
+                    envelope=envelope,
+                    defaults={'name': first_signer_p.name, 'email': first_signer_p.email},
                 )
 
-            # Activate the first workflow step
-            step_numbers = sorted(set(participants.values_list('step_number', flat=True)))
-            min_step = step_numbers[0]
-            activate_workflow_step(envelope, min_step)
+            else:
+                # ── Legacy Signer path (unchanged) ────────────────────────────
+                signer = get_object_or_404(Signer, envelope=envelope)
 
-            # Ensure a legacy Signer record exists (required for token resolution)
-            first_signer_p = (
-                participants.filter(role='signer')
-                .order_by('step_number', 'order', 'id')
-                .first()
+            # Issue / refresh the signing token (legacy compat, used in response URL)
+            signing_token, created = SigningToken.objects.get_or_create(
+                signer=signer,
+                defaults={"expires_at": expires_at, "is_used": False},
             )
-            signer, _ = Signer.objects.get_or_create(
+            if not created:
+                signing_token.expires_at = expires_at
+                signing_token.is_used = False
+                signing_token.save()
+
+            envelope.status = "sent"
+            envelope.save()
+
+            AuditLog.objects.create(
                 envelope=envelope,
-                defaults={'name': first_signer_p.name, 'email': first_signer_p.email},
+                event="sent",
+                ip_address=request.META.get("REMOTE_ADDR"),
+                user_agent=request.META.get("HTTP_USER_AGENT"),
             )
-
-        else:
-            # ── Legacy Signer path (unchanged) ────────────────────────────
-            signer = get_object_or_404(Signer, envelope=envelope)
-
-        # Issue / refresh the signing token (legacy compat, used in response URL)
-        signing_token, created = SigningToken.objects.get_or_create(
-            signer=signer,
-            defaults={"expires_at": expires_at, "is_used": False},
-        )
-        if not created:
-            signing_token.expires_at = expires_at
-            signing_token.is_used = False
-            signing_token.save()
-
-        envelope.status = "sent"
-        envelope.save()
-
-        AuditLog.objects.create(
-            envelope=envelope,
-            event="sent",
-            ip_address=request.META.get("REMOTE_ADDR"),
-            user_agent=request.META.get("HTTP_USER_AGENT"),
-        )
 
         # Send email notification to first active participant / legacy signer.
         # A failure here must NOT roll back the envelope status change above.
@@ -227,127 +228,128 @@ class EnvelopePatchView(APIView):
         from django.core.validators import validate_email as dj_validate_email
         from django.core.exceptions import ValidationError as DjangoValidationError
 
-        # ── Simple scalar fields ──────────────────────────────────────────
-        simple_map = {
-            'title': 'title',
-            'description': 'description',
-            'signature_page': 'signature_page',
-            'signature_x_ratio': 'signature_x_ratio',
-            'signature_y_ratio': 'signature_y_ratio',
-            'send_reminders': 'send_reminders',
-            'send_final_email': 'send_final_email',
-            'allow_printing': 'allow_printing',
-        }
-        for req_key, model_field in simple_map.items():
-            if req_key in request.data:
-                setattr(envelope, model_field, request.data[req_key])
+        with transaction.atomic():
+            # ── Simple scalar fields ──────────────────────────────────────────
+            simple_map = {
+                'title': 'title',
+                'description': 'description',
+                'signature_page': 'signature_page',
+                'signature_x_ratio': 'signature_x_ratio',
+                'signature_y_ratio': 'signature_y_ratio',
+                'send_reminders': 'send_reminders',
+                'send_final_email': 'send_final_email',
+                'allow_printing': 'allow_printing',
+            }
+            for req_key, model_field in simple_map.items():
+                if req_key in request.data:
+                    setattr(envelope, model_field, request.data[req_key])
 
-        # ── additional_recipients ─────────────────────────────────────────
-        if 'additional_recipients' in request.data:
-            recipients = request.data['additional_recipients']
-            if not isinstance(recipients, list):
-                return Response(
-                    {'additional_recipients': ['Must be a list of email strings.']},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            validated_recipients = []
-            for email in recipients:
-                email_str = str(email).strip()
-                if not email_str:
-                    continue
-                try:
-                    dj_validate_email(email_str)
-                except DjangoValidationError:
+            # ── additional_recipients ─────────────────────────────────────────
+            if 'additional_recipients' in request.data:
+                recipients = request.data['additional_recipients']
+                if not isinstance(recipients, list):
                     return Response(
-                        {'additional_recipients': [f"Enter a valid email address: '{email_str}'."]},
+                        {'additional_recipients': ['Must be a list of email strings.']},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
-                validated_recipients.append(email_str)
-            envelope.additional_recipients = validated_recipients
-
-        # ── Optional document update ──────────────────────────────────────
-        if 'document_id' in request.data:
-            try:
-                new_doc = Document.objects.get(id=request.data['document_id'])
-                envelope.document = new_doc
-            except Document.DoesNotExist:
-                return Response(
-                    {'document_id': ['Document not found.']},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-        envelope.save()
-
-        # ── Replace participants ───────────────────────────────────────────
-        if 'participants' in request.data:
-            participants_raw = request.data['participants']
-            if not isinstance(participants_raw, list):
-                return Response(
-                    {'participants': ['Must be a list.']},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            # Validate emails before deleting existing records
-            for p_data in participants_raw:
-                email_str = str(p_data.get('email', '')).strip()
-                if email_str:
+                validated_recipients = []
+                for email in recipients:
+                    email_str = str(email).strip()
+                    if not email_str:
+                        continue
                     try:
                         dj_validate_email(email_str)
                     except DjangoValidationError:
-                        name_str = str(p_data.get('name', '')).strip() or email_str
                         return Response(
-                            {'participants': [f"Enter a valid email address for '{name_str}'."]},
+                            {'additional_recipients': [f"Enter a valid email address: '{email_str}'."]},
                             status=status.HTTP_400_BAD_REQUEST,
                         )
+                    validated_recipients.append(email_str)
+                envelope.additional_recipients = validated_recipients
 
-            # Replace atomically
-            envelope.participants.all().delete()  # cascades ParticipantToken
+            # ── Optional document update ──────────────────────────────────────
+            if 'document_id' in request.data:
+                try:
+                    new_doc = Document.objects.get(id=request.data['document_id'])
+                    envelope.document = new_doc
+                except Document.DoesNotExist:
+                    return Response(
+                        {'document_id': ['Document not found.']},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
-            from .models import ParticipantToken
-            for idx, p_data in enumerate(participants_raw):
-                p = Participant.objects.create(
-                    envelope=envelope,
-                    name=str(p_data.get('name', '')).strip(),
-                    email=str(p_data.get('email', '')).strip(),
-                    role=p_data.get('role', 'signer'),
-                    step_number=p_data.get('step_number', 1),
-                    order=p_data.get('order', idx + 1),
-                    status='pending',
-                )
-                ParticipantToken.objects.create(
-                    participant=p,
-                    expires_at=timezone.now() + timedelta(hours=24),
-                    is_used=False,
-                )
+            envelope.save()
 
-        # ── Replace fields ────────────────────────────────────────────────
-        if 'fields' in request.data:
-            fields_raw = request.data['fields']
-            DocumentField.objects.filter(envelope=envelope).delete()
+            # ── Replace participants ───────────────────────────────────────────
+            if 'participants' in request.data:
+                participants_raw = request.data['participants']
+                if not isinstance(participants_raw, list):
+                    return Response(
+                        {'participants': ['Must be a list.']},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
-            if isinstance(fields_raw, list) and fields_raw:
-                from services.field_service import create_field
-                participants_by_email = {
-                    p.email: p for p in envelope.participants.all()
-                }
-                for field in fields_raw:
-                    if not isinstance(field, dict):
-                        continue
-                    p_email = field.get('participant_email')
-                    participant_inst = participants_by_email.get(p_email)
-                    if participant_inst:
+                # Validate emails before deleting existing records
+                for p_data in participants_raw:
+                    email_str = str(p_data.get('email', '')).strip()
+                    if email_str:
                         try:
-                            create_field(
-                                envelope=envelope,
-                                participant=participant_inst,
-                                field_type=field.get('field_type'),
-                                page=field.get('page'),
-                                x_ratio=field.get('x_ratio'),
-                                y_ratio=field.get('y_ratio'),
-                                required=field.get('required', True),
+                            dj_validate_email(email_str)
+                        except DjangoValidationError:
+                            name_str = str(p_data.get('name', '')).strip() or email_str
+                            return Response(
+                                {'participants': [f"Enter a valid email address for '{name_str}'."]},
+                                status=status.HTTP_400_BAD_REQUEST,
                             )
-                        except Exception:
-                            pass  # Skip malformed fields during draft saves
+
+                # Replace atomically
+                envelope.participants.all().delete()  # cascades ParticipantToken
+
+                from .models import ParticipantToken
+                for idx, p_data in enumerate(participants_raw):
+                    p = Participant.objects.create(
+                        envelope=envelope,
+                        name=str(p_data.get('name', '')).strip(),
+                        email=str(p_data.get('email', '')).strip(),
+                        role=p_data.get('role', 'signer'),
+                        step_number=p_data.get('step_number', 1),
+                        order=p_data.get('order', idx + 1),
+                        status='pending',
+                    )
+                    ParticipantToken.objects.create(
+                        participant=p,
+                        expires_at=timezone.now() + timedelta(hours=24),
+                        is_used=False,
+                    )
+
+            # ── Replace fields ────────────────────────────────────────────────
+            if 'fields' in request.data:
+                fields_raw = request.data['fields']
+                DocumentField.objects.filter(envelope=envelope).delete()
+
+                if isinstance(fields_raw, list) and fields_raw:
+                    from services.field_service import create_field
+                    participants_by_email = {
+                        p.email: p for p in envelope.participants.all()
+                    }
+                    for field in fields_raw:
+                        if not isinstance(field, dict):
+                            continue
+                        p_email = field.get('participant_email')
+                        participant_inst = participants_by_email.get(p_email)
+                        if participant_inst:
+                            try:
+                                create_field(
+                                    envelope=envelope,
+                                    participant=participant_inst,
+                                    field_type=field.get('field_type'),
+                                    page=field.get('page'),
+                                    x_ratio=field.get('x_ratio'),
+                                    y_ratio=field.get('y_ratio'),
+                                    required=field.get('required', True),
+                                )
+                            except Exception:
+                                pass  # Skip malformed fields during draft saves
 
         return Response(
             {'envelope_id': envelope.id, 'status': envelope.status},
@@ -1307,8 +1309,9 @@ class RegisterView(APIView):
         if User.objects.filter(username=username).exists():
             return Response({"detail": "Username already exists."}, status=status.HTTP_400_BAD_REQUEST)
 
-        user = User.objects.create_user(username=username, email=email, password=password)
-        token, _ = Token.objects.get_or_create(user=user)
+        with transaction.atomic():
+            user = User.objects.create_user(username=username, email=email, password=password)
+            token, _ = Token.objects.get_or_create(user=user)
         return Response({
             "token": token.key,
             "user": {

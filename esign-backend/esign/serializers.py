@@ -1,6 +1,7 @@
 # pyrefly: ignore [missing-import]
 from rest_framework import serializers
 import hashlib
+from django.db import transaction
 from .models import Document, Signer, Envelope, Participant, AuditLog, Template
 
 class DocumentUploadSerializer(serializers.ModelSerializer):
@@ -115,121 +116,122 @@ class EnvelopeCreateSerializer(serializers.Serializer):
         return attrs
 
     def create(self, validated_data):
-        is_draft          = validated_data.pop('is_draft', False)
-        owner             = validated_data.pop('owner', None)
-        fields_data       = validated_data.pop('fields', [])
-        document_id       = validated_data['document_id']
-        signer_data       = validated_data.get('signer')
-        participants_data = validated_data.get('participants', [])
-        signature_page    = validated_data.get('signature_page', 1)
-        signature_x_ratio = validated_data.get('signature_x_ratio')
-        signature_y_ratio = validated_data.get('signature_y_ratio')
-        send_reminders    = validated_data.get('send_reminders', False)
-        send_final_email  = validated_data.get('send_final_email', True)
-        allow_printing    = validated_data.get('allow_printing', True)
-        additional_recipients = validated_data.get('additional_recipients', [])
+        with transaction.atomic():
+            is_draft          = validated_data.pop('is_draft', False)
+            owner             = validated_data.pop('owner', None)
+            fields_data       = validated_data.pop('fields', [])
+            document_id       = validated_data['document_id']
+            signer_data       = validated_data.get('signer')
+            participants_data = validated_data.get('participants', [])
+            signature_page    = validated_data.get('signature_page', 1)
+            signature_x_ratio = validated_data.get('signature_x_ratio')
+            signature_y_ratio = validated_data.get('signature_y_ratio')
+            send_reminders    = validated_data.get('send_reminders', False)
+            send_final_email  = validated_data.get('send_final_email', True)
+            allow_printing    = validated_data.get('allow_printing', True)
+            additional_recipients = validated_data.get('additional_recipients', [])
 
-        document = Document.objects.get(id=document_id)
-        envelope = Envelope.objects.create(
-            document=document,
-            signature_page=signature_page,
-            signature_x_ratio=signature_x_ratio,
-            signature_y_ratio=signature_y_ratio,
-            send_reminders=send_reminders,
-            send_final_email=send_final_email,
-            allow_printing=allow_printing,
-            additional_recipients=additional_recipients,
-            owner=owner,
-        )
-
-        # Determine the lowest step_number
-        step_numbers = [p_data.get('step_number', 1) for p_data in participants_data]
-        min_step = min(step_numbers) if step_numbers else 1
-
-        from .models import ParticipantToken
-        from django.utils import timezone
-        from datetime import timedelta
-
-        for p_idx, p_data in enumerate(participants_data):
-            p_data = p_data.copy()
-            order = p_data.pop('order', p_idx + 1)
-
-            p = Participant.objects.create(
-                envelope=envelope,
-                order=order,
-                status='pending',
-                **p_data
-            )
-            ParticipantToken.objects.create(
-                participant=p,
-                expires_at=timezone.now() + timedelta(hours=24),
-                is_used=False
+            document = Document.objects.get(id=document_id)
+            envelope = Envelope.objects.create(
+                document=document,
+                signature_page=signature_page,
+                signature_x_ratio=signature_x_ratio,
+                signature_y_ratio=signature_y_ratio,
+                send_reminders=send_reminders,
+                send_final_email=send_final_email,
+                allow_printing=allow_printing,
+                additional_recipients=additional_recipients,
+                owner=owner,
             )
 
-        if not is_draft:
-            # Audit logging for sequential workflow initiation
-            AuditLog.objects.create(envelope=envelope, event="Workflow Started")
-            AuditLog.objects.create(envelope=envelope, event=f"Step {min_step} Activated")
+            # Determine the lowest step_number
+            step_numbers = [p_data.get('step_number', 1) for p_data in participants_data]
+            min_step = min(step_numbers) if step_numbers else 1
 
-            # Legacy compatibility: create Signer record for the first signer participant
-            signer_record_created = False
-            if participants_data:
-                first_signer = None
-                for p in participants_data:
-                    if p.get('role') == 'signer':
-                        first_signer = p
-                        break
-                if first_signer:
-                    Signer.objects.create(
-                        envelope=envelope,
-                        name=first_signer['name'],
-                        email=first_signer['email']
-                    )
-                    signer_record_created = True
+            from .models import ParticipantToken
+            from django.utils import timezone
+            from datetime import timedelta
 
-            if not signer_record_created and signer_data:
-                Signer.objects.create(envelope=envelope, **signer_data)
+            for p_idx, p_data in enumerate(participants_data):
+                p_data = p_data.copy()
+                order = p_data.pop('order', p_idx + 1)
 
-            # Activate Step 1 / min_step participants and provision their ParticipantTokens
-            from services.workflow_service import activate_workflow_step
-            activate_workflow_step(envelope, min_step)
+                p = Participant.objects.create(
+                    envelope=envelope,
+                    order=order,
+                    status='pending',
+                    **p_data
+                )
+                ParticipantToken.objects.create(
+                    participant=p,
+                    expires_at=timezone.now() + timedelta(hours=24),
+                    is_used=False
+                )
 
-        # Create fields (safe for both draft and non-draft)
-        if fields_data:
-            from services.field_service import create_field
+            if not is_draft:
+                # Audit logging for sequential workflow initiation
+                AuditLog.objects.create(envelope=envelope, event="Workflow Started")
+                AuditLog.objects.create(envelope=envelope, event=f"Step {min_step} Activated")
 
-            participants_by_email = {p.email: p for p in envelope.participants.all()}
+                # Legacy compatibility: create Signer record for the first signer participant
+                signer_record_created = False
+                if participants_data:
+                    first_signer = None
+                    for p in participants_data:
+                        if p.get('role') == 'signer':
+                            first_signer = p
+                            break
+                    if first_signer:
+                        Signer.objects.create(
+                            envelope=envelope,
+                            name=first_signer['name'],
+                            email=first_signer['email']
+                        )
+                        signer_record_created = True
 
-            # Legacy fallback: if no participants, create a Participant record for the legacy signer
-            if not participants_by_email:
-                legacy_signer = Signer.objects.filter(envelope=envelope).first()
-                if legacy_signer:
-                    p_instance = Participant.objects.create(
-                        envelope=envelope,
-                        name=legacy_signer.name,
-                        email=legacy_signer.email,
-                        role='signer',
-                        order=1,
-                        step_number=1,
-                        status='active'
-                    )
-                    participants_by_email[p_instance.email] = p_instance
+                if not signer_record_created and signer_data:
+                    Signer.objects.create(envelope=envelope, **signer_data)
 
-            for field in fields_data:
-                p_email = field.get('participant_email')
-                participant_inst = participants_by_email.get(p_email)
-                if participant_inst:
-                    create_field(
-                        envelope=envelope,
-                        participant=participant_inst,
-                        field_type=field.get('field_type'),
-                        page=field.get('page'),
-                        x_ratio=field.get('x_ratio'),
-                        y_ratio=field.get('y_ratio'),
-                        required=field.get('required', True)
-                    )
+                # Activate Step 1 / min_step participants and provision their ParticipantTokens
+                from services.workflow_service import activate_workflow_step
+                activate_workflow_step(envelope, min_step)
 
-        return envelope
+            # Create fields (safe for both draft and non-draft)
+            if fields_data:
+                from services.field_service import create_field
+
+                participants_by_email = {p.email: p for p in envelope.participants.all()}
+
+                # Legacy fallback: if no participants, create a Participant record for the legacy signer
+                if not participants_by_email:
+                    legacy_signer = Signer.objects.filter(envelope=envelope).first()
+                    if legacy_signer:
+                        p_instance = Participant.objects.create(
+                            envelope=envelope,
+                            name=legacy_signer.name,
+                            email=legacy_signer.email,
+                            role='signer',
+                            order=1,
+                            step_number=1,
+                            status='active'
+                        )
+                        participants_by_email[p_instance.email] = p_instance
+
+                for field in fields_data:
+                    p_email = field.get('participant_email')
+                    participant_inst = participants_by_email.get(p_email)
+                    if participant_inst:
+                        create_field(
+                            envelope=envelope,
+                            participant=participant_inst,
+                            field_type=field.get('field_type'),
+                            page=field.get('page'),
+                            x_ratio=field.get('x_ratio'),
+                            y_ratio=field.get('y_ratio'),
+                            required=field.get('required', True)
+                        )
+
+            return envelope
 
 
 class TemplateSerializer(serializers.ModelSerializer):
