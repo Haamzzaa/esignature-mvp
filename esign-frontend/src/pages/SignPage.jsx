@@ -137,6 +137,7 @@ export default function SignPage() {
   const [successMessage, setSuccessMessage] = useState('')
   const [signedDocumentUrl, setSignedDocumentUrl] = useState('')
   const [numPages, setNumPages] = useState(null)
+  const [viewTracked, setViewTracked] = useState(false)
 
   // ── Signature method ──────────────────────────────────────────────────────
   const [signatureMethod, setSignatureMethod] = useState('typed')
@@ -189,10 +190,18 @@ export default function SignPage() {
   }
 
   useEffect(() => {
+    setViewTracked(false)
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional mount/token sync
     void loadSession()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
+
+  useEffect(() => {
+    if (token && session && !viewTracked && session?.status !== 'completed') {
+      setViewTracked(true)
+      completeSigning(token, { action: 'view' }).catch(() => {})
+    }
+  }, [token, session, viewTracked])
 
   // ── Payload builder — validates each method and returns the correct shape ──
   function buildPayload() {

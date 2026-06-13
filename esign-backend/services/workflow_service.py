@@ -95,8 +95,7 @@ def check_and_advance_step(envelope, current_step, request=None):
             )
             
             # Keep/reset envelope status to sent so the next participants can perform actions
-            envelope.status = "sent"
-            envelope.save(update_fields=["status"])
+            envelope.transition_to("sent")
 
             # Send next step email notifications post-commit.
             # A failure here must NOT unwind the workflow advance already committed above.
@@ -114,8 +113,7 @@ def check_and_advance_step(envelope, current_step, request=None):
             transaction.on_commit(_notify_next_step)
         else:
             # Final workflow step completed! Mark envelope as completed
-            envelope.status = "completed"
-            envelope.save(update_fields=["status"])
+            envelope.transition_to("completed")
 
             # Create completion audit logs first so that they appear on the certificate timeline
             AuditLog.objects.create(

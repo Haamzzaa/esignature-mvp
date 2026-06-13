@@ -66,6 +66,29 @@ class Envelope(models.Model):
 
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='envelopes', null=True, blank=True)
 
+    VALID_TRANSITIONS = {
+        'draft': {'sent', 'viewed', 'completed', 'declined', 'cancelled'},
+        'sent': {'sent', 'viewed', 'completed', 'declined', 'expired'},
+        'viewed': {'sent', 'viewed', 'completed', 'declined', 'expired'},
+        'signed': {'completed'},
+        'completed': set(),
+        'declined': set(),
+        'expired': set(),
+        'cancelled': set(),
+    }
+
+    def transition_to(self, target_status):
+        from esign.exceptions import InvalidStateTransition
+        
+        valid_targets = self.VALID_TRANSITIONS.get(self.status, set())
+        if target_status not in valid_targets:
+            raise InvalidStateTransition(
+                f"Cannot transition envelope from {self.status} to {target_status}"
+            )
+        
+        self.status = target_status
+        self.save(update_fields=["status"])
+
     def save(self, *args, **kwargs):
         if not self.owner:
             self.owner = get_default_user()

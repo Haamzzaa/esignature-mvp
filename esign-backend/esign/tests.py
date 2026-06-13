@@ -418,7 +418,7 @@ class ParticipantAccessAndActionsTestCase(TestCase):
         p_cc = envelope.participants.get(role="cc")
         token_rec = ParticipantToken.objects.get(participant=p_cc)
 
-        # 1. Simulate CC viewing the session via GET
+        # 1. Simulate CC viewing the session via GET and then explicit POST view action
         from django.test import RequestFactory
         from .views import SigningView
         
@@ -431,9 +431,18 @@ class ParticipantAccessAndActionsTestCase(TestCase):
         response = view(request, token=str(token_rec.token))
         self.assertEqual(response.status_code, 200)
 
-        # Verify response indicates role and status
+        # Verify response indicates role and status (remains active as GET is now pure)
         self.assertEqual(response.data['participant_role'], 'cc')
-        self.assertEqual(response.data['participant_status'], 'viewed')
+        self.assertEqual(response.data['participant_status'], 'active')
+
+        # Trigger POST view action to mark as viewed
+        request_view = factory.post(f"/api/signing/{token_rec.token}/", {
+            "action": "view"
+        }, content_type="application/json")
+        request_view.META['REMOTE_ADDR'] = '127.0.0.1'
+        request_view.META['HTTP_USER_AGENT'] = 'TestClient'
+        response_view = view(request_view, token=str(token_rec.token))
+        self.assertEqual(response_view.status_code, 200)
 
         # Refresh database - should be viewed but NOT completed or advanced!
         p_cc.refresh_from_db()
@@ -2071,3 +2080,188 @@ class SmtpResilienceVerificationTest(TransactionTestCase):
             CompletionCertificate.objects.filter(envelope=envelope).exists(),
             "CompletionCertificate not generated on multi-step completion with broken SMTP"
         )
+
+
+class EnvelopeStateTransitionTests(TestCase):
+    def setUp(self):
+        from .models import Document, Envelope
+        self.document = Document.objects.create(file_hash="dummy_hash")
+        self.envelope = Envelope.objects.create(document=self.document, status="draft")
+
+    def test_valid_transitions(self):
+        from esign.exceptions import InvalidStateTransition
+        
+        # draft -> sent
+        self.envelope.transition_to("sent")
+        self.assertEqual(self.envelope.status, "sent")
+        
+        # sent -> viewed
+        self.envelope.transition_to("viewed")
+        self.assertEqual(self.envelope.status, "viewed")
+        
+        # viewed -> sent (resetting on step advancement)
+        self.envelope.transition_to("sent")
+        self.assertEqual(self.envelope.status, "sent")
+        
+        # sent -> declined
+        self.envelope.transition_to("declined")
+        self.assertEqual(self.envelope.status, "declined")
+        
+        # Reset to draft for other tests
+        self.envelope.status = "draft"
+        self.envelope.save()
+        
+        # draft -> cancelled
+        self.envelope.transition_to("cancelled")
+        self.assertEqual(self.envelope.status, "cancelled")
+
+        # Reset to sent
+        self.envelope.status = "sent"
+        self.envelope.save()
+        
+        # sent -> completed
+        self.envelope.transition_to("completed")
+        self.assertEqual(self.envelope.status, "completed")
+
+    def test_invalid_transitions(self):
+        from esign.exceptions import InvalidStateTransition
+        
+        # completed -> sent
+        self.envelope.status = "completed"
+        self.envelope.save()
+        with self.assertRaises(InvalidStateTransition):
+            self.envelope.transition_to("sent")
+            
+        # completed -> draft
+        with self.assertRaises(InvalidStateTransition):
+            self.envelope.transition_to("draft")
+
+        # declined -> sent
+        self.envelope.status = "declined"
+        self.envelope.save()
+        with self.assertRaises(InvalidStateTransition):
+            self.envelope.transition_to("sent")
+
+        # expired -> sent
+        self.envelope.status = "expired"
+        self.envelope.save()
+        with self.assertRaises(InvalidStateTransition):
+            self.envelope.transition_to("sent")
+
+        # cancelled -> sent
+        self.envelope.status = "cancelled"
+        self.envelope.save()
+        with self.assertRaises(InvalidStateTransition):
+            self.envelope.transition_to("sent")
+
+
+class GetSideEffectsRemovalTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from .models import Document, Envelope, Participant, ParticipantToken
+        
+        self.owner = User.objects.create_user(username='owner_p2b', password='password', email='owner_p2b@example.com')
+        self.document = Document.objects.create(file_hash="p2b_hash")
+        self.envelope = Envelope.objects.create(document=self.document, status="sent")
+        self.participant = Participant.objects.create(
+            envelope=self.envelope,
+            name="Alice P2B",
+            email="alice_p2b@example.com",
+            role="signer",
+            step_number=1,
+            status="active"
+        )
+        from django.utils import timezone
+        from datetime import timedelta
+        self.pt = ParticipantToken.objects.create(
+            participant=self.participant,
+            expires_at=timezone.now() + timedelta(hours=24),
+            is_used=False
+        )
+
+    def test_get_purity(self):
+        # 1. Fetching GET should be pure and not mutate anything
+        response = self.client.get(f"/api/sign/{self.pt.token}/")
+        self.assertEqual(response.status_code, 200)
+        
+        # Verify status remains 'active' and 'sent'
+        self.participant.refresh_from_db()
+        self.envelope.refresh_from_db()
+        self.assertEqual(self.participant.status, "active")
+        self.assertEqual(self.envelope.status, "sent")
+        
+        # Verify no audit logs were created
+        self.assertEqual(self.envelope.auditlog_set.count(), 0)
+
+    def test_view_action(self):
+        # 2. Sending POST with action='view' should trigger the transition and log
+        response = self.client.post(f"/api/sign/{self.pt.token}/", {
+            "action": "view"
+        }, format="json")
+        self.assertEqual(response.status_code, 200)
+        
+        # Verify status transitioned to 'viewed'
+        self.participant.refresh_from_db()
+        self.envelope.refresh_from_db()
+        self.assertEqual(self.participant.status, "viewed")
+        self.assertEqual(self.envelope.status, "sent")
+        
+        # Verify audit log was created
+        self.assertEqual(self.envelope.auditlog_set.count(), 1)
+        self.assertEqual(self.envelope.auditlog_set.first().event, "Participant Viewed")
+
+    def test_double_view(self):
+        # 3. Sending POST with action='view' twice should be idempotent
+        r1 = self.client.post(f"/api/sign/{self.pt.token}/", {"action": "view"}, format="json")
+        self.assertEqual(r1.status_code, 200)
+        
+        r2 = self.client.post(f"/api/sign/{self.pt.token}/", {"action": "view"}, format="json")
+        self.assertEqual(r2.status_code, 200)
+        
+        # Verify status remains 'viewed'
+        self.participant.refresh_from_db()
+        self.assertEqual(self.participant.status, "viewed")
+        
+        # Verify only one audit log exists (no duplicate logs)
+        self.assertEqual(self.envelope.auditlog_set.count(), 1)
+        self.assertEqual(self.envelope.auditlog_set.first().event, "Participant Viewed")
+
+    def test_legacy_signer_view_action(self):
+        # Test that legacy signer view POST transitions the envelope status from 'sent' to 'viewed'
+        from .models import Signer, SigningToken
+        signer = Signer.objects.create(envelope=self.envelope, name="Legacy Signer", email="legacy@example.com")
+        from django.utils import timezone
+        from datetime import timedelta
+        st = SigningToken.objects.create(
+            signer=signer,
+            expires_at=timezone.now() + timedelta(hours=24),
+            is_used=False
+        )
+        
+        # Initial status is sent
+        self.assertEqual(self.envelope.status, "sent")
+        
+        # POST action="view"
+        response = self.client.post(f"/api/sign/{st.token}/", {"action": "view"}, format="json")
+        self.assertEqual(response.status_code, 200)
+        
+        # Envelope transitions to viewed
+        self.envelope.refresh_from_db()
+        self.assertEqual(self.envelope.status, "viewed")
+        
+        # Verify audit logs
+        events = list(self.envelope.auditlog_set.values_list('event', flat=True))
+        self.assertIn("viewed", events)
+        
+        # POST action="view" again (double view)
+        response2 = self.client.post(f"/api/sign/{st.token}/", {"action": "view"}, format="json")
+        self.assertEqual(response2.status_code, 200)
+        
+        # Status remains viewed
+        self.envelope.refresh_from_db()
+        self.assertEqual(self.envelope.status, "viewed")
+        
+        # Only one "viewed" audit log
+        self.assertEqual(self.envelope.auditlog_set.filter(event="viewed").count(), 1)
+
+

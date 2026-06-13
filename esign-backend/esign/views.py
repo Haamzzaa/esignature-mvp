@@ -167,8 +167,7 @@ class SendEnvelopeView(APIView):
                 signing_token.is_used = False
                 signing_token.save()
 
-            envelope.status = "sent"
-            envelope.save()
+            envelope.transition_to("sent")
 
             AuditLog.objects.create(
                 envelope=envelope,
@@ -449,16 +448,6 @@ class SigningView(APIView):
         # Check if completed/signed
         signed_doc = SignedDocument.objects.filter(envelope=envelope).first()
         if envelope.status == "completed" and signed_doc:
-            if is_participant and participant.status == 'active':
-                participant.status = 'viewed'
-                participant.save(update_fields=['status'])
-                AuditLog.objects.create(
-                    envelope=envelope,
-                    event="Participant Viewed",
-                    ip_address=request.META.get("REMOTE_ADDR"),
-                    user_agent=request.META.get("HTTP_USER_AGENT"),
-                )
-                
             # Get fields for this participant
             from services.field_service import get_fields_for_participant
             if is_participant:
@@ -495,35 +484,6 @@ class SigningView(APIView):
                 "status": "completed",
                 "fields": fields_list
             })
-
-        # Process viewing transition
-        if is_participant:
-            if participant.status == 'active':
-                participant.status = 'viewed'
-                participant.save(update_fields=["status"])
-                AuditLog.objects.create(
-                    envelope=envelope,
-                    event="Participant Viewed",
-                    ip_address=request.META.get("REMOTE_ADDR"),
-                    user_agent=request.META.get("HTTP_USER_AGENT"),
-                )
-        else:
-            # Legacy signer viewed
-            AuditLog.objects.create(
-                envelope=envelope,
-                event="viewed",
-                ip_address=request.META.get("REMOTE_ADDR"),
-                user_agent=request.META.get("HTTP_USER_AGENT"),
-            )
-            if envelope.status != "viewed":
-                envelope.status = "viewed"
-                envelope.save(update_fields=["status"])
-                
-            # If a participant record exists for this legacy signer's email, mark it viewed too
-            p_rec = Participant.objects.filter(envelope=envelope, email=email).first()
-            if p_rec and p_rec.status == 'active':
-                p_rec.status = 'viewed'
-                p_rec.save(update_fields=["status"])
 
         # Get fields for this participant
         from services.field_service import get_fields_for_participant
@@ -586,6 +546,62 @@ class SigningView(APIView):
             email    = signer.email
             p_status = "active"
 
+        ip_address = request.META.get("REMOTE_ADDR")
+        user_agent = request.META.get("HTTP_USER_AGENT")
+        action = request.data.get("action")
+
+        if action == "view":
+            with transaction.atomic():
+                # Acquire locks: Token -> Participant -> Envelope
+                if is_participant:
+                    locked_token = ParticipantToken.objects.select_for_update().get(id=token_obj.id)
+                    locked_participant = Participant.objects.select_for_update().get(id=participant.id)
+                    locked_envelope = Envelope.objects.select_for_update().get(id=envelope.id)
+                    
+                    if locked_participant.status == 'active':
+                        locked_participant.status = 'viewed'
+                        locked_participant.save(update_fields=['status'])
+                        
+                        AuditLog.objects.get_or_create(
+                            envelope=locked_envelope,
+                            event="Participant Viewed",
+                            defaults={
+                                "ip_address": ip_address,
+                                "user_agent": user_agent,
+                            }
+                        )
+                else:
+                    # Legacy signer viewed
+                    locked_token = SigningToken.objects.select_for_update().get(id=token_obj.id)
+                    p_rec = Participant.objects.filter(envelope=envelope, email=email).first()
+                    if p_rec:
+                        locked_participant = Participant.objects.select_for_update().get(id=p_rec.id)
+                    else:
+                        locked_participant = None
+                    locked_signer = Signer.objects.select_for_update().get(id=signer.id)
+                    locked_envelope = Envelope.objects.select_for_update().get(id=envelope.id)
+
+                    AuditLog.objects.get_or_create(
+                        envelope=locked_envelope,
+                        event="viewed",
+                        defaults={
+                            "ip_address": ip_address,
+                            "user_agent": user_agent,
+                        }
+                    )
+                    if locked_envelope.status == "sent":
+                        locked_envelope.transition_to("viewed")
+                        
+                    if locked_participant and locked_participant.status == 'active':
+                        locked_participant.status = 'viewed'
+                        locked_participant.save(update_fields=["status"])
+
+            return Response({
+                "message": "View registered successfully.",
+                "envelope_id": envelope.id,
+                "status": envelope.status,
+            }, status=status.HTTP_200_OK)
+
         # Check if already completed/signed
         signed_doc = SignedDocument.objects.filter(envelope=envelope).first()
         if envelope.status == "completed" or signed_doc or envelope.status == "declined":
@@ -603,10 +619,6 @@ class SigningView(APIView):
         # Enforce that only active/viewed participants can act
         if is_participant and p_status not in ('active', 'viewed'):
             return Response({"detail": "Workflow stage is not yet active for your role. Actions are restricted."}, status=status.HTTP_400_BAD_REQUEST)
-
-        ip_address = request.META.get("REMOTE_ADDR")
-        user_agent = request.META.get("HTTP_USER_AGENT")
-        action = request.data.get("action")
 
         # ── Role Actions handling ───────────────────────────────────────────
         if role != "signer":
@@ -650,8 +662,7 @@ class SigningView(APIView):
                         locked_participant.completed_at = timezone.now()
                         locked_participant.save(update_fields=["status", "completed_at"])
                         
-                        locked_envelope.status = "declined"
-                        locked_envelope.save(update_fields=["status"])
+                        locked_envelope.transition_to("declined")
                         
                         AuditLog.objects.create(
                             envelope=locked_envelope,
@@ -688,8 +699,7 @@ class SigningView(APIView):
                         locked_participant.completed_at = timezone.now()
                         locked_participant.save(update_fields=["status", "completed_at"])
                         
-                        locked_envelope.status = "declined"
-                        locked_envelope.save(update_fields=["status"])
+                        locked_envelope.transition_to("declined")
                         
                         AuditLog.objects.create(
                             envelope=locked_envelope,
