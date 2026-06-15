@@ -94,11 +94,135 @@ class ParticipantManagementTestCase(TestCase):
         self.assertTrue(serializer.is_valid(), serializer.errors)
         
         envelope = serializer.save()
-        self.assertEqual(envelope.participants.count(), 0)
+        self.assertEqual(envelope.participants.count(), 1)
+        participant = envelope.participants.first()
+        self.assertEqual(participant.name, "Legacy Signer")
+        self.assertEqual(participant.email, "legacy@email.com")
+        self.assertEqual(participant.role, "signer")
+        self.assertEqual(participant.step_number, 1)
+        self.assertEqual(participant.order, 1)
         
         signer = Signer.objects.get(envelope=envelope)
         self.assertEqual(signer.name, "Legacy Signer")
         self.assertEqual(signer.email, "legacy@email.com")
+
+    def test_legacy_signer_produces_participant(self):
+        """Verify that legacy signer creation maps correctly to a Participant."""
+        data = {
+            "document_id": self.document.id,
+            "signer": {"name": "Test Signer", "email": "test@email.com"},
+            "signature_page": 1,
+            "signature_x_ratio": 0.5,
+            "signature_y_ratio": 0.5,
+        }
+        serializer = EnvelopeCreateSerializer(data=data)
+        self.assertTrue(serializer.is_valid())
+        envelope = serializer.save()
+        
+        self.assertEqual(envelope.participants.count(), 1)
+        p = envelope.participants.first()
+        self.assertEqual(p.name, "Test Signer")
+        self.assertEqual(p.email, "test@email.com")
+        self.assertEqual(p.role, "signer")
+        self.assertEqual(p.step_number, 1)
+        self.assertEqual(p.order, 1)
+
+    def test_historical_backfill_works(self):
+        """Verify that the historical backfill data migration runs and maps correctly."""
+        from .models import Signer, SigningToken
+        import importlib
+        migration_module = importlib.import_module('esign.migrations.0019_backfill_participants')
+        backfill_participants = migration_module.backfill_participants
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        # 1. Create legacy database records bypass serializer mapping
+        envelope_sent = Envelope.objects.create(document=self.document, status='sent', signature_page=1)
+        signer_sent = Signer.objects.create(envelope=envelope_sent, name="Sent Signer", email="sent@email.com")
+        st_sent = SigningToken.objects.create(signer=signer_sent, expires_at=timezone.now() + timedelta(hours=10), is_used=False)
+        
+        envelope_completed = Envelope.objects.create(document=self.document, status='completed', signature_page=1)
+        signer_completed = Signer.objects.create(envelope=envelope_completed, name="Completed Signer", email="completed@email.com")
+        st_completed = SigningToken.objects.create(signer=signer_completed, expires_at=timezone.now() + timedelta(hours=5), is_used=True)
+        
+        envelope_viewed = Envelope.objects.create(document=self.document, status='viewed', signature_page=1)
+        signer_viewed = Signer.objects.create(envelope=envelope_viewed, name="Viewed Signer", email="viewed@email.com")
+        
+        # Verify 0 participants initially
+        self.assertEqual(envelope_sent.participants.count(), 0)
+        self.assertEqual(envelope_completed.participants.count(), 0)
+        self.assertEqual(envelope_viewed.participants.count(), 0)
+        
+        # 2. Trigger backfill
+        class MockApps:
+            def get_model(self, app_label, model_name):
+                from django.apps import apps
+                return apps.get_model(app_label, model_name)
+        
+        backfill_participants(MockApps(), None)
+        
+        # 3. Assertions checking outcomes
+        envelope_sent.refresh_from_db()
+        self.assertEqual(envelope_sent.participants.count(), 1)
+        p_sent = envelope_sent.participants.first()
+        self.assertEqual(p_sent.status, "active")
+        self.assertTrue(hasattr(p_sent, 'token'))
+        self.assertEqual(p_sent.token.token, st_sent.token)
+        self.assertEqual(p_sent.token.is_used, False)
+        
+        envelope_completed.refresh_from_db()
+        self.assertEqual(envelope_completed.participants.count(), 1)
+        p_completed = envelope_completed.participants.first()
+        self.assertEqual(p_completed.status, "completed")
+        self.assertEqual(p_completed.has_completed, True)
+        self.assertTrue(hasattr(p_completed, 'token'))
+        self.assertEqual(p_completed.token.token, st_completed.token)
+        self.assertEqual(p_completed.token.is_used, True)
+        
+        envelope_viewed.refresh_from_db()
+        self.assertEqual(envelope_viewed.participants.count(), 1)
+        p_viewed = envelope_viewed.participants.first()
+        self.assertEqual(p_viewed.status, "viewed")
+        
+        # Verify backfill run is idempotent
+        backfill_participants(MockApps(), None)
+        self.assertEqual(envelope_sent.participants.count(), 1)
+        self.assertEqual(envelope_completed.participants.count(), 1)
+        self.assertEqual(envelope_viewed.participants.count(), 1)
+
+    def test_envelopes_always_have_participants(self):
+        """Verify the invariant that every Envelope must have at least one Participant."""
+        # 1. Draft creation
+        data_draft = {
+            "document_id": self.document.id,
+            "signer": {"name": "Draft Signer", "email": "draft@email.com"},
+            "signature_page": 1,
+            "signature_x_ratio": 0.5,
+            "signature_y_ratio": 0.5,
+            "is_draft": True
+        }
+        ser_draft = EnvelopeCreateSerializer(data=data_draft)
+        self.assertTrue(ser_draft.is_valid())
+        env_draft = ser_draft.save()
+        self.assertTrue(env_draft.participants.exists())
+        
+        # 2. Sent creation
+        data_sent = {
+            "document_id": self.document.id,
+            "signer": {"name": "Sent Signer", "email": "sent@email.com"},
+            "signature_page": 1,
+            "signature_x_ratio": 0.5,
+            "signature_y_ratio": 0.5,
+        }
+        ser_sent = EnvelopeCreateSerializer(data=data_sent)
+        self.assertTrue(ser_sent.is_valid())
+        env_sent = ser_sent.save()
+        self.assertTrue(env_sent.participants.exists())
+
+        # Ensure all Envelope objects satisfy the participants.exists() invariant
+        from .models import Envelope
+        for env in Envelope.objects.all():
+            self.assertTrue(env.participants.exists(), f"Envelope {env.id} lacks participants.")
 
 class SequentialWorkflowTestCase(TestCase):
     def setUp(self):

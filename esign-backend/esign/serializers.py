@@ -144,6 +144,16 @@ class EnvelopeCreateSerializer(serializers.Serializer):
                 owner=owner,
             )
 
+            # Map legacy signer to modern participant if no participants are provided
+            if not participants_data and signer_data:
+                participants_data = [{
+                    'name': signer_data['name'],
+                    'email': signer_data['email'],
+                    'role': 'signer',
+                    'step_number': 1,
+                    'order': 1
+                }]
+
             # Determine the lowest step_number
             step_numbers = [p_data.get('step_number', 1) for p_data in participants_data]
             min_step = min(step_numbers) if step_numbers else 1
