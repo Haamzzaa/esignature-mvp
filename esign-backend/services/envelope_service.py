@@ -89,17 +89,10 @@ def send_envelope(envelope_id, owner, request):
             user_agent=request.META.get("HTTP_USER_AGENT"),
         )
 
-    # Send email notification post-commit
-    email_warning = None
-    try:
-        send_package_sent_notifications(envelope, request)
-    except Exception:
-        logger.exception(
-            "Failed to send package notification email for envelope %s",
-            envelope.id,
-        )
-        email_warning = (
-            "Package sent successfully, but the notification email could not be delivered."
+        base_api_url = request.build_absolute_uri('/')[:-1] if request else None
+        from services.tasks import send_package_sent_notifications_task
+        transaction.on_commit(
+            lambda: send_package_sent_notifications_task.delay(envelope.id, base_api_url)
         )
 
     from django.conf import settings
@@ -109,7 +102,7 @@ def send_envelope(envelope_id, owner, request):
         "message": "Envelope sent to signer.",
         "signing_url": signing_url,
         "expires_at": expires_at.isoformat(),
-        "email_warning": email_warning,
+        "email_warning": None,
     }, None
 
 

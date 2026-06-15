@@ -97,20 +97,13 @@ def check_and_advance_step(envelope, current_step, request=None):
             # Keep/reset envelope status to sent so the next participants can perform actions
             envelope.transition_to("sent")
 
-            # Send next step email notifications post-commit.
-            # A failure here must NOT unwind the workflow advance already committed above.
-            from services.notification_service import send_next_step_notifications
-            
-            def _notify_next_step():
-                try:
-                    send_next_step_notifications(envelope, next_step, request)
-                except Exception:
-                    logger.exception(
-                        "Failed to send step %s notification email for envelope %s",
-                        next_step,
-                        envelope.id,
-                    )
-            transaction.on_commit(_notify_next_step)
+            # Send next step email notifications post-commit via Celery.
+            # A failure here must NOT unwind the workflow advance already committed.
+            from services.tasks import send_next_step_notifications_task
+            base_api_url = request.build_absolute_uri('/')[:-1] if request else None
+            transaction.on_commit(
+                lambda: send_next_step_notifications_task.delay(envelope.id, next_step, base_api_url)
+            )
         else:
             # Final workflow step completed! Mark envelope as completed
             envelope.transition_to("completed")
@@ -148,7 +141,7 @@ def check_and_advance_step(envelope, current_step, request=None):
             # envelope status or any of the audit logs saved above.
             def _post_commit_side_effects():
                 from services.certificate_service import generate_certificate
-                from services.notification_service import send_completion_email
+                from services.tasks import send_completion_email_task
                 cert_id = None
                 try:
                     logger.info(
@@ -160,11 +153,13 @@ def check_and_advance_step(envelope, current_step, request=None):
                     logger.exception(
                         "Failed to generate certificate for envelope %s", envelope.id
                     )
+                
+                base_api_url = request.build_absolute_uri('/')[:-1] if request else None
                 try:
-                    send_completion_email(envelope, cert_id, request)
+                    send_completion_email_task.delay(envelope.id, cert_id, base_api_url)
                 except Exception:
                     logger.exception(
-                        "Failed to send completion email for envelope %s", envelope.id
+                        "Failed to queue completion email task for envelope %s", envelope.id
                     )
 
             transaction.on_commit(_post_commit_side_effects)

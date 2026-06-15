@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: esign-web
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn esign_service.wsgi:application"
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: esign-redis
+          property: connectionString
+
+  - type: worker
+    name: esign-worker
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "celery -A esign_service worker --loglevel=info --concurrency=1"
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: esign-redis
+          property: connectionString
+
+  - type: redis
+    name: esign-redis
+    ipRange: 0.0.0.0/0

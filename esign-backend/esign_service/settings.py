@@ -178,3 +178,21 @@ EMAIL_PORT = int(os.environ.get("EMAIL_PORT", 2525))
 EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD")
 EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True") == "True"
+
+# Celery Configuration
+CELERY_BROKER_URL = (
+    os.getenv("REDIS_INTERNAL_URL")
+    or os.getenv("REDIS_URL")
+    or "redis://localhost:6379/0"
+)
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_TASK_SOFT_TIME_LIMIT = 30
+CELERY_TASK_TIME_LIMIT = 60
+
+import sys
+if 'test' in sys.argv:
+    CELERY_TASK_ALWAYS_EAGER = True
+    CELERY_TASK_EAGER_PROPAGATES = True

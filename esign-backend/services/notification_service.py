@@ -22,7 +22,7 @@ def get_sender_name(envelope):
         return envelope.owner.username
     return "System"
 
-def send_participant_email(participant, envelope, request=None):
+def send_participant_email(participant, envelope, base_api_url=None):
     """
     Sends an email to a specific participant with their secure link.
     """
@@ -88,7 +88,7 @@ The E-Signature Team
         )
 
 
-def send_legacy_signer_email(signer, envelope, request=None):
+def send_legacy_signer_email(signer, envelope, base_api_url=None):
     """
     Sends an email to a legacy signer with their secure link.
     """
@@ -139,7 +139,7 @@ The E-Signature Team
         )
 
 
-def send_package_sent_notifications(envelope, request=None):
+def send_package_sent_notifications(envelope, base_api_url=None):
     """
     Sends email to the first active participant when a package is sent.
     If no participants exist, falls back to legacy Signer.
@@ -147,15 +147,15 @@ def send_package_sent_notifications(envelope, request=None):
     active_participants = envelope.participants.filter(status__in=['active', 'viewed']).order_by('step_number', 'order', 'id')
     if active_participants.exists():
         first_p = active_participants.first()
-        send_participant_email(first_p, envelope, request)
+        send_participant_email(first_p, envelope, base_api_url)
     else:
         # Fallback to legacy signer
         signer = Signer.objects.filter(envelope=envelope).first()
         if signer:
-            send_legacy_signer_email(signer, envelope, request)
+            send_legacy_signer_email(signer, envelope, base_api_url)
 
 
-def send_next_step_notifications(envelope, step_number, request=None):
+def send_next_step_notifications(envelope, step_number, base_api_url=None):
     """
     Sends email to all participants in the newly activated step.
 
@@ -166,7 +166,7 @@ def send_next_step_notifications(envelope, step_number, request=None):
     active_participants = envelope.participants.filter(step_number=step_number, status__in=['active', 'viewed'])
     for p in active_participants:
         try:
-            send_participant_email(p, envelope, request)
+            send_participant_email(p, envelope, base_api_url)
         except Exception:
             logger.exception(
                 "Failed to send step %s notification to participant %s (envelope %s)",
@@ -176,7 +176,7 @@ def send_next_step_notifications(envelope, step_number, request=None):
             )
 
 
-def send_completion_email(envelope, certificate_id=None, request=None):
+def send_completion_email(envelope, certificate_id=None, base_api_url=None):
     """
     Sends a final completion email to the package owner and additional recipients.
     """
@@ -197,9 +197,9 @@ def send_completion_email(envelope, certificate_id=None, request=None):
                 
     frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173")
     
-    if request:
-        base_api_url = request.build_absolute_uri('/')[:-1]
-    else:
+    if hasattr(base_api_url, 'build_absolute_uri'):
+        base_api_url = base_api_url.build_absolute_uri('/')[:-1]
+    elif not base_api_url:
         base_api_url = "http://localhost:8000"
         
     if token_val:
