@@ -97,12 +97,12 @@ def check_and_advance_step(envelope, current_step, request=None):
             # Keep/reset envelope status to sent so the next participants can perform actions
             envelope.transition_to("sent")
 
-            # Send next step email notifications post-commit via Celery.
+            # Send next step email notifications post-commit using the dispatch helper.
             # A failure here must NOT unwind the workflow advance already committed.
-            from services.tasks import send_next_step_notifications_task
+            from services.email_dispatch import dispatch_next_step_notification
             base_api_url = request.build_absolute_uri('/')[:-1] if request else None
             transaction.on_commit(
-                lambda: send_next_step_notifications_task.delay(envelope.id, next_step, base_api_url)
+                lambda: dispatch_next_step_notification(envelope.id, next_step, base_api_url)
             )
         else:
             # Final workflow step completed! Mark envelope as completed
@@ -141,7 +141,7 @@ def check_and_advance_step(envelope, current_step, request=None):
             # envelope status or any of the audit logs saved above.
             def _post_commit_side_effects():
                 from services.certificate_service import generate_certificate
-                from services.tasks import send_completion_email_task
+                from services.email_dispatch import dispatch_completion_email
                 cert_id = None
                 try:
                     logger.info(
@@ -156,10 +156,10 @@ def check_and_advance_step(envelope, current_step, request=None):
                 
                 base_api_url = request.build_absolute_uri('/')[:-1] if request else None
                 try:
-                    send_completion_email_task.delay(envelope.id, cert_id, base_api_url)
+                    dispatch_completion_email(envelope.id, cert_id, base_api_url)
                 except Exception:
                     logger.exception(
-                        "Failed to queue completion email task for envelope %s", envelope.id
+                        "Failed to dispatch completion email for envelope %s", envelope.id
                     )
 
             transaction.on_commit(_post_commit_side_effects)

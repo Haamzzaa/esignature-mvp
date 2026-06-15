@@ -90,9 +90,9 @@ def send_envelope(envelope_id, owner, request):
         )
 
         base_api_url = request.build_absolute_uri('/')[:-1] if request else None
-        from services.tasks import send_package_sent_notifications_task
+        from services.email_dispatch import dispatch_package_sent_notification
         transaction.on_commit(
-            lambda: send_package_sent_notifications_task.delay(envelope.id, base_api_url)
+            lambda: dispatch_package_sent_notification(envelope.id, base_api_url)
         )
 
     from django.conf import settings

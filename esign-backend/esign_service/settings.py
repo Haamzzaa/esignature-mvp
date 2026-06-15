@@ -180,6 +180,8 @@ EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD")
 EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True") == "True"
 
 # Celery Configuration
+USE_CELERY = os.getenv("USE_CELERY", "False").lower() == "true"
+
 CELERY_BROKER_URL = (
     os.getenv("REDIS_INTERNAL_URL")
     or os.getenv("REDIS_URL")
@@ -194,5 +196,6 @@ CELERY_TASK_TIME_LIMIT = 60
 
 import sys
 if 'test' in sys.argv:
+    USE_CELERY = True
     CELERY_TASK_ALWAYS_EAGER = True
     CELERY_TASK_EAGER_PROPAGATES = True
