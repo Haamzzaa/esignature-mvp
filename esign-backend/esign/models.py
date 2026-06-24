@@ -230,6 +230,8 @@ class ParticipantAuthorizationState(models.Model):
     email_verified = models.BooleanField(default=False)
     sms_verified = models.BooleanField(default=False)
     accepted_terms = models.BooleanField(default=False)
+    accepted_terms_at = models.DateTimeField(null=True, blank=True)
+    terms_version = models.CharField(max_length=50, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

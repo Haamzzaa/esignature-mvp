@@ -5259,9 +5259,165 @@ class IdentityConfidenceEngineTestCase(TestCase):
 
 
 
+class TermsAcceptanceTestCase(TestCase):
+    """
+    Phase 11.1 — Tests for the Terms & Conditions acceptance flow.
 
+    Covers:
+        - accept_terms() service creates/updates ParticipantAuthorizationState.
+        - POST /api/participants/{id}/accept-terms/ requires authorization.
+        - Valid acceptance returns correct payload.
+        - Custom terms_version is persisted.
+        - Re-acceptance is idempotent.
+    """
 
+    def setUp(self):
+        from .models import Document, Envelope, Participant, ParticipantToken
+        from django.utils import timezone
+        from datetime import timedelta
 
+        self.document = Document.objects.create(
+            file="terms_test.pdf",
+            file_hash="termshash001"
+        )
+        self.envelope = Envelope.objects.create(
+            document=self.document,
+            status="sent",
+            signature_page=1,
+            terms_acceptance_required=True,
+        )
+        self.participant = Participant.objects.create(
+            envelope=self.envelope,
+            name="Terms Tester",
+            email="terms@test.com",
+            role="signer",
+            order=1,
+        )
+        self.token_obj = ParticipantToken.objects.create(
+            participant=self.participant,
+            expires_at=timezone.now() + timedelta(hours=24),
+            is_used=False,
+        )
+        self.token = str(self.token_obj.token)
+
+    # ------------------------------------------------------------------
+    # Service-level tests
+    # ------------------------------------------------------------------
+
+    def test_accept_terms_creates_authorization_state(self):
+        """accept_terms() creates ParticipantAuthorizationState if absent."""
+        from services.terms_service import accept_terms
+        from .models import ParticipantAuthorizationState
+
+        self.assertFalse(
+            ParticipantAuthorizationState.objects.filter(
+                participant=self.participant
+            ).exists()
+        )
+        state = accept_terms(self.participant)
+        self.assertTrue(state.accepted_terms)
+        self.assertIsNotNone(state.accepted_terms_at)
+        self.assertEqual(state.terms_version, "v1")
+
+    def test_accept_terms_updates_existing_state(self):
+        """accept_terms() updates existing ParticipantAuthorizationState."""
+        from services.terms_service import accept_terms
+        from .models import ParticipantAuthorizationState
+
+        # Pre-create state with email_verified=True to ensure fields survive
+        ParticipantAuthorizationState.objects.create(
+            participant=self.participant,
+            email_verified=True,
+        )
+        state = accept_terms(self.participant, terms_version="v2")
+        state.refresh_from_db()
+        self.assertTrue(state.accepted_terms)
+        self.assertEqual(state.terms_version, "v2")
+        self.assertTrue(state.email_verified)  # unrelated field preserved
+
+    def test_accept_terms_idempotent(self):
+        """Calling accept_terms() twice does not create duplicate state rows."""
+        from services.terms_service import accept_terms
+        from .models import ParticipantAuthorizationState
+
+        accept_terms(self.participant, terms_version="v1")
+        accept_terms(self.participant, terms_version="v2")
+
+        count = ParticipantAuthorizationState.objects.filter(
+            participant=self.participant
+        ).count()
+        self.assertEqual(count, 1)
+
+        state = ParticipantAuthorizationState.objects.get(participant=self.participant)
+        self.assertEqual(state.terms_version, "v2")
+
+    # ------------------------------------------------------------------
+    # API-level tests
+    # ------------------------------------------------------------------
+
+    def _post(self, participant_id, data, token=None):
+        from rest_framework.test import APIClient
+        client = APIClient()
+        url = f"/api/participants/{participant_id}/accept-terms/"
+        if token:
+            return client.post(url, data, format="json", HTTP_X_PARTICIPANT_TOKEN=token)
+        return client.post(url, data, format="json")
+
+    def test_api_requires_authorization(self):
+        """POST without a valid token returns 401 or 403."""
+        response = self._post(self.participant.id, {"accepted": True})
+        self.assertIn(response.status_code, [401, 403])
+
+    def test_api_accept_terms_success(self):
+        """Valid POST returns accepted_terms=True and terms_version."""
+        response = self._post(
+            self.participant.id,
+            {"accepted": True, "terms_version": "v1"},
+            token=self.token,
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["accepted_terms"])
+        self.assertEqual(data["terms_version"], "v1")
+        self.assertIsNotNone(data["accepted_terms_at"])
+
+    def test_api_accept_terms_custom_version(self):
+        """Custom terms_version is stored and returned."""
+        response = self._post(
+            self.participant.id,
+            {"accepted": True, "terms_version": "v3"},
+            token=self.token,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["terms_version"], "v3")
+
+    def test_api_accepted_false_returns_400(self):
+        """Sending accepted=false is rejected with 400."""
+        response = self._post(
+            self.participant.id,
+            {"accepted": False},
+            token=self.token,
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_api_missing_accepted_field_returns_400(self):
+        """Omitting the accepted field returns 400."""
+        response = self._post(
+            self.participant.id,
+            {},
+            token=self.token,
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_api_defaults_terms_version_to_v1(self):
+        """When terms_version is omitted, defaults to 'v1'."""
+        response = self._post(
+            self.participant.id,
+            {"accepted": True},
+            token=self.token,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["terms_version"], "v1")
 
 
 

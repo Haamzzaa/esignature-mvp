@@ -1316,4 +1316,31 @@ class SignerAuthorizationStatusView(APIView):
         return Response(status_data, status=status.HTTP_200_OK)
 
 
+class TermsAcceptanceView(APIView):
+    permission_classes = [permissions.AllowAny]
 
+    def post(self, request, participant_id, *args, **kwargs):
+        participant, token_obj, error_resp = check_participant_authorization(request, participant_id)
+        if error_resp:
+            return error_resp
+
+        accepted = request.data.get("accepted")
+        if accepted is not True:
+            return Response(
+                {"detail": "accepted must be true."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        terms_version = request.data.get("terms_version", "v1") or "v1"
+
+        from services.terms_service import accept_terms
+        state = accept_terms(participant, terms_version=str(terms_version))
+
+        return Response(
+            {
+                "accepted_terms": state.accepted_terms,
+                "accepted_terms_at": state.accepted_terms_at.isoformat() if state.accepted_terms_at else None,
+                "terms_version": state.terms_version,
+            },
+            status=status.HTTP_200_OK
+        )

@@ -29,6 +29,7 @@ from .views import (
     SignerVerificationDetailView,
     SignerVerificationIDExtractView,
     SignerAuthorizationStatusView,
+    TermsAcceptanceView,
 )
 
 urlpatterns = [
@@ -61,4 +62,5 @@ urlpatterns = [
     path('participants/<int:participant_id>/verification/extract-id/', SignerVerificationIDExtractView.as_view(), name='signer-verification-extract-id'),
     path('participants/<int:participant_id>/verification/', SignerVerificationDetailView.as_view(), name='signer-verification-detail'),
     path('participants/<int:participant_id>/authorization-status/', SignerAuthorizationStatusView.as_view(), name='authorization-status'),
+    path('participants/<int:participant_id>/accept-terms/', TermsAcceptanceView.as_view(), name='accept-terms'),
 ]
