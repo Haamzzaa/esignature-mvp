@@ -5420,5 +5420,202 @@ class TermsAcceptanceTestCase(TestCase):
         self.assertEqual(response.json()["terms_version"], "v1")
 
 
+class EmailOTPTestCase(TestCase):
+    """
+    Phase 11.2 — Tests for Email OTP authentication.
 
+    Covers:
+        - send_email_otp() generates and stores OTP + expiry.
+        - verify_email_otp() with correct code sets email_verified=True.
+        - verify_email_otp() with wrong code returns {"verified": False, "error": "Invalid OTP"}.
+        - verify_email_otp() with expired code returns {"verified": False, "error": "OTP expired"}.
+        - get_authorization_status() reports authorized=True when email OTP required and verified.
+    """
 
+    def setUp(self):
+        from .models import Document, Envelope, Participant, ParticipantToken
+        from django.utils import timezone
+        from datetime import timedelta
+
+        self.document = Document.objects.create(
+            file="otp_test.pdf",
+            file_hash="otphash001"
+        )
+        self.envelope = Envelope.objects.create(
+            document=self.document,
+            status="sent",
+            signature_page=1,
+            email_otp_required=True,
+        )
+        self.participant = Participant.objects.create(
+            envelope=self.envelope,
+            name="OTP Tester",
+            email="otp@test.com",
+            role="signer",
+            order=1,
+        )
+        self.token_obj = ParticipantToken.objects.create(
+            participant=self.participant,
+            expires_at=timezone.now() + timedelta(hours=24),
+            is_used=False,
+        )
+        self.token = str(self.token_obj.token)
+
+    # ------------------------------------------------------------------
+    # Service-level tests
+    # ------------------------------------------------------------------
+
+    def test_send_email_otp_generates_otp_and_expiry(self):
+        """send_email_otp() stores a 6-digit OTP and sets expiry."""
+        from services.email_otp_service import send_email_otp
+        from .models import ParticipantAuthorizationState
+        from django.utils import timezone
+
+        with self.settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"):
+            state = send_email_otp(self.participant)
+
+        self.assertIsNotNone(state.email_otp_code)
+        self.assertEqual(len(state.email_otp_code), 6)
+        self.assertTrue(state.email_otp_code.isdigit())
+        self.assertIsNotNone(state.email_otp_sent_at)
+        self.assertIsNotNone(state.email_otp_expires_at)
+        self.assertGreater(state.email_otp_expires_at, timezone.now())
+        # email_verified should be reset to False when a new OTP is issued
+        self.assertFalse(state.email_verified)
+
+    def test_verify_correct_otp_sets_email_verified(self):
+        """Correct OTP sets email_verified=True and clears the stored code."""
+        from services.email_otp_service import send_email_otp, verify_email_otp
+        from .models import ParticipantAuthorizationState
+
+        with self.settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"):
+            state = send_email_otp(self.participant)
+
+        stored_otp = state.email_otp_code
+        result = verify_email_otp(self.participant, stored_otp)
+
+        self.assertEqual(result, {"verified": True})
+
+        state.refresh_from_db()
+        self.assertTrue(state.email_verified)
+        self.assertIsNotNone(state.email_verified_at)
+        self.assertEqual(state.email_otp_code, "")
+
+    def test_invalid_otp_returns_error(self):
+        """Wrong OTP code returns verified=False with 'Invalid OTP'."""
+        from services.email_otp_service import send_email_otp, verify_email_otp
+
+        with self.settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"):
+            send_email_otp(self.participant)
+
+        result = verify_email_otp(self.participant, "000000")
+        self.assertEqual(result["verified"], False)
+        self.assertEqual(result["error"], "Invalid OTP")
+
+    def test_expired_otp_returns_error(self):
+        """Expired OTP returns verified=False with 'OTP expired'."""
+        from services.email_otp_service import send_email_otp, verify_email_otp
+        from .models import ParticipantAuthorizationState
+        from django.utils import timezone
+        from datetime import timedelta
+
+        with self.settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"):
+            state = send_email_otp(self.participant)
+
+        # Backdate the expiry to simulate expiration
+        stored_otp = state.email_otp_code
+        state.email_otp_expires_at = timezone.now() - timedelta(minutes=1)
+        state.save(update_fields=["email_otp_expires_at"])
+
+        result = verify_email_otp(self.participant, stored_otp)
+        self.assertEqual(result["verified"], False)
+        self.assertEqual(result["error"], "OTP expired")
+
+    def test_authorization_status_after_email_verification(self):
+        """
+        When email_otp_required=True and email is verified,
+        get_authorization_status() returns authorized=True
+        (assuming no other requirements are set).
+        """
+        from services.email_otp_service import send_email_otp, verify_email_otp
+        from services.security_policy_service import get_authorization_status
+
+        with self.settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"):
+            state = send_email_otp(self.participant)
+
+        stored_otp = state.email_otp_code
+        verify_email_otp(self.participant, stored_otp)
+
+        status_data = get_authorization_status(self.participant)
+        self.assertTrue(status_data["authorized"])
+        self.assertNotIn("email_otp", status_data["missing_requirements"])
+        self.assertTrue(status_data["requirements"]["email_otp"]["satisfied"])
+
+    # ------------------------------------------------------------------
+    # API-level tests
+    # ------------------------------------------------------------------
+
+    def _post(self, url_name, participant_id, data, token=None):
+        from rest_framework.test import APIClient
+        from django.urls import reverse
+        client = APIClient()
+        url = reverse(url_name, kwargs={"participant_id": participant_id})
+        if token:
+            return client.post(url, data, format="json", HTTP_X_PARTICIPANT_TOKEN=token)
+        return client.post(url, data, format="json")
+
+    def test_api_send_email_otp_requires_auth(self):
+        """POST send-email-otp without token returns 403."""
+        response = self._post("send-email-otp", self.participant.id, {})
+        self.assertIn(response.status_code, [401, 403])
+
+    def test_api_send_email_otp_success(self):
+        """Authenticated POST to send-email-otp returns 200."""
+        with self.settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"):
+            response = self._post(
+                "send-email-otp", self.participant.id, {}, token=self.token
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("email", response.json())
+
+    def test_api_verify_email_otp_correct(self):
+        """Correct OTP via API returns verified=True."""
+        from .models import ParticipantAuthorizationState
+
+        with self.settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"):
+            self._post("send-email-otp", self.participant.id, {}, token=self.token)
+
+        state = ParticipantAuthorizationState.objects.get(participant=self.participant)
+        response = self._post(
+            "verify-email-otp",
+            self.participant.id,
+            {"otp": state.email_otp_code},
+            token=self.token,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["verified"])
+
+    def test_api_verify_email_otp_wrong_code(self):
+        """Wrong OTP via API returns 400 with verified=False."""
+        with self.settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"):
+            self._post("send-email-otp", self.participant.id, {}, token=self.token)
+
+        response = self._post(
+            "verify-email-otp",
+            self.participant.id,
+            {"otp": "000000"},
+            token=self.token,
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.json()["verified"])
+        self.assertEqual(response.json()["error"], "Invalid OTP")
+
+    def test_api_verify_email_otp_missing_field(self):
+        """Missing otp field returns 400."""
+        response = self._post(
+            "verify-email-otp",
+            self.participant.id,
+            {},
+            token=self.token,
+        )
+        self.assertEqual(response.status_code, 400)

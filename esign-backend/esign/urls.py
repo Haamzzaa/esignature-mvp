@@ -30,6 +30,8 @@ from .views import (
     SignerVerificationIDExtractView,
     SignerAuthorizationStatusView,
     TermsAcceptanceView,
+    SendEmailOTPView,
+    VerifyEmailOTPView,
 )
 
 urlpatterns = [
@@ -63,4 +65,6 @@ urlpatterns = [
     path('participants/<int:participant_id>/verification/', SignerVerificationDetailView.as_view(), name='signer-verification-detail'),
     path('participants/<int:participant_id>/authorization-status/', SignerAuthorizationStatusView.as_view(), name='authorization-status'),
     path('participants/<int:participant_id>/accept-terms/', TermsAcceptanceView.as_view(), name='accept-terms'),
+    path('participants/<int:participant_id>/send-email-otp/', SendEmailOTPView.as_view(), name='send-email-otp'),
+    path('participants/<int:participant_id>/verify-email-otp/', VerifyEmailOTPView.as_view(), name='verify-email-otp'),
 ]

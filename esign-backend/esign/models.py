@@ -227,8 +227,15 @@ class ParticipantAuthorizationState(models.Model):
         on_delete=models.CASCADE,
         related_name="authorization_state"
     )
+    # Email OTP
+    email_otp_code = models.CharField(max_length=6, blank=True, default="")
+    email_otp_sent_at = models.DateTimeField(null=True, blank=True)
+    email_otp_expires_at = models.DateTimeField(null=True, blank=True)
     email_verified = models.BooleanField(default=False)
+    email_verified_at = models.DateTimeField(null=True, blank=True)
+    # SMS OTP
     sms_verified = models.BooleanField(default=False)
+    # Terms
     accepted_terms = models.BooleanField(default=False)
     accepted_terms_at = models.DateTimeField(null=True, blank=True)
     terms_version = models.CharField(max_length=50, blank=True, default="")

@@ -1331,6 +1331,200 @@ class TermsAcceptanceView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+    def post(self, request, participant_id, *args, **kwargs):
+        participant, token_obj, error_resp = check_participant_authorization(request, participant_id)
+        if error_resp:
+            return error_resp
+
+        national_id_number = request.data.get('national_id_number')
+        if not national_id_number or not str(national_id_number).strip():
+            return Response({"detail": "national_id_number is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        front_image = request.data.get('front_image')
+        back_image = request.data.get('back_image')
+
+        if not front_image or not back_image:
+            return Response({"detail": "Both front_image and back_image are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            validate_image_file(front_image)
+            validate_image_file(back_image)
+        except ValidationError as e:
+            return Response({"detail": e.detail[0] if isinstance(e.detail, list) else str(e.detail)}, status=status.HTTP_400_BAD_REQUEST)
+
+        from services.signer_verification_service import upload_national_id
+        from esign.serializers import SignerVerificationSerializer
+
+        verification = upload_national_id(participant, str(national_id_number).strip(), front_image, back_image)
+        serializer = SignerVerificationSerializer(verification)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class SignerVerificationSelfieView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, participant_id, *args, **kwargs):
+        participant, token_obj, error_resp = check_participant_authorization(request, participant_id)
+        if error_resp:
+            return error_resp
+
+        selfie_image = request.data.get('selfie_image')
+        if not selfie_image:
+            return Response({"detail": "selfie_image is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            validate_image_file(selfie_image)
+        except ValidationError as e:
+            return Response({"detail": e.detail[0] if isinstance(e.detail, list) else str(e.detail)}, status=status.HTTP_400_BAD_REQUEST)
+
+        from esign.models import SignerVerification
+        verification_exists = SignerVerification.objects.filter(participant=participant).first()
+        if not verification_exists or verification_exists.status == 'pending':
+            return Response({"detail": "National ID must be uploaded before uploading selfie."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from services.signer_verification_service import upload_selfie
+        from esign.serializers import SignerVerificationSerializer
+
+        verification = upload_selfie(participant, selfie_image)
+        serializer = SignerVerificationSerializer(verification)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class SignerVerificationDetailView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, participant_id, *args, **kwargs):
+        participant, token_obj, error_resp = check_participant_authorization(request, participant_id)
+        if error_resp:
+            return error_resp
+
+        from esign.models import SignerVerification
+        from esign.serializers import SignerVerificationSerializer
+
+        verification = SignerVerification.objects.filter(participant=participant).first()
+        if not verification:
+            return Response({
+                "status": "pending",
+                "verified_at": None,
+                "masked_national_id": ""
+            }, status=status.HTTP_200_OK)
+
+        serializer = SignerVerificationSerializer(verification)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class SignerVerificationIDExtractView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, participant_id, *args, **kwargs):
+        participant, token_obj, error_resp = check_participant_authorization(request, participant_id)
+        if error_resp:
+            return error_resp
+
+        from esign.models import SignerVerification
+        verification = SignerVerification.objects.filter(participant=participant).first()
+        if not verification or not verification.national_id_front:
+            return Response(
+                {"detail": "Front ID image is required. Please upload the National ID front image first."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Log OCR started event
+        from esign.constants import EVENT_ID_OCR_STARTED
+        from esign.models import VerificationEvent
+        VerificationEvent.objects.create(
+            signer_verification=verification,
+            event_type=EVENT_ID_OCR_STARTED,
+            metadata={}
+        )
+
+        from services.national_identity_service import (
+            extract_identity_data,
+            parse_identity_document,
+            save_identity_data
+        )
+
+        try:
+            front_image = verification.national_id_front
+            back_image = verification.national_id_back
+
+            ocr_result = extract_identity_data(front_image, back_image)
+
+            if not ocr_result or not ocr_result.get("raw_text", "").strip():
+                save_identity_data(
+                    verification,
+                    ocr_result=ocr_result,
+                    parsed_fields={},
+                    extraction_status="failed",
+                    failure_reason="no_text_detected"
+                )
+                return Response(
+                    {"detail": "OCR extraction failed: No text detected on the identity document."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Parse fields
+            parsed_fields = parse_identity_document(ocr_result["raw_text"])
+
+            # Save extracted metadata
+            national_identity = save_identity_data(
+                verification,
+                ocr_result=ocr_result,
+                parsed_fields=parsed_fields,
+                extraction_status="success"
+            )
+
+            return Response({
+                "full_name": national_identity.full_name,
+                "masked_national_id": national_identity.masked_national_id,
+                "date_of_birth": national_identity.date_of_birth.isoformat() if national_identity.date_of_birth else None,
+                "expiry_date": national_identity.expiry_date.isoformat() if national_identity.expiry_date else None,
+                "document_type": national_identity.document_type
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.exception("Azure OCR extraction encountered an error.")
+
+            save_identity_data(
+                verification,
+                ocr_result=None,
+                parsed_fields={},
+                extraction_status="failed",
+                failure_reason="azure_error"
+            )
+            return Response(
+                {"detail": f"OCR extraction failed due to Azure service error: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class SignerAuthorizationStatusView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, participant_id, *args, **kwargs):
+        participant = get_object_or_404(Participant, id=participant_id)
+        from services.security_policy_service import get_authorization_status
+        status_data = get_authorization_status(participant)
+        return Response(status_data, status=status.HTTP_200_OK)
+
+
+class TermsAcceptanceView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, participant_id, *args, **kwargs):
+        participant, token_obj, error_resp = check_participant_authorization(request, participant_id)
+        if error_resp:
+            return error_resp
+
+        accepted = request.data.get("accepted")
+        if accepted is not True:
+            return Response(
+                {"detail": "accepted must be true."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         terms_version = request.data.get("terms_version", "v1") or "v1"
 
         from services.terms_service import accept_terms
@@ -1344,3 +1538,51 @@ class TermsAcceptanceView(APIView):
             },
             status=status.HTTP_200_OK
         )
+
+
+class SendEmailOTPView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, participant_id, *args, **kwargs):
+        participant, token_obj, error_resp = check_participant_authorization(request, participant_id)
+        if error_resp:
+            return error_resp
+
+        from services.email_otp_service import send_email_otp
+        try:
+            send_email_otp(participant)
+        except Exception as exc:
+            return Response(
+                {"detail": f"Failed to send OTP: {exc}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return Response(
+            {"detail": "OTP sent.", "email": participant.email},
+            status=status.HTTP_200_OK,
+        )
+
+
+class VerifyEmailOTPView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, participant_id, *args, **kwargs):
+        participant, token_obj, error_resp = check_participant_authorization(request, participant_id)
+        if error_resp:
+            return error_resp
+
+        otp = request.data.get("otp")
+        if not otp:
+            return Response(
+                {"verified": False, "error": "otp is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from services.email_otp_service import verify_email_otp
+        result = verify_email_otp(participant, str(otp))
+
+        if result["verified"]:
+            return Response(result, status=status.HTTP_200_OK)
+
+        # Distinguish expired vs invalid for an informative but uniform error shape
+        return Response(result, status=status.HTTP_400_BAD_REQUEST)
