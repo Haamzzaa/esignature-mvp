@@ -36,6 +36,12 @@ def create_envelope(request_data, owner):
             "send_final_email": envelope.send_final_email,
             "allow_printing": envelope.allow_printing,
             "additional_recipients": envelope.additional_recipients,
+            "email_otp_required": envelope.email_otp_required,
+            "sms_otp_required": envelope.sms_otp_required,
+            "national_id_required": envelope.national_id_required,
+            "face_biometric_required": envelope.face_biometric_required,
+            "representative_match_required": envelope.representative_match_required,
+            "terms_acceptance_required": envelope.terms_acceptance_required,
         }, None
         
     return None, serializer.errors
@@ -122,6 +128,12 @@ def patch_envelope(envelope_id, request_data, owner):
             'send_reminders': 'send_reminders',
             'send_final_email': 'send_final_email',
             'allow_printing': 'allow_printing',
+            'email_otp_required': 'email_otp_required',
+            'sms_otp_required': 'sms_otp_required',
+            'national_id_required': 'national_id_required',
+            'face_biometric_required': 'face_biometric_required',
+            'representative_match_required': 'representative_match_required',
+            'terms_acceptance_required': 'terms_acceptance_required',
         }
         for req_key, model_field in simple_map.items():
             if req_key in request_data:

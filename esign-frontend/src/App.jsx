@@ -10,6 +10,7 @@ import WorkspaceHome from './pages/WorkspaceHome.jsx'
 import PackageDetailPage from './pages/PackageDetailPage.jsx'
 import TemplatesPage from './pages/TemplatesPage.jsx'
 import InboxPage from './pages/InboxPage.jsx'
+import ContractAnalysisPage from './pages/ContractAnalysisPage.jsx'
 import { RefreshCw } from 'lucide-react'
 
 function ProtectedRoute({ children }) {
@@ -74,6 +75,7 @@ export default function App() {
                 <Route path="/dashboard" element={<ProtectedRoute><WorkspaceHome /></ProtectedRoute>} />
                 <Route path="/packages/:id" element={<ProtectedRoute><PackageDetailPage /></ProtectedRoute>} />
                 <Route path="/inbox" element={<ProtectedRoute><InboxPage /></ProtectedRoute>} />
+                <Route path="/analyze" element={<ProtectedRoute><ContractAnalysisPage /></ProtectedRoute>} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </div>

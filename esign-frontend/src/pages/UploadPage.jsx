@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { createEnvelope, sendEnvelope, uploadDocument, createTemplate, getTemplateDetail, getPackageDetail, saveDraft, updateDraft, apiClient, API_URL } from '../services/api.js'
+import { createEnvelope, sendEnvelope, uploadDocument, createTemplate, getTemplateDetail, getPackageDetail, saveDraft, updateDraft, apiClient, API_URL, confirmCandidates, ignoreCandidates, analyzeContract } from '../services/api.js'
 import UserNav from '../components/UserNav.jsx'
 import { Document, Page, pdfjs } from 'react-pdf'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -282,6 +282,11 @@ export default function UploadPage() {
   const [existingDocUrl, setExistingDocUrl] = useState('')
   const [existingDocName, setExistingDocName] = useState('')
   const [existingDocId, setExistingDocId] = useState(null)
+  const [candidates, setCandidates] = useState([])
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [analysisError, setAnalysisError] = useState('')
+  const [candidatesConfirmed, setCandidatesConfirmed] = useState(false)
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState([])
 
   // ── Reusable template states ──────────────────────────────────
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false)
@@ -489,6 +494,68 @@ export default function UploadPage() {
         stepNumber: idx + 1
       }))
     })
+  }
+
+  const updateWorkflowStepsFromParticipants = (participants) => {
+    if (participants && Array.isArray(participants) && participants.length > 0) {
+      const grouped = {}
+      participants.forEach(p => {
+        const stepNum = p.step_number || 1
+        if (!grouped[stepNum]) grouped[stepNum] = []
+        grouped[stepNum].push({
+          id: p.id ? p.id.toString() : Math.random().toString(36).substring(2),
+          name: p.name || '', email: p.email || '', role: p.role || 'signer'
+        })
+      })
+      const sortedSteps = Object.keys(grouped).map(Number).sort((a, b) => a - b)
+        .map((stepNum, idx) => ({ stepNumber: idx + 1, participants: grouped[stepNum] }))
+      if (sortedSteps.length > 0) setWorkflowSteps(sortedSteps)
+    }
+  }
+
+  const handleToggleCandidate = (id) => {
+    setSelectedCandidateIds(prev => 
+      prev.includes(id) ? prev.filter(cId => cId !== id) : [...prev, id]
+    )
+  }
+
+  const pendingCandidates = useMemo(() => {
+    return (candidates || []).filter(c => c.status === 'pending' || c.status === undefined)
+  }, [candidates])
+
+  const handleConfirmCandidates = async () => {
+    if (!draftId) return
+    setIsSubmitting(true)
+    setError('')
+    try {
+      const confirmRes = await confirmCandidates(draftId, selectedCandidateIds)
+      if (confirmRes && confirmRes.participants) {
+        updateWorkflowStepsFromParticipants(confirmRes.participants)
+      }
+      setCandidatesConfirmed(true)
+    } catch (err) {
+      setError(err?.response?.data?.detail || err?.message || 'Failed to confirm candidates.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleSkipCandidates = async () => {
+    if (!draftId || !pendingCandidates || pendingCandidates.length === 0) {
+      setCandidatesConfirmed(true)
+      return
+    }
+    setIsSubmitting(true)
+    setError('')
+    try {
+      const candidateIds = pendingCandidates.map(c => c.id)
+      await ignoreCandidates(draftId, candidateIds)
+      setCandidatesConfirmed(true)
+    } catch (err) {
+      setError(err?.response?.data?.detail || err?.message || 'Failed to dismiss candidates.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   // ── Additional Recipients helpers ───────────────────────────────────────────
@@ -748,7 +815,7 @@ export default function UploadPage() {
     try {
       // Upload file if a new one was selected (caches the id for future saves)
       let documentId = existingDocId
-      if (file) {
+      if (file && !existingDocId) {
         const uploadRes = await uploadDocument(file)
         documentId = uploadRes?.document_id
         setExistingDocId(documentId)
@@ -865,7 +932,7 @@ export default function UploadPage() {
     setIsSubmitting(true)
     try {
       let documentId = existingDocId
-      if (file) {
+      if (file && !existingDocId) {
         const uploadRes = await uploadDocument(file)
         documentId = uploadRes?.document_id
       }
@@ -1144,6 +1211,11 @@ export default function UploadPage() {
                         setNumPages(null)
                         setError('')
                         setUploadError('')
+                        setExistingDocId(null)
+                        setCandidates([])
+                        setCandidatesConfirmed(false)
+                        setSelectedCandidateIds([])
+                        setAnalysisError('')
                         const selectedFile = e.target.files?.[0] ?? null
                         setFile(selectedFile)
                         if (selectedFile) {
@@ -1157,8 +1229,42 @@ export default function UploadPage() {
                           
                           setIsValidating(true)
                           try {
-                            await uploadDocument(selectedFile)
+                            const uploadRes = await uploadDocument(selectedFile)
+                            const docId = uploadRes?.document_id
+                            setExistingDocId(docId)
                             setUploadError('')
+                            
+                            setIsAnalyzing(true)
+                            setAnalysisError('')
+                            try {
+                              const draftRes = await saveDraft({ documentId: docId })
+                              const envId = draftRes?.envelope_id
+                              if (envId) {
+                                setDraftId(envId.toString())
+                                
+                                const analysisData = await analyzeContract(selectedFile, envId)
+                                if (analysisData && analysisData.candidates) {
+                                  setCandidates(analysisData.candidates)
+                                  const candIds = analysisData.candidates.map(c => c.id)
+                                  setSelectedCandidateIds(candIds)
+                                  
+                                  const updatedPackage = await getPackageDetail(envId)
+                                  if (updatedPackage && updatedPackage.participants) {
+                                    updateWorkflowStepsFromParticipants(updatedPackage.participants)
+                                  }
+                                }
+                              }
+                            } catch (analysisErr) {
+                              console.error("Auto draft/analysis failed:", analysisErr)
+                              setAnalysisError(
+                                analysisErr?.response?.data?.detail ||
+                                analysisErr?.message ||
+                                'Failed to analyze contract authority.'
+                              )
+                            } finally {
+                              setIsAnalyzing(false)
+                            }
+
                             if (templateId) {
                               setTimeout(() => {
                                 setCurrentTab('recipients')
@@ -1288,6 +1394,117 @@ export default function UploadPage() {
                     Add Workflow Step
                   </button>
                 </div>
+
+                {/* AI Authority Extraction Banners/Checklist */}
+                {isAnalyzing && (
+                  <div className="flex items-center gap-3 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-4 text-sm text-cyan-200 animate-pulse">
+                    <Sparkles className="h-5 w-5 text-cyan-400 shrink-0 animate-spin" />
+                    <div>
+                      <p className="font-semibold text-cyan-300">Analyzing Signing Authority...</p>
+                      <p className="text-xs text-cyan-200/80 mt-0.5 font-mono">
+                        Extracting representatives and validation parameters. Please hold.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {analysisError && (
+                  <div className="flex items-center gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-4 text-xs text-red-200">
+                    <AlertCircle className="h-5 w-5 text-red-400 shrink-0" />
+                    <span>{analysisError}</span>
+                  </div>
+                )}
+
+                {!isAnalyzing && candidates && candidates.length === 1 && (
+                  <div className="flex items-start gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200">
+                    <Sparkles className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-semibold text-emerald-300 font-mono">Representative Pre-populated</p>
+                      <p className="text-xs text-emerald-200/80 mt-0.5 leading-relaxed">
+                        We automatically detected <strong>{candidates[0].name_en || candidates[0].name_ar}</strong> ({candidates[0].title_en || candidates[0].title_ar}) as the authorized signatory and pre-populated them in the list. Please add their email below.
+                      </p>
+                      {candidates[0].authority_clause && (
+                        <p className="text-[11px] text-emerald-200/60 mt-1.5 border-t border-emerald-500/20 pt-1.5 italic">
+                          Clause: "{candidates[0].authority_clause}"
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {!isAnalyzing && pendingCandidates && pendingCandidates.length > 1 && !candidatesConfirmed && (
+                  <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-5 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-5 w-5 text-cyan-400 animate-pulse" />
+                      <h4 className="text-sm font-semibold text-text-primary">
+                        Signing Representatives Detected
+                      </h4>
+                    </div>
+                    <p className="text-xs text-text-secondary">
+                      Multiple authorized signatories were found in this contract. Select who you would like to include as signers in the workflow:
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-1">
+                      {pendingCandidates.map((cand) => {
+                        const isSelected = selectedCandidateIds.includes(cand.id);
+                        return (
+                          <label
+                            key={cand.id}
+                            className={`flex items-start gap-3 rounded-xl border p-4 transition-all cursor-pointer select-none ${
+                              isSelected
+                                ? 'border-cyan-500 bg-cyan-500/10'
+                                : 'border-border-color bg-card-bg hover:border-cyan-500/20'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleToggleCandidate(cand.id)}
+                              className="mt-1 h-4.5 w-4.5 rounded border-border-color bg-card-bg text-cyan-500 focus:ring-cyan-500 cursor-pointer shrink-0"
+                            />
+                            <div className="text-xs space-y-1">
+                              <p className="font-bold text-text-primary">
+                                {cand.name_en || cand.name_ar}
+                              </p>
+                              <p className="text-[10px] text-text-secondary">
+                                {cand.title_en || cand.title_ar}
+                              </p>
+                              {cand.authority_clause && (
+                                <p className="text-[10px] text-zinc-500 italic mt-1 leading-relaxed line-clamp-2" title={cand.authority_clause}>
+                                  "{cand.authority_clause}"
+                                </p>
+                              )}
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <div className="flex items-center gap-3 pt-2 border-t border-border-color/50">
+                      <button
+                        type="button"
+                        onClick={handleConfirmCandidates}
+                        disabled={selectedCandidateIds.length === 0 || isSubmitting}
+                        className="rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-2.5 text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
+                      >
+                        Add Selected Signers
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSkipCandidates}
+                        disabled={isSubmitting}
+                        className="rounded-xl bg-transparent border border-border-color text-text-secondary hover:text-text-primary px-4 py-2.5 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        Skip
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {!isAnalyzing && candidates && candidates.length === 0 && file && (
+                  <div className="flex items-center gap-3 rounded-2xl border border-border-color bg-card-bg/50 px-4 py-4 text-xs text-text-secondary">
+                    <AlertCircle className="h-4 w-4 text-zinc-500 shrink-0" />
+                    <span>No representatives detected in this contract. Please add participants manually.</span>
+                  </div>
+                )}
 
                 <div className="space-y-4">
                   {workflowSteps.map((step, stepIdx) => (

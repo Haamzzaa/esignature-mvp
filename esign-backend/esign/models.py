@@ -1,6 +1,19 @@
 from django.db import models
 import uuid
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from esign.constants import (
+    VERIFICATION_STATUS_PENDING,
+    VERIFICATION_STATUS_ID_UPLOADED,
+    VERIFICATION_STATUS_SELFIE_UPLOADED,
+    VERIFICATION_STATUS_UNDER_REVIEW,
+    VERIFICATION_STATUS_VERIFIED,
+    VERIFICATION_STATUS_FAILED,
+    VERIFICATION_STATUS_CHOICES,
+    VERIFICATION_METHOD_INTERNAL,
+    VERIFICATION_METHOD_CHOICES,
+    VERIFICATION_EVENT_CHOICES,
+)
 
 def get_default_user():
     from django.contrib.auth.models import User
@@ -59,6 +72,13 @@ class Envelope(models.Model):
     send_final_email = models.BooleanField(default=True)
 
     allow_printing = models.BooleanField(default=True)
+
+    email_otp_required = models.BooleanField(default=False)
+    sms_otp_required = models.BooleanField(default=False)
+    national_id_required = models.BooleanField(default=False)
+    face_biometric_required = models.BooleanField(default=False)
+    representative_match_required = models.BooleanField(default=False)
+    terms_acceptance_required = models.BooleanField(default=False)
 
     additional_recipients = models.JSONField(default=list, blank=True)
 
@@ -201,6 +221,22 @@ class ParticipantToken(models.Model):
         return f"Token for {self.participant.name} ({self.participant.role}) - Used: {self.is_used}"
 
 
+class ParticipantAuthorizationState(models.Model):
+    participant = models.OneToOneField(
+        Participant,
+        on_delete=models.CASCADE,
+        related_name="authorization_state"
+    )
+    email_verified = models.BooleanField(default=False)
+    sms_verified = models.BooleanField(default=False)
+    accepted_terms = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"Authorization State for Participant {self.participant.id}"
+
+
 class Template(models.Model):
     VISIBILITY_CHOICES = [
         ('private', 'Private'),
@@ -252,9 +288,210 @@ class DocumentField(models.Model):
     def __str__(self):
         return f"{self.field_type} on page {self.page} for {self.participant.name}"
 
-   
-   
 
-        
-   
+class RepresentativeCandidate(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('converted', 'Converted'),
+        ('ignored', 'Ignored'),
+    ]
+    envelope = models.ForeignKey(Envelope, on_delete=models.CASCADE, related_name="representative_candidates")
+    name_en = models.CharField(max_length=255, blank=True)
+    name_ar = models.CharField(max_length=255, blank=True)
+    title_en = models.CharField(max_length=255, blank=True)
+    title_ar = models.CharField(max_length=255, blank=True)
+    authority_clause = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    converted_at = models.DateTimeField(null=True, blank=True)
+    ignored_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Candidate {self.name_en or self.name_ar} ({self.status}) for Envelope {self.envelope.id}"
+
+
+class ContractAnalysisAudit(models.Model):
+    envelope = models.OneToOneField(Envelope, on_delete=models.CASCADE, related_name="analysis_audit")
+    representative_name = models.CharField(max_length=512, blank=True)
+    representative_title = models.CharField(max_length=512, blank=True)
+    authority_clause = models.TextField(blank=True)
+    authority_detected = models.BooleanField(default=False)
+    ocr_provider = models.CharField(max_length=50, blank=True)
+    ocr_confidence = models.FloatField(null=True, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Audit log for Envelope {self.envelope.id}"
+
+
+class SignerVerification(models.Model):
+    participant = models.OneToOneField(Participant, on_delete=models.CASCADE, related_name="verification")
+    status = models.CharField(
+        max_length=50,
+        choices=VERIFICATION_STATUS_CHOICES,
+        default=VERIFICATION_STATUS_PENDING,
+    )
+    verification_method = models.CharField(
+        max_length=50,
+        choices=VERIFICATION_METHOD_CHOICES,
+        default=VERIFICATION_METHOD_INTERNAL,
+    )
+    national_id_number = models.CharField(max_length=50, blank=True)
+    national_id_front = models.FileField(
+        upload_to="verification/id_front/",
+        blank=True,
+        null=True,
+    )
+    national_id_back = models.FileField(
+        upload_to="verification/id_back/",
+        blank=True,
+        null=True,
+    )
+    selfie_image = models.FileField(
+        upload_to="verification/selfie/",
+        blank=True,
+        null=True,
+    )
+    verified_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    VALID_TRANSITIONS = {
+        VERIFICATION_STATUS_PENDING: {VERIFICATION_STATUS_ID_UPLOADED, VERIFICATION_STATUS_FAILED},
+        VERIFICATION_STATUS_ID_UPLOADED: {VERIFICATION_STATUS_SELFIE_UPLOADED, VERIFICATION_STATUS_FAILED},
+        VERIFICATION_STATUS_SELFIE_UPLOADED: {VERIFICATION_STATUS_UNDER_REVIEW, VERIFICATION_STATUS_FAILED},
+        VERIFICATION_STATUS_UNDER_REVIEW: {VERIFICATION_STATUS_VERIFIED, VERIFICATION_STATUS_FAILED},
+        VERIFICATION_STATUS_VERIFIED: {VERIFICATION_STATUS_FAILED},
+        VERIFICATION_STATUS_FAILED: {VERIFICATION_STATUS_PENDING},
+    }
+
+    def transition_to(self, target_status):
+        valid_targets = self.VALID_TRANSITIONS.get(self.status, set())
+        if target_status not in valid_targets:
+            raise ValidationError(
+                f"Cannot transition verification from {self.status} to {target_status}"
+            )
+        self.status = target_status
+        self.save(update_fields=["status"])
+
+    @property
+    def masked_national_id(self):
+        if not self.national_id_number:
+            return ""
+        length = len(self.national_id_number)
+        if length <= 4:
+            return "*" * length
+        return "*" * (length - 4) + self.national_id_number[-4:]
+
+    def __str__(self):
+        return f"Verification ({self.status}) for Participant {self.participant.id}"
+
+
+class VerificationEvent(models.Model):
+    signer_verification = models.ForeignKey(SignerVerification, on_delete=models.CASCADE, related_name="events")
+    event_type = models.CharField(
+        max_length=50,
+        choices=VERIFICATION_EVENT_CHOICES,
+    )
+    timestamp = models.DateTimeField(auto_now_add=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    def save(self, *args, **kwargs):
+        if self.pk is not None:
+            raise ValidationError("VerificationEvent is append-only and cannot be modified.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("VerificationEvent is append-only and cannot be deleted.")
+
+    def __str__(self):
+        return f"Event {self.event_type} at {self.timestamp}"
+
+
+class NationalIdentity(models.Model):
+    EXTRACTION_STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("success", "Success"),
+        ("failed", "Failed"),
+    ]
+
+    verification = models.OneToOneField(
+        "SignerVerification",
+        on_delete=models.CASCADE,
+        related_name="national_identity"
+    )
+    document_type = models.CharField(
+        max_length=30,
+        choices=[
+            ("saudi_id", "Saudi National ID"),
+            ("iqama", "Iqama"),
+            ("passport", "Passport"),
+            ("aadhaar", "Aadhaar"),
+            ("unknown", "Unknown"),
+        ],
+        default="unknown"
+    )
+    full_name = models.CharField(
+        max_length=255,
+        blank=True
+    )
+    national_id_number = models.CharField(
+        max_length=50,
+        blank=True
+    )
+    date_of_birth = models.DateField(
+        null=True,
+        blank=True
+    )
+    expiry_date = models.DateField(
+        null=True,
+        blank=True
+    )
+    id_photo = models.ImageField(
+        upload_to="verification/id_photo/",
+        null=True,
+        blank=True
+    )
+    ocr_provider = models.CharField(
+        max_length=50,
+        default="azure"
+    )
+    ocr_confidence = models.FloatField(
+        null=True,
+        blank=True
+    )
+    raw_text = models.TextField(
+        blank=True
+    )
+    extraction_status = models.CharField(
+        max_length=20,
+        choices=EXTRACTION_STATUS_CHOICES,
+        default="pending"
+    )
+    failure_reason = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        choices=[
+            ("no_text_detected", "No text detected"),
+            ("parsing_failed", "Parsing failed"),
+            ("azure_error", "Azure OCR service error"),
+        ]
+    )
+    extracted_at = models.DateTimeField(
+        null=True,
+        blank=True
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    @property
+    def masked_national_id(self):
+        if not self.national_id_number:
+            return ""
+        return "*" * max(0, len(self.national_id_number) - 4) + self.national_id_number[-4:]
+
+    def __str__(self):
+        return f"NationalIdentity ({self.document_type}) for Verification {self.verification.id}"
 

@@ -2389,3 +2389,2880 @@ class GetSideEffectsRemovalTests(TestCase):
         self.assertEqual(self.envelope.auditlog_set.filter(event="viewed").count(), 1)
 
 
+class ContractAnalysisTestCase(TestCase):
+    def setUp(self):
+        import os
+        self.old_ocr_provider = os.environ.get("OCR_PROVIDER")
+        os.environ["OCR_PROVIDER"] = "paddle"
+
+    def tearDown(self):
+        import os
+        if self.old_ocr_provider is not None:
+            os.environ["OCR_PROVIDER"] = self.old_ocr_provider
+        elif "OCR_PROVIDER" in os.environ:
+            del os.environ["OCR_PROVIDER"]
+
+    def test_analysis_endpoint_no_file(self):
+        from django.test import RequestFactory
+        from .views import ContractAnalyzeView
+        from django.contrib.auth.models import User
+        from rest_framework.test import force_authenticate
+        
+        user = User.objects.create_user(username="test_analyzer", password="password")
+        factory = RequestFactory()
+        request = factory.post("/api/contracts/analyze/")
+        force_authenticate(request, user=user)
+        
+        view = ContractAnalyzeView.as_view()
+        response = view(request)
+        self.assertEqual(response.status_code, 400)
+
+    def test_analysis_endpoint_success(self):
+        from django.test import RequestFactory
+        from .views import ContractAnalyzeView
+        from django.contrib.auth.models import User
+        from rest_framework.test import force_authenticate
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from unittest.mock import patch
+        
+        import fitz
+        doc = fitz.open()
+        doc.new_page()
+        pdf_bytes = doc.write()
+        doc.close()
+        user = User.objects.create_user(username="test_analyzer2", password="password")
+        uploaded_file = SimpleUploadedFile("contract.pdf", pdf_bytes, content_type="application/pdf")
+        
+        factory = RequestFactory()
+        request = factory.post("/api/contracts/analyze/", {"file": uploaded_file})
+        force_authenticate(request, user=user)
+        
+        view = ContractAnalyzeView.as_view()
+        
+        with patch("services.ocr_service.extract_text_from_pdf") as mock_extract:
+            mock_extract.return_value = {
+                "raw_text": (
+                    "This Agreement is represented by Mr. Yasser Othman Ramadan in his capacity as General Manager. "
+                    "يمثله السيد ياسر عثمان رمضان بصفته المدير العام."
+                ),
+                "language_detected": ["en", "ar"],
+                "extraction_source": "digital_pdf",
+                "ocr_confidence": 1.0,
+                "page_count": 1
+            }
+            response = view(request)
+            
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["representative_name_en"], "Yasser Othman Ramadan")
+        self.assertEqual(response.data["representative_name_ar"], "ياسر عثمان رمضان")
+        self.assertEqual(response.data["title_en"], "General Manager")
+        self.assertEqual(response.data["title_ar"], "المدير العام")
+        self.assertEqual(response.data["authority_clause_en"], "represented by Mr. Yasser Othman Ramadan, in his capacity as General Manager")
+        self.assertEqual(response.data["authority_clause_ar"], "يمثله السيد/ ياسر عثمان رمضان بصفته/ المدير العام")
+        self.assertNotIn("confidence_score", response.data)
+
+    def test_is_text_sufficient(self):
+        from services.ocr_service import is_text_sufficient
+        # Too short
+        self.assertFalse(is_text_sufficient("short text"))
+        # Low alphabetic density
+        self.assertFalse(is_text_sufficient("1234567890 " * 20))
+        # High density, printable, but too short
+        self.assertFalse(is_text_sufficient("Yasser Othman"))
+        # Good text
+        good_text = "This is a valid corporate contract document between party A and party B represented by General Manager Yasser Othman Ramadan. " * 3
+        self.assertTrue(is_text_sufficient(good_text))
+
+    def test_invalid_file_extension(self):
+        from django.test import RequestFactory
+        from .views import ContractAnalyzeView
+        from django.contrib.auth.models import User
+        from rest_framework.test import force_authenticate
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        
+        user = User.objects.create_user(username="test_analyzer_invalid_ext", password="password")
+        uploaded_file = SimpleUploadedFile("contract.txt", b"some plain text content", content_type="text/plain")
+        
+        factory = RequestFactory()
+        request = factory.post("/api/contracts/analyze/", {"file": uploaded_file})
+        force_authenticate(request, user=user)
+        
+        view = ContractAnalyzeView.as_view()
+        response = view(request)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Unsupported file format", response.data["detail"])
+
+    def test_uppercase_file_extension(self):
+        from django.test import RequestFactory
+        from .views import ContractAnalyzeView
+        from django.contrib.auth.models import User
+        from rest_framework.test import force_authenticate
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from unittest.mock import patch
+        
+        import fitz
+        doc = fitz.open()
+        doc.new_page()
+        pdf_bytes = doc.write()
+        doc.close()
+        user = User.objects.create_user(username="test_analyzer_upper_ext", password="password")
+        uploaded_file = SimpleUploadedFile("contract.PDF", pdf_bytes, content_type="application/pdf")
+        
+        factory = RequestFactory()
+        request = factory.post("/api/contracts/analyze/", {"file": uploaded_file})
+        force_authenticate(request, user=user)
+        
+        view = ContractAnalyzeView.as_view()
+        with patch("services.ocr_service.extract_text_from_pdf") as mock_extract:
+            mock_extract.return_value = {
+                "raw_text": "This Agreement is represented by Mr. Yasser Othman Ramadan in his capacity as General Manager.",
+                "language_detected": ["en"],
+                "extraction_source": "digital_pdf",
+                "ocr_confidence": 1.0,
+                "page_count": 1
+            }
+            response = view(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("extraction_source", response.data)
+
+    def test_file_size_limit(self):
+        from django.test import RequestFactory
+        from .views import ContractAnalyzeView
+        from django.contrib.auth.models import User
+        from rest_framework.test import force_authenticate
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        
+        user = User.objects.create_user(username="test_analyzer_size", password="password")
+        large_bytes = b"0" * (21 * 1024 * 1024)
+        uploaded_file = SimpleUploadedFile("contract.pdf", large_bytes, content_type="application/pdf")
+        
+        factory = RequestFactory()
+        request = factory.post("/api/contracts/analyze/", {"file": uploaded_file})
+        force_authenticate(request, user=user)
+        
+        view = ContractAnalyzeView.as_view()
+        response = view(request)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("File size exceeds", response.data["detail"])
+
+    def test_page_count_limit(self):
+        from django.test import RequestFactory
+        from .views import ContractAnalyzeView
+        from django.contrib.auth.models import User
+        from rest_framework.test import force_authenticate
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from unittest.mock import patch
+        
+        user = User.objects.create_user(username="test_analyzer_pages", password="password")
+        uploaded_file = SimpleUploadedFile("contract.pdf", b"%PDF-1.4 dummy", content_type="application/pdf")
+        
+        factory = RequestFactory()
+        request = factory.post("/api/contracts/analyze/", {"file": uploaded_file})
+        force_authenticate(request, user=user)
+        
+        view = ContractAnalyzeView.as_view()
+        with patch("fitz.open") as mock_open:
+            mock_doc = mock_open.return_value
+            mock_doc.__len__.return_value = 21
+            response = view(request)
+            
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("PDF exceeds the maximum limit of 20 pages", response.data["detail"])
+
+    def test_digital_pdf_metadata(self):
+        from django.test import RequestFactory
+        from .views import ContractAnalyzeView
+        from django.contrib.auth.models import User
+        from rest_framework.test import force_authenticate
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from unittest.mock import patch
+        
+        import fitz
+        doc = fitz.open()
+        doc.new_page()
+        pdf_bytes = doc.write()
+        doc.close()
+        user = User.objects.create_user(username="test_analyzer_meta", password="password")
+        uploaded_file = SimpleUploadedFile("contract.pdf", pdf_bytes, content_type="application/pdf")
+        
+        factory = RequestFactory()
+        request = factory.post("/api/contracts/analyze/", {"file": uploaded_file})
+        force_authenticate(request, user=user)
+        
+        view = ContractAnalyzeView.as_view()
+        with patch("services.ocr_service.extract_text_from_pdf") as mock_extract:
+            mock_extract.return_value = {
+                "raw_text": "This Agreement is represented by Mr. Yasser Othman Ramadan in his capacity as General Manager.",
+                "language_detected": ["en"],
+                "extraction_source": "digital_pdf",
+                "ocr_confidence": 1.0,
+                "page_count": 3
+            }
+            response = view(request)
+            
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("extraction_source", response.data)
+        self.assertNotIn("page_count", response.data)
+        self.assertNotIn("ocr_confidence", response.data)
+        self.assertNotIn("processing_time_ms", response.data)
+
+    def test_pdf_ocr_fallback(self):
+        from django.test import RequestFactory
+        from .views import ContractAnalyzeView
+        from django.contrib.auth.models import User
+        from rest_framework.test import force_authenticate
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from unittest.mock import patch
+        
+        import fitz
+        doc = fitz.open()
+        doc.new_page()
+        pdf_bytes = doc.write()
+        doc.close()
+        user = User.objects.create_user(username="test_analyzer_fallback", password="password")
+        uploaded_file = SimpleUploadedFile("scanned.pdf", pdf_bytes, content_type="application/pdf")
+        
+        factory = RequestFactory()
+        request = factory.post("/api/contracts/analyze/", {"file": uploaded_file})
+        force_authenticate(request, user=user)
+        
+        view = ContractAnalyzeView.as_view()
+        with patch("services.ocr_service.extract_text_from_pdf") as mock_extract:
+            mock_extract.return_value = {
+                "raw_text": "يمثله السيد ياسر عثمان رمضان بصفته المدير العام.",
+                "language_detected": ["ar"],
+                "extraction_source": "paddleocr",
+                "ocr_confidence": 0.88,
+                "page_count": 2
+            }
+            response = view(request)
+            
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("extraction_source", response.data)
+        self.assertNotIn("ocr_confidence", response.data)
+        self.assertNotIn("page_count", response.data)
+        self.assertEqual(response.data["representative_name_ar"], "ياسر عثمان رمضان")
+        self.assertEqual(response.data["title_ar"], "المدير العام")
+
+    def test_image_ocr_extraction(self):
+        from django.test import RequestFactory
+        from .views import ContractAnalyzeView
+        from django.contrib.auth.models import User
+        from rest_framework.test import force_authenticate
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from unittest.mock import patch
+        
+        user = User.objects.create_user(username="test_analyzer_image", password="password")
+        uploaded_file = SimpleUploadedFile("contract.png", b"dummy png bytes", content_type="image/png")
+        
+        factory = RequestFactory()
+        request = factory.post("/api/contracts/analyze/", {"file": uploaded_file})
+        force_authenticate(request, user=user)
+        
+        view = ContractAnalyzeView.as_view()
+        with patch("services.ocr_service.extract_text_from_image") as mock_extract_img:
+            mock_extract_img.return_value = (
+                "This Agreement is represented by Mr. Yasser Othman Ramadan in his capacity as General Manager.",
+                0.92
+            )
+            response = view(request)
+            
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("extraction_source", response.data)
+        self.assertNotIn("page_count", response.data)
+        self.assertNotIn("ocr_confidence", response.data)
+        self.assertEqual(response.data["representative_name_en"], "Yasser Othman Ramadan")
+        self.assertEqual(response.data["title_en"], "General Manager")
+
+    def test_arabic_representative_and_title_extraction(self):
+        from services.authority_extraction_service import analyze_contract_authority
+        text = "ويمثلها السيد/ ياسر عثمان رمضان بصفته/ المدير العام"
+        res = analyze_contract_authority(text)
+        self.assertEqual(res["representative_name_ar"], "ياسر عثمان رمضان")
+        self.assertEqual(res["title_ar"], "المدير العام")
+        self.assertEqual(res["authority_clause_ar"], "ويمثلها السيد/ ياسر عثمان رمضان بصفته/ المدير العام")
+
+    def test_english_representative_and_title_extraction(self):
+        from services.authority_extraction_service import analyze_contract_authority
+        text = "represented by Mr. Yasser Othman Ramadan, in his capacity as General Manager"
+        res = analyze_contract_authority(text)
+        self.assertEqual(res["representative_name_en"], "Yasser Othman Ramadan")
+        self.assertEqual(res["title_en"], "General Manager")
+        self.assertEqual(res["authority_clause_en"], "represented by Mr. Yasser Othman Ramadan, in his capacity as General Manager")
+
+    def test_mixed_bilingual_contracts(self):
+        from services.authority_extraction_service import analyze_contract_authority
+        text = (
+            "represented by Mr. Yasser Othman Ramadan, in his capacity as General Manager. "
+            "ويمثلها السيد/ ياسر عثمان رمضان بصفته/ المدير العام."
+        )
+        res = analyze_contract_authority(text)
+        self.assertEqual(res["representative_name_en"], "Yasser Othman Ramadan")
+        self.assertEqual(res["title_en"], "General Manager")
+        self.assertEqual(res["representative_name_ar"], "ياسر عثمان رمضان")
+        self.assertEqual(res["title_ar"], "المدير العام")
+
+    def test_slash_removal_and_whitespace_collapse(self):
+        from services.authority_extraction_service import clean_extracted_name
+        name_with_slashes = "  / Yasser / Othman \\ Ramadan : ; ()  "
+        self.assertEqual(clean_extracted_name(name_with_slashes, "en"), "Yasser Othman Ramadan")
+        
+        ar_name_with_punctuation = " السيد/  ياسر ، عثمان رمضان  "
+        self.assertEqual(clean_extracted_name(ar_name_with_punctuation, "ar"), "ياسر عثمان رمضان")
+
+    def test_newline_normalization(self):
+        from services.authority_extraction_service import normalize_text
+        text_with_newlines = "represented\nby\r\nMr.\tYasser\u200bOthman"
+        self.assertEqual(normalize_text(text_with_newlines), "represented by Mr. YasserOthman")
+
+    def test_multiple_authority_keywords_and_scoring(self):
+        from services.authority_extraction_service import extract_english_authority
+        text = (
+            "represented by Mr. John Doe. Some dummy text. "
+            "acting through Dr. Yasser Othman Ramadan, in his capacity as General Manager"
+        )
+        res = extract_english_authority(text)
+        self.assertEqual(res["representative_name"], "Dr. Yasser Othman Ramadan")
+        self.assertEqual(res["title"], "General Manager")
+        self.assertEqual(res["score"], 4)
+
+    def test_candidate_window_tie_breaking(self):
+        from services.authority_extraction_service import extract_english_authority
+        text = (
+            "represented by Mr. Yasser Ramadan, in his capacity as CEO. "
+            "represented by Mr. Yasser Othman Ramadan, in his capacity as General Manager."
+        )
+        res = extract_english_authority(text)
+        self.assertEqual(res["representative_name"], "Yasser Othman Ramadan")
+        self.assertEqual(res["title"], "General Manager")
+
+    def test_english_prefixes_support(self):
+        from services.authority_extraction_service import extract_english_authority
+        prefixes = ["Mr.", "Mrs.", "Ms.", "Dr.", "Prof.", "Eng."]
+        for p in prefixes:
+            text = f"represented by {p} Yasser Ramadan, in his capacity as CEO"
+            res = extract_english_authority(text)
+            if p in ["Dr.", "Eng.", "Prof."]:
+                self.assertEqual(res["representative_name"], f"{p} Yasser Ramadan")
+            else:
+                self.assertEqual(res["representative_name"], "Yasser Ramadan")
+
+    def test_arabic_prefixes_support(self):
+        from services.authority_extraction_service import extract_arabic_authority
+        prefixes = ["السيد", "السيدة", "الأستاذ", "الدكتور", "المهندس", "البروفيسور", "م."]
+        for p in prefixes:
+            text = f"ويمثلها {p}/ ياسر رمضان بصفته/ المدير العام"
+            res = extract_arabic_authority(text)
+            if p in ["الدكتور", "المهندس", "البروفيسور"]:
+                self.assertEqual(res["representative_name"], f"{p}/ ياسر رمضان")
+            else:
+                self.assertEqual(res["representative_name"], "ياسر رمضان")
+
+    def test_dictionary_title_detection(self):
+        from services.authority_extraction_service import extract_english_authority
+        text = "represented by Mr. Yasser Ramadan, in his capacity as Managing Director"
+        res = extract_english_authority(text)
+        self.assertEqual(res["title"], "Managing Director")
+
+    def test_confidence_computation_with_penalties(self):
+        from services.authority_extraction_service import extract_english_authority
+        text1 = "represented by Mr. Yasser Ramadan, in his capacity as CEO"
+        res1 = extract_english_authority(text1)
+        self.assertEqual(res1["confidence_score"], 1.0)
+        
+        text2 = "represented by Mr. Yasser Ramadan, in his capacity as Senior Lead"
+        res2 = extract_english_authority(text2)
+        self.assertEqual(res2["confidence_score"], 0.4)
+
+    def test_failure_cases(self):
+        from services.authority_extraction_service import validate_representative_name
+        self.assertFalse(validate_representative_name("Yasser", "en"))
+        self.assertFalse(validate_representative_name("ياسر", "ar"))
+        self.assertFalse(validate_representative_name("Mr. Yasser Ramadan", "en"))
+        self.assertFalse(validate_representative_name("السيد ياسر رمضان", "ar"))
+        self.assertFalse(validate_representative_name("Yasser General Manager", "en"))
+        self.assertFalse(validate_representative_name("ياسر المدير العام", "ar"))
+
+    def test_exact_title_matching_en(self):
+        from services.authority_extraction_service import extract_english_authority
+        text = "represented by Mr. Yasser Ramadan, in his capacity as CEO"
+        res = extract_english_authority(text)
+        self.assertEqual(res["title"], "CEO")
+        self.assertEqual(res["title_match_score"], 100.0)
+        self.assertEqual(res["title_match_method"], "exact")
+
+    def test_exact_title_matching_ar(self):
+        from services.authority_extraction_service import extract_arabic_authority
+        text = "ويمثلها السيد/ ياسر رمضان بصفته/ المدير العام"
+        res = extract_arabic_authority(text)
+        self.assertEqual(res["title"], "المدير العام")
+        self.assertEqual(res["title_match_score"], 100.0)
+        self.assertEqual(res["title_match_method"], "exact")
+
+    def test_arabic_ocr_typo_resolving(self):
+        from services.authority_extraction_service import extract_arabic_authority
+        # Typo: املدير العام instead of المدير العام
+        text = "ويمثلها السيد/ ياسر رمضان بصفته/ املدير العام"
+        res = extract_arabic_authority(text)
+        self.assertEqual(res["title"], "المدير العام")
+        self.assertGreaterEqual(res["title_match_score"], 90.0)
+        self.assertEqual(res["title_match_method"], "fuzzy")
+
+    def test_arabic_ocr_typo_resolving_alternative(self):
+        from services.authority_extraction_service import extract_arabic_authority
+        # Typo: الرئيس التنفيدي instead of الرئيس التنفيذي
+        text = "ويمثلها السيد/ ياسر رمضان بصفته/ الرئيس التنفيدي"
+        res = extract_arabic_authority(text)
+        self.assertEqual(res["title"], "الرئيس التنفيذي")
+        self.assertGreaterEqual(res["title_match_score"], 90.0)
+        self.assertEqual(res["title_match_method"], "fuzzy")
+
+    def test_longer_suffix_arabic(self):
+        from services.authority_extraction_service import extract_arabic_authority
+        # Suffix includes extra words: املدير العام لشركة الشرق الأوسط
+        text = "ويمثلها السيد/ ياسر رمضان بصفته/ املدير العام لشركة الشرق الأوسط"
+        res = extract_arabic_authority(text)
+        self.assertEqual(res["title"], "المدير العام")
+        self.assertGreaterEqual(res["title_match_score"], 90.0)
+        self.assertEqual(res["title_match_method"], "fuzzy")
+
+    def test_longer_suffix_arabic_alternative(self):
+        from services.authority_extraction_service import extract_arabic_authority
+        text = "ويمثلها السيد/ ياسر رمضان بصفته/ المدير العام والمدير التنفيذي"
+        res = extract_arabic_authority(text)
+        self.assertEqual(res["title"], "المدير العام")
+        self.assertEqual(res["title_match_score"], 100.0)
+        self.assertEqual(res["title_match_method"], "exact")
+
+    def test_english_fuzzy_title_matching(self):
+        from services.authority_extraction_service import extract_english_authority
+        # Typo: Generral Manager instead of General Manager
+        text = "represented by Mr. Yasser Ramadan, in his capacity as Generral Manager"
+        res = extract_english_authority(text)
+        self.assertEqual(res["title"], "General Manager")
+        self.assertGreaterEqual(res["title_match_score"], 90.0)
+        self.assertEqual(res["title_match_method"], "fuzzy")
+
+    def test_english_fuzzy_title_matching_ceo(self):
+        from services.authority_extraction_service import extract_english_authority
+        # Typo: Chief Executve Officer instead of Chief Executive Officer
+        text = "represented by Mr. Yasser Ramadan, in his capacity as Chief Executve Officer"
+        res = extract_english_authority(text)
+        self.assertEqual(res["title"], "Chief Executive Officer")
+        self.assertGreaterEqual(res["title_match_score"], 90.0)
+        self.assertIn(res["title_match_method"], ("exact", "fuzzy"))
+
+    def test_title_match_method_exact(self):
+        from services.authority_extraction_service import find_best_title_match
+        matched_title, score, method, penalty = find_best_title_match("CEO", ["CEO", "General Manager"])
+        self.assertEqual(method, "exact")
+        self.assertEqual(penalty, 0.0)
+        self.assertEqual(matched_title, "CEO")
+
+    def test_title_match_method_fuzzy_high(self):
+        from services.authority_extraction_service import find_best_title_match
+        matched_title, score, method, penalty = find_best_title_match("Generral Manager", ["General Manager", "CEO"])
+        self.assertEqual(method, "fuzzy")
+        self.assertEqual(penalty, -0.02)
+        self.assertEqual(matched_title, "General Manager")
+
+    def test_title_match_method_fuzzy_low(self):
+        from services.authority_extraction_service import find_best_title_match
+        # A score around 85-90
+        # "General Mngr" vs "General Manager"
+        matched_title, score, method, penalty = find_best_title_match("General Mngr", ["General Manager", "CEO"])
+        self.assertEqual(method, "fuzzy")
+        self.assertEqual(penalty, -0.05)
+        self.assertEqual(matched_title, "General Manager")
+
+    def test_title_match_method_none(self):
+        from services.authority_extraction_service import find_best_title_match
+        # Score below 85
+        matched_title, score, method, penalty = find_best_title_match("Random String", ["General Manager", "CEO"])
+        self.assertEqual(method, "none")
+        self.assertEqual(penalty, 0.0)
+        self.assertIsNone(matched_title)
+
+    def test_confidence_penalty_fuzzy_93(self):
+        from services.authority_extraction_service import extract_english_authority
+        # "Generral Manager" typo has score 93.33, penalty -0.02, base confidence would be 1.0, final 0.98
+        text = "represented by Mr. Yasser Ramadan, in his capacity as Generral Manager"
+        res = extract_english_authority(text)
+        self.assertAlmostEqual(res["confidence_score"], 0.98, places=5)
+
+    def test_confidence_penalty_fuzzy_87(self):
+        from services.authority_extraction_service import extract_english_authority
+        # "General Mngr" typo has score around 87, penalty -0.05, base confidence 1.0, final 0.95
+        text = "represented by Mr. Yasser Ramadan, in his capacity as General Mngr"
+        res = extract_english_authority(text)
+        self.assertAlmostEqual(res["confidence_score"], 0.95, places=5)
+
+    def test_confidence_penalty_exact_98(self):
+        from services.authority_extraction_service import extract_english_authority
+        text = "represented by Mr. Yasser Ramadan, in his capacity as CEO"
+        res = extract_english_authority(text)
+        self.assertEqual(res["confidence_score"], 1.0)
+
+    def test_average_confidence_aggregation(self):
+        from services.authority_extraction_service import analyze_contract_authority
+        # English confidence = 1.0, Arabic confidence = 1.0 => overall = 1.0
+        text = (
+            "represented by Mr. Yasser Othman Ramadan, in his capacity as General Manager. "
+            "ويمثلها السيد/ ياسر عثمان رمضان بصفته/ المدير العام"
+        )
+        res = analyze_contract_authority(text)
+        self.assertEqual(res["confidence_score"], 1.0)
+
+    def test_average_confidence_aggregation_with_mismatch(self):
+        from services.authority_extraction_service import analyze_contract_authority
+        # English confidence = 1.0
+        # Arabic confidence = 0.0 (incomplete, e.g. no representative found)
+        # Overall = 0.5
+        text = (
+            "represented by Mr. Yasser Othman Ramadan, in his capacity as General Manager. "
+            "بصفته المدير العام"
+        )
+        res = analyze_contract_authority(text)
+        self.assertEqual(res["confidence_score"], 0.5)
+
+    def test_rejection_below_85(self):
+        from services.authority_extraction_service import extract_english_authority
+        # Suffix doesn't match any title: "represented by Mr. Yasser Ramadan, in his capacity as Engineer"
+        # "Engineer" vs ENGLISH_TITLES (score below 85) => rejected => title = ""
+        text = "represented by Mr. Yasser Ramadan, in his capacity as Engineer"
+        res = extract_english_authority(text)
+        self.assertEqual(res["title"], "")
+        self.assertEqual(res["title_match_method"], "none")
+
+    def test_regression_bilingual_contract(self):
+        from services.authority_extraction_service import analyze_contract_authority
+        text = (
+            "This Agreement is represented by Mr. Yasser Othman Ramadan, in his capacity as General Manager. "
+            "ويمثلها السيد/ ياسر عثمان رمضان بصفته/ المدير العام."
+        )
+        res = analyze_contract_authority(text)
+        self.assertEqual(res["representative_name_en"], "Yasser Othman Ramadan")
+        self.assertEqual(res["representative_name_ar"], "ياسر عثمان رمضان")
+        self.assertEqual(res["title_en"], "General Manager")
+        self.assertEqual(res["title_ar"], "المدير العام")
+        self.assertEqual(
+            res["authority_clause_en"],
+            "represented by Mr. Yasser Othman Ramadan, in his capacity as General Manager"
+        )
+        self.assertEqual(
+            res["authority_clause_ar"],
+            "ويمثلها السيد/ ياسر عثمان رمضان بصفته/ المدير العام"
+        )
+
+    def test_empty_suffix_handling(self):
+        from services.authority_extraction_service import extract_english_authority
+        # Suffix is empty after capacity phrase
+        text = "represented by Mr. Yasser Ramadan, in his capacity as "
+        res = extract_english_authority(text)
+        self.assertEqual(res["title"], "")
+        self.assertEqual(res["title_match_method"], "none")
+
+    def test_no_capacity_phrase_matching(self):
+        from services.authority_extraction_service import extract_english_authority
+        # Test fallback to search on whole window when no capacity phrase is matched
+        text = "represented by Mr. Yasser Ramadan. CEO of the Company."
+        res = extract_english_authority(text)
+        self.assertEqual(res["title"], "CEO")
+        self.assertEqual(res["title_match_method"], "exact")
+
+    def test_normalization_zero_width_chars(self):
+        from services.authority_extraction_service import analyze_contract_authority
+        text = (
+            "represented by Mr. Y\u200basser Othman Ramadan, in his capacity as Gen\u200ceral Manager"
+        )
+        res = analyze_contract_authority(text)
+        self.assertEqual(res["representative_name_en"], "Yasser Othman Ramadan")
+        self.assertEqual(res["title_en"], "General Manager")
+
+    def test_garbage_ratio_penalty(self):
+        from services.ocr_service import evaluate_arabic_quality
+        # Clean text
+        res_clean = evaluate_arabic_quality("المدير العام")
+        self.assertEqual(res_clean["garbage_ratio"], 0.0)
+        self.assertGreaterEqual(res_clean["score"], 0.8)
+        
+        # Corrupted text with Canadian Aboriginal characters
+        res_corrupt = evaluate_arabic_quality("المدير العام ᒠᓞᓢᓚᓕ")
+        self.assertGreater(res_corrupt["garbage_ratio"], 0.0)
+        self.assertLess(res_corrupt["score"], res_clean["score"])
+
+    def test_corrupted_unicode_quality(self):
+        from services.ocr_service import evaluate_arabic_quality
+        text = "ᒠᓞᓢᓚᓕ ᒢᓪᓊᓞᒎ ᓪᒁᒤ"
+        res = evaluate_arabic_quality(text)
+        self.assertGreater(res["garbage_ratio"], 0.5)
+        self.assertEqual(res["score"], 0.0)
+
+    def test_page_quality_scores(self):
+        from services.ocr_service import evaluate_arabic_quality
+        res_en = evaluate_arabic_quality("This is a clean English text.")
+        self.assertEqual(res_en["score"], 1.0)
+        self.assertEqual(res_en["arabic_chars"], 0)
+
+    def test_page_level_strategy_selection(self):
+        from unittest.mock import patch, MagicMock
+        import fitz
+        from services.ocr_service import extract_text_from_pdf
+        
+        # Mock fitz.open and page.get_text
+        doc = fitz.open()
+        p1 = doc.new_page() # empty page
+        p2 = doc.new_page() # page with text
+        pdf_bytes = doc.write()
+        doc.close()
+        
+        with patch("fitz.open") as mock_open:
+            mock_doc = MagicMock()
+            mock_doc.__len__.return_value = 2
+            
+            mock_page1 = MagicMock()
+            mock_page1.get_text.return_value = "This is a clean English only page text, no Arabic here." * 10
+            mock_page1.rect.width = 600
+            mock_page1.rect.height = 800
+            
+            mock_page2 = MagicMock()
+            mock_page2.get_text.return_value = "This is a bilingual page. المدير العام CEO represented by." * 10
+            mock_page2.rect.width = 600
+            mock_page2.rect.height = 800
+            
+            mock_doc.load_page.side_effect = [mock_page1, mock_page2]
+            mock_open.return_value = mock_doc
+            
+            res = extract_text_from_pdf(pdf_bytes)
+            
+        self.assertEqual(res["page_strategies"][1], "english_only")
+        # Since score for page 2 has Arabic and is clean (printable_ratio >= 0.8, garbage_ratio=0), strategy should be digital_pdf
+        self.assertEqual(res["page_strategies"][2], "digital_pdf")
+
+    def test_dominant_strategy(self):
+        from unittest.mock import patch, MagicMock
+        import fitz
+        from services.ocr_service import extract_text_from_pdf
+        
+        doc = fitz.open()
+        doc.new_page()
+        doc.new_page()
+        pdf_bytes = doc.write()
+        doc.close()
+        
+        with patch("fitz.open") as mock_open:
+            mock_doc = MagicMock()
+            mock_doc.__len__.return_value = 2
+            
+            mock_page1 = MagicMock()
+            mock_page1.get_text.return_value = "English text only. English text only. English text only. English text only." * 10
+            
+            mock_page2 = MagicMock()
+            mock_page2.get_text.return_value = "English text only. English text only. English text only. English text only." * 10
+            
+            mock_doc.load_page.side_effect = [mock_page1, mock_page2]
+            mock_open.return_value = mock_doc
+            
+            res = extract_text_from_pdf(pdf_bytes)
+            
+        self.assertEqual(res["dominant_strategy"], "english_only")
+
+    def test_page_regions(self):
+        from unittest.mock import patch, MagicMock
+        import fitz
+        from services.ocr_service import extract_text_from_pdf
+        
+        doc = fitz.open()
+        doc.new_page()
+        pdf_bytes = doc.write()
+        doc.close()
+        
+        with patch("fitz.open") as mock_open:
+            mock_doc = MagicMock()
+            mock_doc.__len__.return_value = 1
+            
+            mock_page = MagicMock()
+            # Left side has Arabic, right side doesn't
+            def mock_get_text(opt="", clip=None):
+                if clip is None:
+                    return "CEO represented by Mr. John CEO represented by Mr. John CEO represented by Mr. John" * 10 + "المدير العام المدير العام المدير العام المدير العام" * 10
+                if clip.x0 == 0:
+                    return "المدير العام المدير العام المدير العام المدير العام" * 10
+                return "CEO represented by Mr. John CEO represented by Mr. John CEO represented by Mr. John" * 10
+            mock_page.get_text = mock_get_text
+            mock_page.rect.width = 600
+            mock_page.rect.height = 800
+            
+            mock_doc.load_page.return_value = mock_page
+            mock_open.return_value = mock_doc
+            
+            res = extract_text_from_pdf(pdf_bytes)
+            
+        self.assertEqual(res["page_regions"][1], "left")
+
+    def test_dominant_region(self):
+        from unittest.mock import patch, MagicMock
+        import fitz
+        from services.ocr_service import extract_text_from_pdf
+        
+        doc = fitz.open()
+        doc.new_page()
+        doc.new_page()
+        pdf_bytes = doc.write()
+        doc.close()
+        
+        with patch("fitz.open") as mock_open:
+            mock_doc = MagicMock()
+            mock_doc.__len__.return_value = 2
+            
+            mock_page1 = MagicMock()
+            # Left side has Arabic
+            def mock_get_text_p1(opt="", clip=None):
+                if clip is None:
+                    return "CEO represented by Mr. John CEO represented by Mr. John CEO represented by Mr. John" * 10 + "المدير العام المدير العام المدير العام المدير العام" * 10
+                if clip.x0 == 0:
+                    return "المدير العام المدير العام المدير العام المدير العام" * 10
+                return "CEO represented by Mr. John CEO represented by Mr. John CEO represented by Mr. John" * 10
+            mock_page1.get_text = mock_get_text_p1
+            mock_page1.rect.width = 600
+            mock_page1.rect.height = 800
+            
+            mock_page2 = MagicMock()
+            # Right side has Arabic
+            def mock_get_text_p2(opt="", clip=None):
+                if clip is None:
+                    return "CEO represented by Mr. John CEO represented by Mr. John CEO represented by Mr. John" * 10 + "المدير العام المدير العام المدير العام المدير العام" * 10
+                if clip.x0 > 0:
+                    return "المدير العام المدير العام المدير العام المدير العام" * 10
+                return "CEO represented by Mr. John CEO represented by Mr. John CEO represented by Mr. John" * 10
+            mock_page2.get_text = mock_get_text_p2
+            mock_page2.rect.width = 600
+            mock_page2.rect.height = 800
+            
+            mock_doc.load_page.side_effect = [mock_page1, mock_page2]
+            mock_open.return_value = mock_doc
+            
+            res = extract_text_from_pdf(pdf_bytes)
+            
+        # Ties default to right
+        self.assertEqual(res["dominant_arabic_region"], "right")
+
+    def test_mixed_strategy_document(self):
+        from unittest.mock import patch, MagicMock
+        import fitz
+        from services.ocr_service import extract_text_from_pdf
+        
+        doc = fitz.open()
+        doc.new_page()
+        doc.new_page()
+        pdf_bytes = doc.write()
+        doc.close()
+        
+        with patch("fitz.open") as mock_open:
+            mock_doc = MagicMock()
+            mock_doc.__len__.return_value = 2
+            
+            mock_page1 = MagicMock()
+            mock_page1.get_text.return_value = "Clean English contract text. Clean English contract text. Clean English contract text. " * 10
+            
+            mock_page2 = MagicMock()
+            # Insufficient text length < 100, triggers full_page_ocr
+            mock_page2.get_text.return_value = "Short"
+            mock_pixmap = MagicMock()
+            mock_pixmap.tobytes.return_value = b"bytes"
+            mock_page2.get_pixmap.return_value = mock_pixmap
+            
+            mock_doc.load_page.side_effect = [mock_page1, mock_page2]
+            mock_open.return_value = mock_doc
+            
+            from PIL import Image
+            real_img = Image.new("RGB", (10, 10))
+            
+            with patch("services.ocr_service.get_ocr_engine") as mock_ocr_engine, \
+                 patch("PIL.Image.open", return_value=real_img):
+                mock_ocr = mock_ocr_engine.return_value
+                # Mock OCR lines for full_page_ocr
+                mock_ocr.ocr.return_value = [[
+                    [[[0,0], [10,0], [10,10], [0,10]], ("الرئيس التنفيذي", 0.95)]
+                ]]
+                res = extract_text_from_pdf(pdf_bytes)
+                
+        self.assertEqual(res["page_strategies"][1], "english_only")
+        self.assertEqual(res["page_strategies"][2], "full_page_ocr")
+
+    def test_processing_metadata(self):
+        from django.test import RequestFactory
+        from .views import ContractAnalyzeView
+        from django.contrib.auth.models import User
+        from rest_framework.test import force_authenticate
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from unittest.mock import patch
+        
+        import fitz
+        doc = fitz.open()
+        doc.new_page()
+        pdf_bytes = doc.write()
+        doc.close()
+        user = User.objects.create_user(username="test_analyzer_metadata_checks", password="password")
+        uploaded_file = SimpleUploadedFile("contract.pdf", pdf_bytes, content_type="application/pdf")
+        
+        factory = RequestFactory()
+        request = factory.post("/api/contracts/analyze/", {"file": uploaded_file})
+        force_authenticate(request, user=user)
+        
+        view = ContractAnalyzeView.as_view()
+        with patch("services.ocr_service.extract_text_from_pdf") as mock_extract:
+            mock_extract.return_value = {
+                "raw_text": "This Agreement is represented by Mr. Yasser Othman Ramadan, in his capacity as General Manager.",
+                "english_text": "This Agreement is represented by Mr. Yasser Othman Ramadan, in his capacity as General Manager.",
+                "arabic_text": "",
+                "language_detected": ["en"],
+                "extraction_source": "digital_pdf",
+                "dominant_strategy": "digital_pdf",
+                "page_strategies": {1: "digital_pdf"},
+                "page_quality_scores": {1: 1.0},
+                "dominant_arabic_region": "right",
+                "page_regions": {1: "right"},
+                "ocr_confidence": 1.0,
+                "page_count": 1,
+                "digital_extraction_ms": 12.0,
+                "ocr_ms": 0.0
+            }
+            response = view(request)
+            
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("digital_extraction_ms", response.data)
+        self.assertNotIn("ocr_ms", response.data)
+        self.assertNotIn("authority_extraction_ms", response.data)
+        self.assertNotIn("total_processing_ms", response.data)
+        self.assertNotIn("extraction_strategy", response.data)
+        self.assertNotIn("page_strategies", response.data)
+        self.assertNotIn("page_quality_scores", response.data)
+        self.assertNotIn("dominant_arabic_region", response.data)
+
+    def test_corrupted_unicode_count(self):
+        from services.ocr_service import count_suspicious_unicode
+        text = "This is clean text."
+        self.assertEqual(count_suspicious_unicode(text), 0)
+        
+        corrupted_text = "Clean text ᒠᓞᓢᓚᓕ" # 5 Canadian Aboriginal chars
+        self.assertEqual(count_suspicious_unicode(corrupted_text), 5)
+        
+        PUA_text = "Clean \uE000\uE001\uE002\uE003\uE004\uE005" # 6 PUA chars
+        self.assertEqual(count_suspicious_unicode(PUA_text), 6)
+
+    def test_healthy_english_corrupted_arabic(self):
+        from unittest.mock import patch, MagicMock
+        import fitz
+        from services.ocr_service import extract_text_from_pdf
+        
+        doc = fitz.open()
+        doc.new_page()
+        pdf_bytes = doc.write()
+        doc.close()
+        
+        with patch("fitz.open") as mock_open:
+            mock_doc = MagicMock()
+            mock_doc.__len__.return_value = 1
+            
+            mock_page = MagicMock()
+            # Clean English on the left, but corrupted Arabic (Canadian Aboriginal Syllabics) on the right
+            mock_page.get_text.return_value = "This Agreement is represented by Mr. Yasser Othman Ramadan, in his capacity as General Manager. ᒠᓞᓢᓚ\u1505 ᒢ\u150C\u14CA\u14DE\u14CD"
+            mock_page.rect.width = 600
+            mock_page.rect.height = 800
+            
+            mock_pixmap = MagicMock()
+            mock_pixmap.tobytes.return_value = b"bytes"
+            mock_page.get_pixmap.return_value = mock_pixmap
+            
+            mock_doc.load_page.return_value = mock_page
+            mock_open.return_value = mock_doc
+            
+            from PIL import Image
+            real_img = Image.new("RGB", (10, 10))
+            
+            with patch("services.ocr_service.get_ocr_engine") as mock_ocr_engine, \
+                 patch("PIL.Image.open", return_value=real_img):
+                mock_ocr = mock_ocr_engine.return_value
+                # Mock OCR lines for split OCR (returns clean Arabic text)
+                mock_ocr.ocr.return_value = [[
+                    [[[0,0], [10,0], [10,10], [0,10]], ("المدير العام", 0.95)]
+                ]]
+                res = extract_text_from_pdf(pdf_bytes)
+                
+        self.assertEqual(res["page_strategies"][1], "corrupted_text_layer")
+        # English is preserved from the digital layer
+        self.assertIn("General Manager", res["english_text"])
+        # Arabic is replaced by OCR text
+        self.assertIn("المدير العام", res["arabic_text"])
+
+    def test_corrupted_text_layer_strategy(self):
+        from unittest.mock import patch, MagicMock
+        import fitz
+        from services.ocr_service import extract_text_from_pdf
+        
+        doc = fitz.open()
+        doc.new_page()
+        pdf_bytes = doc.write()
+        doc.close()
+        
+        with patch("fitz.open") as mock_open:
+            mock_doc = MagicMock()
+            mock_doc.__len__.return_value = 1
+            
+            mock_page = MagicMock()
+            # English is healthy, but more than 5 suspicious Unicode characters are present
+            mock_page.get_text.return_value = "This is a bilingual page with some healthy English text. ᒠᓞᓢᓚ\u1505\u14A2" * 2 # 12 suspicious chars, len > 100
+            mock_page.rect.width = 600
+            mock_page.rect.height = 800
+            
+            mock_pixmap = MagicMock()
+            mock_pixmap.tobytes.return_value = b"bytes"
+            mock_page.get_pixmap.return_value = mock_pixmap
+            
+            mock_doc.load_page.return_value = mock_page
+            mock_open.return_value = mock_doc
+            
+            from PIL import Image
+            real_img = Image.new("RGB", (10, 10))
+            
+            with patch("services.ocr_service.get_ocr_engine") as mock_ocr_engine, \
+                 patch("PIL.Image.open", return_value=real_img):
+                mock_ocr = mock_ocr_engine.return_value
+                mock_ocr.ocr.return_value = [[
+                    [[[0,0], [10,0], [10,10], [0,10]], ("المدير العام", 0.95)]
+                ]]
+                res = extract_text_from_pdf(pdf_bytes)
+                
+        self.assertEqual(res["page_strategies"][1], "corrupted_text_layer")
+
+    def test_page_metadata(self):
+        from unittest.mock import patch, MagicMock
+        import fitz
+        from services.ocr_service import extract_text_from_pdf
+        
+        doc = fitz.open()
+        doc.new_page()
+        pdf_bytes = doc.write()
+        doc.close()
+        
+        with patch("fitz.open") as mock_open:
+            mock_doc = MagicMock()
+            mock_doc.__len__.return_value = 1
+            
+            mock_page = MagicMock()
+            mock_page.get_text.return_value = "This is clean English only page text, no Arabic here." * 10
+            mock_page.rect.width = 600
+            mock_page.rect.height = 800
+            
+            mock_doc.load_page.return_value = mock_page
+            mock_open.return_value = mock_doc
+            
+            res = extract_text_from_pdf(pdf_bytes)
+            
+        self.assertIn("page_metadata", res)
+        self.assertEqual(len(res["page_metadata"]), 1)
+        meta = res["page_metadata"][0]
+        self.assertEqual(meta["page_num"], 1)
+        self.assertEqual(meta["strategy"], "english_only")
+        self.assertGreaterEqual(meta["english_quality_score"], 0.8)
+        self.assertEqual(meta["suspicious_unicode_count"], 0)
+        self.assertEqual(meta["ocr_confidence"], 1.0)
+
+    def test_language_specific_quality_scores(self):
+        from services.ocr_service import evaluate_english_quality, evaluate_arabic_quality
+        
+        # Corrupted Arabic layer text
+        text = "This is clean English text. ᒠᓞᓢᓚ\u1505\u14A2" # English segment has no corruption, Arabic segment has corruption
+        
+        from services.ocr_service import extract_latin_segments, extract_arabic_segments
+        lat_seg = extract_latin_segments(text)
+        ara_seg = extract_arabic_segments(text)
+        
+        # English quality should be evaluated on Latin segment (no corruption) -> high score
+        eng_q = evaluate_english_quality(lat_seg)
+        self.assertGreaterEqual(eng_q["score"], 0.8)
+        self.assertEqual(eng_q["suspicious_unicode_count"], 0)
+        
+        # Arabic quality should be evaluated on Arabic segment (contains the corruption) -> 0.0 score
+        ara_q = evaluate_arabic_quality(ara_seg)
+        self.assertEqual(ara_q["score"], 0.0)
+        self.assertEqual(ara_q["suspicious_unicode_count"], 6)
+
+    def test_corrupted_arabic_layer(self):
+        from unittest.mock import patch, MagicMock
+        import fitz
+        from services.ocr_service import extract_text_from_pdf
+        
+        doc = fitz.open()
+        doc.new_page()
+        pdf_bytes = doc.write()
+        doc.close()
+        
+        with patch("fitz.open") as mock_open:
+            mock_doc = MagicMock()
+            mock_doc.__len__.return_value = 1
+            
+            mock_page = MagicMock()
+            # Corrupted Arabic layer: English is healthy, but Arabic contains Canadian Aboriginal Syllabics
+            mock_page.get_text.return_value = "Contract agreement by Mr. Yasser. ᒠᓞᓢ\u14CD\u1505\u14A2" * 3 # 18 suspicious chars, len > 100
+            mock_page.rect.width = 600
+            mock_page.rect.height = 800
+            
+            mock_pixmap = MagicMock()
+            mock_pixmap.tobytes.return_value = b"bytes"
+            mock_page.get_pixmap.return_value = mock_pixmap
+            
+            mock_doc.load_page.return_value = mock_page
+            mock_open.return_value = mock_doc
+            
+            from PIL import Image
+            real_img = Image.new("RGB", (10, 10))
+            
+            with patch("services.ocr_service.get_ocr_engine") as mock_ocr_engine, \
+                 patch("PIL.Image.open", return_value=real_img):
+                mock_ocr = mock_ocr_engine.return_value
+                mock_ocr.ocr.return_value = [[
+                    [[[0,0], [10,0], [10,10], [0,10]], ("المدير العام", 0.95)]
+                ]]
+                res = extract_text_from_pdf(pdf_bytes)
+                
+        self.assertEqual(res["page_strategies"][1], "corrupted_text_layer")
+        self.assertEqual(res["dominant_strategy"], "corrupted_text_layer")
+
+    def test_full_page_ocr(self):
+        from unittest.mock import patch, MagicMock
+        import fitz
+        from services.ocr_service import extract_text_from_pdf
+        
+        doc = fitz.open()
+        doc.new_page()
+        pdf_bytes = doc.write()
+        doc.close()
+        
+        with patch("fitz.open") as mock_open:
+            mock_doc = MagicMock()
+            mock_doc.__len__.return_value = 1
+            
+            mock_page = MagicMock()
+            # Insufficient text length, triggers full_page_ocr
+            mock_page.get_text.return_value = "Short"
+            mock_pixmap = MagicMock()
+            mock_pixmap.tobytes.return_value = b"bytes"
+            mock_page.get_pixmap.return_value = mock_pixmap
+            
+            mock_doc.load_page.return_value = mock_page
+            mock_open.return_value = mock_doc
+            
+            from PIL import Image
+            real_img = Image.new("RGB", (10, 10))
+            
+            with patch("services.ocr_service.get_ocr_engine") as mock_ocr_engine, \
+                 patch("PIL.Image.open", return_value=real_img):
+                mock_ocr = mock_ocr_engine.return_value
+                mock_ocr.ocr.return_value = [[
+                    [[[0,0], [10,0], [10,10], [0,10]], ("CEO", 0.95)]
+                ]]
+                res = extract_text_from_pdf(pdf_bytes)
+                
+        self.assertEqual(res["page_strategies"][1], "full_page_ocr")
+
+
+class AuthorityExtractionTestCase(TestCase):
+    def test_english_authority_phrases(self):
+        from services.authority_extraction_service import analyze_contract_authority
+        
+        # 1. represented by
+        text1 = "This contract is represented by Dr. Abdulrahman Al-Dosari in his capacity as Procurement Manager."
+        res1 = analyze_contract_authority(text1)
+        self.assertEqual(res1["representative_name_en"], "Dr. Abdulrahman Al-Dosari")
+        self.assertEqual(res1["title_en"], "Procurement Manager")
+        
+        # 2. authorized signatory
+        text2 = "This contract is signed by the authorized signatory Eng. Fahad Suleiman Al-Awaji in his capacity as IT Manager."
+        res2 = analyze_contract_authority(text2)
+        self.assertEqual(res2["representative_name_en"], "Eng. Fahad Suleiman Al-Awaji")
+        self.assertEqual(res2["title_en"], "IT Manager")
+        
+        # 3. acting through
+        text3 = "First Party is acting through Prof. Faisal Salem Al-Harbi in his capacity as Managing Director."
+        res3 = analyze_contract_authority(text3)
+        # Note: Prof. is in REATTACH_PREFIXES_EN, so it is re-attached.
+        self.assertEqual(res3["representative_name_en"], "Prof. Faisal Salem Al-Harbi")
+        self.assertEqual(res3["title_en"], "Managing Director")
+        
+        # 4. herein legally represented by
+        text4 = "First Party is herein legally represented by Mr. John Smith in his capacity as Executive Director."
+        res4 = analyze_contract_authority(text4)
+        # Note: Mr. is not in REATTACH_PREFIXES_EN, so it is stripped.
+        self.assertEqual(res4["representative_name_en"], "John Smith")
+        self.assertEqual(res4["title_en"], "Executive Director")
+
+    def test_arabic_authority_phrases(self):
+        from services.authority_extraction_service import analyze_contract_authority
+        
+        # 1. يمثلها
+        text1 = "الطرف الأول يمثلها الدكتور/ عبدالرحمن الدوسري بصفته مدير المشتريات."
+        res1 = analyze_contract_authority(text1)
+        self.assertEqual(res1["representative_name_ar"], "الدكتور/ عبدالرحمن الدوسري")
+        self.assertEqual(res1["title_ar"], "مدير المشتريات")
+        
+        # 2. ويمثلها
+        text2 = "الطرف الأول ويمثلها المهندس/ فهد سليمان العواجي بصفته مدير تقنية المعلومات."
+        res2 = analyze_contract_authority(text2)
+        self.assertEqual(res2["representative_name_ar"], "المهندس/ فهد سليمان العواجي")
+        self.assertEqual(res2["title_ar"], "مدير تقنية المعلومات")
+        
+        # 3. ويمثلها نظاما
+        text3 = "الطرف الأول ويمثلها نظاماً السيد/ عمر خالد المطيري بصفته العضو المنتدب."
+        res3 = analyze_contract_authority(text3)
+        # Note: السيد is not in REATTACH_PREFIXES_AR, so it is stripped.
+        self.assertEqual(res3["representative_name_ar"], "عمر خالد المطيري")
+        self.assertEqual(res3["title_ar"], "العضو المنتدب")
+        
+        # 4. المفوض بالتوقيع
+        text4 = "الطرف الأول المفوض بالتوقيع الأستاذ/ ماجد خالد الرويلي بصفته المستشار القانوني."
+        res4 = analyze_contract_authority(text4)
+        # Note: الأستاذ is not in REATTACH_PREFIXES_AR, so it is stripped.
+        self.assertEqual(res4["representative_name_ar"], "ماجد خالد الرويلي")
+        self.assertEqual(res4["title_ar"], "المستشار القانوني")
+        
+        # 5. المخول بالتوقيع
+        text5 = "الطرف الأول المخول بالتوقيع الدكتور/ سلمان أحمد المالكي بصفته مدير المشروع."
+        res5 = analyze_contract_authority(text5)
+        self.assertEqual(res5["representative_name_ar"], "الدكتور/ سلمان أحمد المالكي")
+        self.assertEqual(res5["title_ar"], "مدير المشروع")
+
+    def test_api_authority_detected(self):
+        from django.test import RequestFactory
+        from .views import ContractAnalyzeView
+        from django.contrib.auth.models import User
+        from rest_framework.test import force_authenticate
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from unittest.mock import patch
+        import fitz
+        
+        doc = fitz.open()
+        doc.new_page()
+        pdf_bytes = doc.write()
+        doc.close()
+        
+        user = User.objects.create_user(username="test_auth_det_user", password="password")
+        uploaded_file = SimpleUploadedFile("contract_test.pdf", pdf_bytes, content_type="application/pdf")
+        
+        factory = RequestFactory()
+        request = factory.post("/api/contracts/analyze/", {"file": uploaded_file})
+        force_authenticate(request, user=user)
+        view = ContractAnalyzeView.as_view()
+        
+        # Test case 1: Positive extraction -> authority_detected=True
+        with patch("services.ocr_service.extract_text_from_pdf") as mock_extract:
+            mock_extract.return_value = {
+                "raw_text": "represented by Dr. Abdulrahman Al-Dosari in his capacity as Procurement Manager.",
+                "language_detected": ["en"],
+                "extraction_source": "digital_pdf",
+                "ocr_confidence": 1.0,
+                "page_count": 1
+            }
+            response = view(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["authority_detected"])
+        
+        # Test case 2: Negative extraction -> authority_detected=False
+        uploaded_file.seek(0)
+        request2 = factory.post("/api/contracts/analyze/", {"file": uploaded_file})
+        force_authenticate(request2, user=user)
+        with patch("services.ocr_service.extract_text_from_pdf") as mock_extract:
+            mock_extract.return_value = {
+                "raw_text": "This is a simple contract with no representative mentioned anywhere.",
+                "language_detected": ["en"],
+                "extraction_source": "digital_pdf",
+                "ocr_confidence": 1.0,
+                "page_count": 1
+            }
+            response2 = view(request2)
+        self.assertEqual(response2.status_code, 200)
+        self.assertFalse(response2.data["authority_detected"])
+
+
+class PartialExtractionRecoveryTestCase(TestCase):
+    def test_hyphen_normalization(self):
+        from services.authority_extraction_service import canonicalize_name
+        self.assertEqual(canonicalize_name("Al- Dosari"), "Al-Dosari")
+        self.assertEqual(canonicalize_name("Al -Dosari"), "Al-Dosari")
+        self.assertEqual(canonicalize_name("Al - Dosari"), "Al-Dosari")
+
+    def test_arabic_compound_names(self):
+        from services.authority_extraction_service import canonicalize_name
+        self.assertEqual(canonicalize_name("عبد الرحمن"), "عبدالرحمن")
+        self.assertEqual(canonicalize_name("عبد الله"), "عبدالله")
+        self.assertEqual(canonicalize_name("عبدالرحمن"), "عبدالرحمن")
+
+    def test_prefix_restoration(self):
+        from services.authority_extraction_service import extract_english_authority, extract_arabic_authority
+        # English: Dr., Eng., Prof.
+        res_en1 = extract_english_authority("represented by Dr. Yasser Ramadan, in his capacity as CEO")
+        self.assertEqual(res_en1["representative_name"], "Dr. Yasser Ramadan")
+        
+        res_en2 = extract_english_authority("represented by Eng. Yasser Ramadan, in his capacity as CEO")
+        self.assertEqual(res_en2["representative_name"], "Eng. Yasser Ramadan")
+        
+        res_en3 = extract_english_authority("represented by Prof. Yasser Ramadan, in his capacity as CEO")
+        self.assertEqual(res_en3["representative_name"], "Prof. Yasser Ramadan")
+
+        # Arabic: الدكتور/, المهندس/, البروفيسور/
+        res_ar1 = extract_arabic_authority("ويمثلها الدكتور/ ياسر رمضان بصفته/ المدير العام")
+        self.assertEqual(res_ar1["representative_name"], "الدكتور/ ياسر رمضان")
+
+        res_ar2 = extract_arabic_authority("ويمثلها المهندس/ ياسر رمضان بصفته/ المدير العام")
+        self.assertEqual(res_ar2["representative_name"], "المهندس/ ياسر رمضان")
+
+        res_ar3 = extract_arabic_authority("ويمثلها البروفيسور/ ياسر رمضان بصفته/ المدير العام")
+        self.assertEqual(res_ar3["representative_name"], "البروفيسور/ ياسر رمضان")
+
+    def test_trailing_noise_removal(self):
+        from services.authority_extraction_service import canonicalize_name
+        self.assertEqual(canonicalize_name("Yasser Ramadan,"), "Yasser Ramadan")
+        self.assertEqual(canonicalize_name("Yasser Ramadan."), "Yasser Ramadan")
+        self.assertEqual(canonicalize_name("Yasser Ramadan/"), "Yasser Ramadan")
+        self.assertEqual(canonicalize_name("Yasser Ramadan, "), "Yasser Ramadan")
+
+    def test_larger_candidate_window(self):
+        from services.authority_extraction_service import extract_english_authority, extract_arabic_authority
+        # When capacity is absent, fallback window should extract up to 80 chars / 6 words
+        text_en = "represented by Dr. Yasser Othman Salem Al-Harbi who is signing this contract standard draft"
+        res_en = extract_english_authority(text_en)
+        # Verify it captures the name (excluding excess words)
+        self.assertEqual(res_en["representative_name"], "Dr. Yasser Othman Salem Al-Harbi")
+
+        text_ar = "ويمثلها الدكتور/ ياسر عثمان سالم الحربي الذي يوقع هذا العقد"
+        res_ar = extract_arabic_authority(text_ar)
+        self.assertEqual(res_ar["representative_name"], "الدكتور/ ياسر عثمان سالم الحربي")
+
+
+class OCRRecoveryTestCase(TestCase):
+    def test_canonicalization_consistency(self):
+        from services.authority_extraction_service import canonicalize_name
+        from rapidfuzz import fuzz
+        name1 = canonicalize_name("Al Dosari")
+        name2 = canonicalize_name("Al-Dosari")
+        name3 = canonicalize_name("AL DOSARI")
+        
+        # Check token_set_ratio similarity is 100 or >= 85
+        self.assertTrue(fuzz.token_set_ratio(name1, name2) >= 85)
+        self.assertTrue(fuzz.token_set_ratio(name1.lower(), name3.lower()) == 100)
+
+    def test_ocr_character_noise(self):
+        from services.authority_extraction_service import extract_arabic_authority
+        # Expected is الدكتور/ عبدالرحمن الدوسري, but raw text has minor typo "عبد الرحمن الدوشي"
+        # Since it is a self-contained fuzzy comparison, it should still evaluate candidate correctly
+        text = "ويمثلها الدكتور/ عبدالرحمن الدوشي بصفته/ مدير المشتريات"
+        res = extract_arabic_authority(text)
+        self.assertEqual(res["representative_name"], "الدكتور/ عبدالرحمن الدوشي")
+        self.assertTrue(res["name_similarity_score"] >= 0.8)
+
+
+from unittest.mock import patch, MagicMock
+
+class AzureOCRServiceTestCase(TestCase):
+    @patch.dict('os.environ', {
+        'OCR_PROVIDER': 'azure',
+        'AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT': '',
+        'AZURE_DOCUMENT_INTELLIGENCE_KEY': ''
+    })
+    @patch('services.ocr_service.extract_text_with_paddle')
+    def test_missing_credentials_fallback(self, mock_paddle):
+        from services.ocr_service import extract_text_from_pdf
+        mock_paddle.return_value = {"ocr_provider": "paddle", "raw_text": "paddle_fallback"}
+        res = extract_text_from_pdf(b"mockpdf")
+        mock_paddle.assert_called_once()
+        self.assertEqual(res["ocr_provider"], "paddle")
+
+    @patch.dict('os.environ', {
+        'OCR_PROVIDER': 'azure',
+        'AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT': 'https://dummy.azure.com',
+        'AZURE_DOCUMENT_INTELLIGENCE_KEY': 'dummykey'
+    })
+    @patch('services.azure_ocr_service.requests.post')
+    @patch('services.ocr_service.extract_text_with_paddle')
+    def test_http_429_fallback(self, mock_paddle, mock_post):
+        from services.ocr_service import extract_text_from_pdf
+        # Mock 429 response
+        mock_resp = MagicMock()
+        mock_resp.status_code = 429
+        mock_resp.text = "Too Many Requests"
+        mock_post.return_value = mock_resp
+        
+        mock_paddle.return_value = {"ocr_provider": "paddle", "raw_text": "paddle_fallback"}
+        res = extract_text_from_pdf(b"mockpdf")
+        mock_paddle.assert_called_once()
+        self.assertEqual(res["ocr_provider"], "paddle")
+
+    @patch.dict('os.environ', {
+        'OCR_PROVIDER': 'azure',
+        'AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT': 'https://dummy.azure.com',
+        'AZURE_DOCUMENT_INTELLIGENCE_KEY': 'dummykey'
+    })
+    @patch('services.azure_ocr_service.requests.post')
+    @patch('services.azure_ocr_service.requests.get')
+    @patch('services.ocr_service.extract_text_with_paddle')
+    def test_failed_job_fallback(self, mock_paddle, mock_get, mock_post):
+        from services.ocr_service import extract_text_from_pdf
+        # POST response (202 Accepted with Operation-Location)
+        mock_post_resp = MagicMock()
+        mock_post_resp.status_code = 202
+        mock_post_resp.headers = {"Operation-Location": "https://dummy.azure.com/ops/1"}
+        mock_post.return_value = mock_post_resp
+        
+        # GET response (failed status)
+        mock_get_resp = MagicMock()
+        mock_get_resp.status_code = 200
+        mock_get_resp.json.return_value = {"status": "failed", "error": {"message": "Job failed"}}
+        mock_get.return_value = mock_get_resp
+        
+        mock_paddle.return_value = {"ocr_provider": "paddle", "raw_text": "paddle_fallback"}
+        res = extract_text_from_pdf(b"mockpdf")
+        mock_paddle.assert_called_once()
+        self.assertEqual(res["ocr_provider"], "paddle")
+
+    @patch.dict('os.environ', {
+        'OCR_PROVIDER': 'azure',
+        'AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT': 'https://dummy.azure.com',
+        'AZURE_DOCUMENT_INTELLIGENCE_KEY': 'dummykey'
+    })
+    @patch('services.azure_ocr_service.requests.post')
+    @patch('services.ocr_service.extract_text_with_paddle')
+    def test_malformed_response_fallback(self, mock_paddle, mock_post):
+        from services.ocr_service import extract_text_from_pdf
+        # POST response (202 Accepted but missing headers)
+        mock_post_resp = MagicMock()
+        mock_post_resp.status_code = 202
+        mock_post_resp.headers = {}  # missing Operation-Location
+        mock_post.return_value = mock_post_resp
+        
+        mock_paddle.return_value = {"ocr_provider": "paddle", "raw_text": "paddle_fallback"}
+        res = extract_text_from_pdf(b"mockpdf")
+        mock_paddle.assert_called_once()
+        self.assertEqual(res["ocr_provider"], "paddle")
+
+    @patch.dict('os.environ', {
+        'OCR_PROVIDER': 'azure',
+        'AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT': 'https://dummy.azure.com',
+        'AZURE_DOCUMENT_INTELLIGENCE_KEY': 'dummykey'
+    })
+    @patch('services.azure_ocr_service.requests.post')
+    @patch('services.azure_ocr_service.requests.get')
+    def test_successful_azure_extraction(self, mock_get, mock_post):
+        from services.ocr_service import extract_text_from_pdf
+        # POST response (202 Accepted)
+        mock_post_resp = MagicMock()
+        mock_post_resp.status_code = 202
+        mock_post_resp.headers = {"Operation-Location": "https://dummy.azure.com/ops/1"}
+        mock_post.return_value = mock_post_resp
+        
+        # GET response (succeeded)
+        mock_get_resp = MagicMock()
+        mock_get_resp.status_code = 200
+        mock_get_resp.json.return_value = {
+            "status": "succeeded",
+            "analyzeResult": {
+                "content": "This is English text ويمثلها ياسر عثمان بصفته المدير العام",
+                "pages": [
+                    {
+                        "pageNumber": 1,
+                        "words": [
+                            {"content": "This", "confidence": 0.99, "polygon": [0,0,1,0,1,1,0,1]},
+                            {"content": "is", "confidence": 0.95, "polygon": [1,0,2,0,2,1,1,1]}
+                        ],
+                        "lines": [
+                            {"content": "This is English text ويمثلها ياسر عثمان بصفته المدير العام", "polygon": [0,0,10,0,10,2,0,2]}
+                        ]
+                    }
+                ]
+            }
+        }
+        mock_get.return_value = mock_get_resp
+        
+        res = extract_text_from_pdf(b"mockpdf")
+        self.assertEqual(res["ocr_provider"], "azure")
+        self.assertIn("English text", res["raw_text"])
+        self.assertIn("ياسر عثمان", res["arabic_text"])
+        self.assertEqual(res["ocr_confidence"], 0.97)  # (0.99 + 0.95) / 2
+
+    @patch.dict('os.environ', {'OCR_PROVIDER': 'paddle'})
+    @patch('services.ocr_service.extract_text_with_paddle')
+    def test_routing_paddle(self, mock_paddle):
+        from services.ocr_service import extract_text_from_pdf
+        mock_paddle.return_value = {"ocr_provider": "paddle", "raw_text": "paddle_only"}
+        res = extract_text_from_pdf(b"mockpdf")
+        mock_paddle.assert_called_once()
+        self.assertEqual(res["ocr_provider"], "paddle")
+
+    @patch.dict('os.environ', {
+        'OCR_PROVIDER': 'azure',
+        'AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT': 'https://dummy.azure.com',
+        'AZURE_DOCUMENT_INTELLIGENCE_KEY': 'dummykey'
+    })
+    @patch('services.azure_ocr_service.requests.post')
+    @patch('services.azure_ocr_service.requests.get')
+    def test_routing_azure(self, mock_get, mock_post):
+        from services.ocr_service import extract_text_from_pdf
+        
+        # Mock POST & GET for success
+        mock_post_resp = MagicMock()
+        mock_post_resp.status_code = 202
+        mock_post_resp.headers = {"Operation-Location": "https://dummy.azure.com/ops/1"}
+        mock_post.return_value = mock_post_resp
+        
+        mock_get_resp = MagicMock()
+        mock_get_resp.status_code = 200
+        mock_get_resp.json.return_value = {
+            "status": "succeeded",
+            "analyzeResult": {"content": "azure text", "pages": []}
+        }
+        mock_get.return_value = mock_get_resp
+        
+        res = extract_text_from_pdf(b"mockpdf")
+        self.assertEqual(res["ocr_provider"], "azure")
+
+
+class OCRProviderVisibilityTestCase(TestCase):
+    @patch.dict('os.environ', {
+        'OCR_PROVIDER': 'azure',
+        'AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT': 'https://dummy.azure.com',
+        'AZURE_DOCUMENT_INTELLIGENCE_KEY': 'dummykey'
+    })
+    @patch('services.azure_ocr_service.requests.post')
+    @patch('services.azure_ocr_service.requests.get')
+    def test_visibility_successful_azure(self, mock_get, mock_post):
+        from services.ocr_service import extract_text_from_pdf
+        
+        # Mock POST & GET for success
+        mock_post_resp = MagicMock()
+        mock_post_resp.status_code = 202
+        mock_post_resp.headers = {"Operation-Location": "https://dummy.azure.com/ops/1"}
+        mock_post.return_value = mock_post_resp
+        
+        mock_get_resp = MagicMock()
+        mock_get_resp.status_code = 200
+        mock_get_resp.json.return_value = {
+            "status": "succeeded",
+            "analyzeResult": {
+                "content": "azure text", 
+                "pages": [{"pageNumber": 1, "words": [{"content": "azure", "confidence": 0.98}]}]
+            }
+        }
+        mock_get.return_value = mock_get_resp
+        
+        res = extract_text_from_pdf(b"mockpdf")
+        self.assertEqual(res["ocr_provider"], "azure")
+        self.assertEqual(res["fallback_used"], False)
+        self.assertEqual(res["ocr_confidence"], 0.98)
+        self.assertTrue("ocr_ms" in res)
+
+    @patch.dict('os.environ', {'OCR_PROVIDER': 'paddle'})
+    @patch('services.ocr_service.extract_text_with_paddle')
+    def test_visibility_direct_paddle(self, mock_paddle):
+        from services.ocr_service import extract_text_from_pdf
+        mock_paddle.return_value = {
+            "ocr_provider": "paddle",
+            "fallback_used": False,
+            "ocr_confidence": None,
+            "ocr_ms": 120
+        }
+        res = extract_text_from_pdf(b"mockpdf")
+        mock_paddle.assert_called_once_with(b"mockpdf", fallback_used=False)
+        self.assertEqual(res["ocr_provider"], "paddle")
+        self.assertEqual(res["fallback_used"], False)
+        self.assertIsNone(res["ocr_confidence"])
+
+    @patch.dict('os.environ', {
+        'OCR_PROVIDER': 'azure',
+        'AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT': 'https://dummy.azure.com',
+        'AZURE_DOCUMENT_INTELLIGENCE_KEY': 'dummykey'
+    })
+    @patch('services.azure_ocr_service.requests.post')
+    @patch('services.ocr_service.extract_text_with_paddle')
+    def test_visibility_azure_failure_fallback(self, mock_paddle, mock_post):
+        import requests
+        from services.ocr_service import extract_text_from_pdf
+        # Mock Azure POST request failure
+        mock_post.side_effect = requests.exceptions.RequestException("connection error")
+        
+        mock_paddle.return_value = {
+            "ocr_provider": "paddle",
+            "fallback_used": True,
+            "ocr_confidence": None,
+            "ocr_ms": 150
+        }
+        
+        res = extract_text_from_pdf(b"mockpdf")
+        mock_paddle.assert_called_once_with(b"mockpdf", fallback_used=True)
+        self.assertEqual(res["ocr_provider"], "paddle")
+        self.assertEqual(res["fallback_used"], True)
+
+    @patch.dict('os.environ', {'OCR_PROVIDER': 'paddle'})
+    def test_api_response_observability_fields(self):
+        import fitz
+        from django.test import RequestFactory
+        from django.contrib.auth.models import User
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from esign.views import ContractAnalyzeView
+        from rest_framework.test import force_authenticate
+        
+        user = User.objects.create_user(username='test_visibility_user', password='password')
+        factory = RequestFactory()
+        
+        # Generate valid 1-page PDF
+        doc = fitz.open()
+        doc.new_page()
+        pdf_bytes = doc.tobytes()
+        doc.close()
+        
+        uploaded_file = SimpleUploadedFile("contract.pdf", pdf_bytes, content_type="application/pdf")
+        request = factory.post("/api/contracts/analyze/", {"file": uploaded_file})
+        force_authenticate(request, user=user)
+        view = ContractAnalyzeView.as_view()
+        
+        with patch("services.ocr_service.extract_text_from_pdf") as mock_extract:
+            mock_extract.return_value = {
+                "raw_text": "represented by Dr. Yasser Ramadan capacity CEO",
+                "english_text": "represented by Dr. Yasser Ramadan capacity CEO",
+                "arabic_text": "",
+                "language_detected": ["en"],
+                "extraction_source": "digital_pdf",
+                "ocr_confidence": 0.95,
+                "page_count": 1,
+                "ocr_provider": "azure",
+                "fallback_used": False,
+                "ocr_ms": 1250
+            }
+            response = view(request)
+            
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("ocr_provider", response.data)
+        self.assertNotIn("ocr_confidence", response.data)
+        self.assertNotIn("fallback_used", response.data)
+        self.assertNotIn("ocr_ms", response.data)
+        self.assertIn("candidates", response.data)
+
+
+class UnicodeNormalizationTestCase(TestCase):
+    def test_unicode_normalization(self):
+        from services.authority_extraction_service import normalize_text
+        
+        # 1. Yeh compatibility: \u06cc (Persian/Urdu Yeh) -> \u064a (Arabic Yeh)
+        self.assertEqual(normalize_text("المخول بالتوقيع"), normalize_text("المخول بالتوقیع"))
+        
+        # 2. Alef Maksura: \u0649 (Alef Maksura) -> \u064a (Arabic Yeh)
+        self.assertEqual(normalize_text("على"), normalize_text("علي"))
+        
+        # 3. Keheh compatibility: \u06a9 (Persian Keheh) -> \u0643 (Arabic Kaf)
+        self.assertEqual(normalize_text("شركة"), normalize_text("شرکة"))
+        
+        # 4. Tatweel removal: \u0640 (Tatweel)
+        self.assertEqual(normalize_text("المخــول"), normalize_text("المخول"))
+        
+        # 5. Zero width character removal (\u200b, \u200c, \u200d, \ufeff)
+        self.assertEqual(normalize_text("الم\u200bخ\u200cو\u200dل"), normalize_text("المخول"))
+        self.assertEqual(normalize_text("\ufeffالمخول"), normalize_text("المخول"))
+        
+        # 6. NFC normalization (combining characters)
+        import unicodedata
+        text_decomp = unicodedata.normalize("NFD", "شركة")
+        self.assertEqual(normalize_text(text_decomp), normalize_text("شركة"))
+
+
+class RepresentativeCandidateSelectionTestCase(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from esign.models import Document, Envelope
+        
+        self.user = User.objects.create_user(username='candidate_test_user', password='password')
+        self.document = Document.objects.create(file="dummy.pdf", file_hash="dummyhash")
+        self.envelope = Envelope.objects.create(document=self.document, owner=self.user, status='draft')
+
+    def test_case_1_single_representative_auto_added(self):
+        """Case 1: When a single candidate is found, it must be auto-converted to a participant."""
+        from services.recipient_discovery_service import generate_candidates
+        from esign.models import RepresentativeCandidate, Participant
+
+        analysis_result = {
+            "representative_name_en": "Yasser Ramadan",
+            "representative_name_ar": "",
+            "title_en": "General Manager",
+            "title_ar": "",
+            "authority_clause_en": "represented by General Manager",
+            "authority_clause_ar": ""
+        }
+
+        # Clear existing participants/candidates
+        self.envelope.participants.all().delete()
+        RepresentativeCandidate.objects.filter(envelope=self.envelope).delete()
+
+        candidates = generate_candidates(self.envelope, analysis_result)
+        self.assertEqual(len(candidates), 1)
+        
+        # Verify database candidate field states
+        cand = RepresentativeCandidate.objects.get(envelope=self.envelope)
+        self.assertEqual(cand.status, 'converted')
+        self.assertIsNotNone(cand.converted_at)
+        self.assertIsNone(cand.ignored_at)
+
+        # Check that Participant was auto-created
+        participants = self.envelope.participants.all()
+        self.assertEqual(participants.count(), 1)
+        participant = participants.first()
+        self.assertEqual(participant.name, "Yasser Ramadan")
+        self.assertEqual(participant.email, "")
+        self.assertEqual(participant.role, "signer")
+
+    def test_case_2_multiple_representatives_not_auto_added(self):
+        """Case 2: When multiple candidates are found, they are NOT auto-converted but can be confirmed manually."""
+        from services.recipient_discovery_service import generate_candidates
+        from esign.models import RepresentativeCandidate, Participant
+        from django.test import RequestFactory
+        from esign.views import ConfirmCandidatesView
+        from rest_framework.test import force_authenticate
+        import json
+
+        analysis_result = {
+            "representative_name_en": "Yasser Ramadan",
+            "representative_name_ar": "عمر خالد",  # Different names, so they should be added separately
+            "title_en": "General Manager",
+            "title_ar": "العضو المنتدب",
+            "authority_clause_en": "represented by General Manager",
+            "authority_clause_ar": "يمثلها العضو المنتدب"
+        }
+
+        # Clear existing
+        self.envelope.participants.all().delete()
+        RepresentativeCandidate.objects.filter(envelope=self.envelope).delete()
+
+        candidates = generate_candidates(self.envelope, analysis_result)
+        self.assertEqual(len(candidates), 2)
+        
+        # Verify status is pending
+        for c in candidates:
+            self.assertEqual(c.status, 'pending')
+            self.assertIsNone(c.converted_at)
+            self.assertIsNone(c.ignored_at)
+
+        # Ensure no participant was auto-created
+        self.assertEqual(self.envelope.participants.count(), 0)
+
+        # Confirm ONLY one candidate manually via API view
+        factory = RequestFactory()
+        candidate_ids = [candidates[0].id]
+        request = factory.post(
+            f"/api/envelopes/{self.envelope.id}/confirm-candidates/",
+            {"candidate_ids": candidate_ids},
+            content_type="application/json"
+        )
+        force_authenticate(request, user=self.user)
+        view = ConfirmCandidatesView.as_view()
+        response = view(request, envelope_id=self.envelope.id)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.envelope.participants.count(), 1)
+        
+        # Verify statuses post-confirmation
+        c1 = RepresentativeCandidate.objects.get(id=candidates[0].id)
+        c2 = RepresentativeCandidate.objects.get(id=candidates[1].id)
+        self.assertEqual(c1.status, 'converted')
+        self.assertIsNotNone(c1.converted_at)
+        
+        # The other candidate must remain pending (not automatically ignored)
+        self.assertEqual(c2.status, 'pending')
+        self.assertIsNone(c2.converted_at)
+        self.assertIsNone(c2.ignored_at)
+
+    def test_case_3_manual_ignore_candidates(self):
+        """Case 3: Unselected candidates can be explicitly ignored."""
+        from services.recipient_discovery_service import generate_candidates
+        from esign.models import RepresentativeCandidate
+        from django.test import RequestFactory
+        from esign.views import IgnoreCandidatesView
+        from rest_framework.test import force_authenticate
+
+        analysis_result = {
+            "representative_name_en": "Yasser Ramadan",
+            "representative_name_ar": "عمر خالد",
+            "title_en": "General Manager",
+            "title_ar": "العضو المنتدب",
+            "authority_clause_en": "represented by General Manager",
+            "authority_clause_ar": "يمثلها العضو المنتدب"
+        }
+
+        # Clear existing
+        self.envelope.participants.all().delete()
+        RepresentativeCandidate.objects.filter(envelope=self.envelope).delete()
+
+        candidates = generate_candidates(self.envelope, analysis_result)
+        self.assertEqual(len(candidates), 2)
+
+        # Ignore candidates manually via API view
+        factory = RequestFactory()
+        candidate_ids = [c.id for c in candidates]
+        request = factory.post(
+            f"/api/envelopes/{self.envelope.id}/ignore-candidates/",
+            {"candidate_ids": candidate_ids},
+            content_type="application/json"
+        )
+        force_authenticate(request, user=self.user)
+        view = IgnoreCandidatesView.as_view()
+        response = view(request, envelope_id=self.envelope.id)
+
+        self.assertEqual(response.status_code, 200)
+        
+        # Verify candidate states
+        for c in RepresentativeCandidate.objects.filter(envelope=self.envelope):
+            self.assertEqual(c.status, 'ignored')
+            self.assertIsNotNone(c.ignored_at)
+            self.assertIsNone(c.converted_at)
+
+
+class PrefixDeduplicationTestCase(TestCase):
+    def test_collapse_duplicate_prefixes_en(self):
+        from services.authority_extraction_service import collapse_duplicate_prefixes
+        self.assertEqual(collapse_duplicate_prefixes("Dr. Dr. Abdulrahman Al-Dosari", "en"), "Dr. Abdulrahman Al-Dosari")
+        self.assertEqual(collapse_duplicate_prefixes("Dr. Abdulrahman Al-Dosari", "en"), "Dr. Abdulrahman Al-Dosari")
+        self.assertEqual(collapse_duplicate_prefixes("dr dr Abdulrahman Al-Dosari", "en"), "Dr. Abdulrahman Al-Dosari")
+        self.assertEqual(collapse_duplicate_prefixes("Prof. Prof. John Doe", "en"), "Prof. John Doe")
+        self.assertEqual(collapse_duplicate_prefixes("Eng. Eng. Smith", "en"), "Eng. Smith")
+
+    def test_collapse_duplicate_prefixes_ar(self):
+        from services.authority_extraction_service import collapse_duplicate_prefixes
+        self.assertEqual(collapse_duplicate_prefixes("الدكتور/ الدكتور/ عبدالرحمن الدوسري", "ar"), "الدكتور/ عبدالرحمن الدوسري")
+        self.assertEqual(collapse_duplicate_prefixes("الدكتور/ عبدالرحمن الدوسري", "ar"), "الدكتور/ عبدالرحمن الدوسري")
+        self.assertEqual(collapse_duplicate_prefixes("المهندس المهندس محمد", "ar"), "المهندس/ محمد")
+
+    def test_restore_prefix_en(self):
+        from services.authority_extraction_service import restore_prefix
+        # Already has prefix
+        self.assertEqual(restore_prefix("Dr.", "Dr. Abdulrahman Al-Dosari", "en"), "Dr. Abdulrahman Al-Dosari")
+        self.assertEqual(restore_prefix("Dr", "Dr. Abdulrahman Al-Dosari", "en"), "Dr. Abdulrahman Al-Dosari")
+        self.assertEqual(restore_prefix("dr", "dr Abdulrahman Al-Dosari", "en"), "dr Abdulrahman Al-Dosari")
+        
+        # Missing prefix
+        self.assertEqual(restore_prefix("Dr.", "Abdulrahman Al-Dosari", "en"), "Dr. Abdulrahman Al-Dosari")
+        self.assertEqual(restore_prefix("Dr", "Abdulrahman Al-Dosari", "en"), "Dr. Abdulrahman Al-Dosari")
+        
+        # Prevent duplication when prefix is restored to a name already containing it
+        self.assertEqual(restore_prefix("Dr.", "Dr. Dr. Abdulrahman Al-Dosari", "en"), "Dr. Abdulrahman Al-Dosari")
+
+    def test_restore_prefix_ar(self):
+        from services.authority_extraction_service import restore_prefix
+        # Already has prefix
+        self.assertEqual(restore_prefix("الدكتور/", "الدكتور/ عبدالرحمن الدوسري", "ar"), "الدكتور/ عبدالرحمن الدوسري")
+        self.assertEqual(restore_prefix("الدكتور", "الدكتور/ عبدالرحمن الدوسري", "ar"), "الدكتور/ عبدالرحمن الدوسري")
+        
+        # Missing prefix
+        self.assertEqual(restore_prefix("الدكتور", "عبدالرحمن الدوسري", "ar"), "الدكتور/ عبدالرحمن الدوسري")
+        self.assertEqual(restore_prefix("الدكتور/", "عبدالرحمن الدوسري", "ar"), "الدكتور/ عبدالرحمن الدوسري")
+        
+        # Prevent duplication when prefix is restored to a name already containing it
+        self.assertEqual(restore_prefix("الدكتور", "الدكتور/ الدكتور/ عبدالرحمن الدوسري", "ar"), "الدكتور/ عبدالرحمن الدوسري")
+
+    def test_end_to_end_extraction_deduplicates_en(self):
+        from services.authority_extraction_service import extract_english_authority
+        # Test contract snippet where the candidate has "Dr. Dr."
+        snippet = "Signed by the authorized signatory Dr. Dr. Abdulrahman Al-Dosari in his capacity as General Manager"
+        res = extract_english_authority(snippet)
+        self.assertEqual(res["representative_name"], "Dr. Abdulrahman Al-Dosari")
+
+    def test_end_to_end_extraction_deduplicates_ar(self):
+        from services.authority_extraction_service import extract_arabic_authority
+        # Test contract snippet where the candidate has "الدكتور/ الدكتور/"
+        snippet = "تم التوقيع بواسطة المفوض بالتوقيع الدكتور/ الدكتور/ عبدالرحمن الدوسري بصفته المدير العام"
+        res = extract_arabic_authority(snippet)
+        self.assertEqual(res["representative_name"], "الدكتور/ عبدالرحمن الدوسري")
+
+
+class DuplicatePrefixCollapseTestCase(TestCase):
+    def test_collapse_duplicate_prefixes_en(self):
+        from services.authority_extraction_service import collapse_duplicate_prefixes
+        self.assertEqual(
+            collapse_duplicate_prefixes("Dr. Dr. Abdulrahman Al-Dosari"),
+            "Dr. Abdulrahman Al-Dosari"
+        )
+        self.assertEqual(
+            collapse_duplicate_prefixes("Eng. Eng. Ahmed Al-Qahtani"),
+            "Eng. Ahmed Al-Qahtani"
+        )
+        # Test mixed case and punctuation
+        self.assertEqual(
+            collapse_duplicate_prefixes("dr dr. John Doe"),
+            "Dr. John Doe"
+        )
+
+    def test_collapse_duplicate_prefixes_ar(self):
+        from services.authority_extraction_service import collapse_duplicate_prefixes
+        self.assertEqual(
+            collapse_duplicate_prefixes("الدكتور/ الدكتور/ عبدالرحمن الدوسري"),
+            "الدكتور/ عبدالرحمن الدوسري"
+        )
+        self.assertEqual(
+            collapse_duplicate_prefixes("المهندس/ المهندس/ أحمد القحطاني"),
+            "المهندس/ أحمد القحطاني"
+        )
+        # Test mixed punctuation/slashes
+        self.assertEqual(
+            collapse_duplicate_prefixes("الدكتور الدكتور/ عبدالرحمن"),
+            "الدكتور/ عبدالرحمن"
+        )
+
+    def test_collapse_in_clauses(self):
+        from services.authority_extraction_service import collapse_duplicate_prefixes
+        self.assertEqual(
+            collapse_duplicate_prefixes("authorized signatory Dr. Dr. Abdulrahman Al-Dosari"),
+            "authorized signatory Dr. Abdulrahman Al-Dosari"
+        )
+        self.assertEqual(
+            collapse_duplicate_prefixes("المخول بالتوقيع الدكتور/ الدكتور/ عبدالرحمن الدوسري"),
+            "المخول بالتوقيع الدكتور/ عبدالرحمن الدوسري"
+        )
+
+    def test_preserves_legitimate_later_occurrences(self):
+        from services.authority_extraction_service import collapse_duplicate_prefixes
+        # Legitimate later occurrences of prefixes should NOT be collapsed
+        self.assertEqual(
+            collapse_duplicate_prefixes("Dr. Abdulrahman met Dr. Ahmed"),
+            "Dr. Abdulrahman met Dr. Ahmed"
+        )
+
+
+class SignerVerificationTestCase(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from esign.models import Document, Envelope, Participant, ParticipantToken
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        # 1. Setup users & envelope
+        self.owner = User.objects.create_user(username="owner", password="password")
+        self.other_user = User.objects.create_user(username="other", password="password")
+        self.document = Document.objects.create(file="test.pdf", file_hash="hash")
+        self.envelope = Envelope.objects.create(document=self.document, owner=self.owner)
+        
+        # 2. Setup participant & token
+        self.participant = Participant.objects.create(
+            envelope=self.envelope,
+            name="Alice Signer",
+            email="alice@example.com",
+            role="signer",
+            step_number=1,
+            order=1,
+        )
+        self.token_obj = ParticipantToken.objects.create(
+            participant=self.participant,
+            expires_at=timezone.now() + timedelta(hours=24),
+            is_used=False
+        )
+
+    def generate_mock_image(self, name="test.png", size=(100, 100), bytes_length=None):
+        from io import BytesIO
+        from PIL import Image
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        
+        file_obj = BytesIO()
+        image = Image.new("RGB", size, color="blue")
+        image.save(file_obj, format="PNG")
+        data = file_obj.getvalue()
+        
+        if bytes_length:
+            data = data + b"0" * (bytes_length - len(data))
+            
+        return SimpleUploadedFile(name, data, content_type="image/png")
+
+    def test_signer_verification_model_transitions(self):
+        """Verify state machine constraints on SignerVerification status."""
+        from esign.models import SignerVerification
+        from esign.constants import (
+            VERIFICATION_STATUS_PENDING,
+            VERIFICATION_STATUS_ID_UPLOADED,
+            VERIFICATION_STATUS_SELFIE_UPLOADED,
+            VERIFICATION_STATUS_UNDER_REVIEW,
+            VERIFICATION_STATUS_VERIFIED,
+            VERIFICATION_STATUS_FAILED,
+        )
+        from django.core.exceptions import ValidationError
+        
+        verification = SignerVerification.objects.create(participant=self.participant)
+        self.assertEqual(verification.status, VERIFICATION_STATUS_PENDING)
+        
+        # Invalid transition: pending -> selfie_uploaded
+        with self.assertRaises(ValidationError):
+            verification.transition_to(VERIFICATION_STATUS_SELFIE_UPLOADED)
+            
+        # Valid: pending -> id_uploaded
+        verification.transition_to(VERIFICATION_STATUS_ID_UPLOADED)
+        self.assertEqual(verification.status, VERIFICATION_STATUS_ID_UPLOADED)
+        
+        # Valid: id_uploaded -> selfie_uploaded
+        verification.transition_to(VERIFICATION_STATUS_SELFIE_UPLOADED)
+        self.assertEqual(verification.status, VERIFICATION_STATUS_SELFIE_UPLOADED)
+        
+        # Valid: selfie_uploaded -> under_review
+        verification.transition_to(VERIFICATION_STATUS_UNDER_REVIEW)
+        self.assertEqual(verification.status, VERIFICATION_STATUS_UNDER_REVIEW)
+        
+        # Valid: under_review -> verified
+        verification.transition_to(VERIFICATION_STATUS_VERIFIED)
+        self.assertEqual(verification.status, VERIFICATION_STATUS_VERIFIED)
+
+    def test_verification_event_immutability(self):
+        """Verify that VerificationEvent is strictly append-only."""
+        from esign.models import SignerVerification, VerificationEvent
+        from esign.constants import EVENT_ID_FRONT_UPLOADED
+        from django.core.exceptions import ValidationError
+        
+        verification = SignerVerification.objects.create(participant=self.participant)
+        event = VerificationEvent.objects.create(
+            signer_verification=verification,
+            event_type=EVENT_ID_FRONT_UPLOADED
+        )
+        self.assertIsNotNone(event.pk)
+        
+        # Try to modify
+        event.event_type = "SELFIE_UPLOADED"
+        with self.assertRaises(ValidationError):
+            event.save()
+            
+        # Try to delete
+        with self.assertRaises(ValidationError):
+            event.delete()
+
+    def test_api_unauthorized_access(self):
+        """Verify that requests without token or wrong tokens are rejected (IDOR protection)."""
+        from rest_framework.test import APIClient
+        client = APIClient()
+        
+        # Request details without credentials -> 403
+        response = client.get(f"/api/participants/{self.participant.id}/verification/")
+        self.assertEqual(response.status_code, 403)
+        
+        # Request details with invalid token -> 403
+        response = client.get(
+            f"/api/participants/{self.participant.id}/verification/",
+            HTTP_X_PARTICIPANT_TOKEN="invalid-uuid"
+        )
+        self.assertEqual(response.status_code, 403)
+        
+        # Request details as authenticated non-owner -> 403
+        client.force_authenticate(user=self.other_user)
+        response = client.get(f"/api/participants/{self.participant.id}/verification/")
+        self.assertEqual(response.status_code, 403)
+
+    def test_api_authorized_owner_access(self):
+        """Verify that the envelope owner can access details and upload verification documents."""
+        from rest_framework.test import APIClient
+        client = APIClient()
+        client.force_authenticate(user=self.owner)
+        
+        # GET details -> 200 (returns default pending status)
+        response = client.get(f"/api/participants/{self.participant.id}/verification/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], "pending")
+        self.assertEqual(response.data["masked_national_id"], "")
+
+    def test_full_verification_flow_api(self):
+        """Verify complete upload sequence (ID -> Selfie -> Under Review) via public token headers."""
+        from rest_framework.test import APIClient
+        client = APIClient()
+        token_str = str(self.token_obj.token)
+        
+        # Mock files
+        front_img = self.generate_mock_image("front.png")
+        back_img = self.generate_mock_image("back.png")
+        selfie_img = self.generate_mock_image("selfie.png")
+        
+        # 1. Upload ID
+        payload_id = {
+            "national_id_number": "1234567890",
+            "front_image": front_img,
+            "back_image": back_img,
+        }
+        response = client.post(
+            f"/api/participants/{self.participant.id}/verification/id/",
+            payload_id,
+            format="multipart",
+            HTTP_X_PARTICIPANT_TOKEN=token_str
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], "id_uploaded")
+        self.assertEqual(response.data["masked_national_id"], "******7890")
+        
+        # Verify events logged
+        from esign.models import VerificationEvent
+        from esign.constants import EVENT_ID_FRONT_UPLOADED, EVENT_ID_BACK_UPLOADED
+        events = list(VerificationEvent.objects.values_list("event_type", flat=True))
+        self.assertIn(EVENT_ID_FRONT_UPLOADED, events)
+        self.assertIn(EVENT_ID_BACK_UPLOADED, events)
+        
+        # 2. Upload Selfie
+        payload_selfie = {
+            "selfie_image": selfie_img,
+        }
+        response = client.post(
+            f"/api/participants/{self.participant.id}/verification/selfie/",
+            payload_selfie,
+            format="multipart",
+            HTTP_X_PARTICIPANT_TOKEN=token_str
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], "under_review")
+        
+        # Verify details endpoint output (hides full ID number)
+        response_detail = client.get(
+            f"/api/participants/{self.participant.id}/verification/",
+            HTTP_X_PARTICIPANT_TOKEN=token_str
+        )
+        self.assertEqual(response_detail.status_code, 200)
+        self.assertEqual(response_detail.data["status"], "under_review")
+        self.assertEqual(response_detail.data["masked_national_id"], "******7890")
+        self.assertNotIn("national_id_number", response_detail.data)
+
+    def test_file_type_and_size_validation(self):
+        """Verify that files exceeding size limits or having invalid extensions/mimetypes are rejected."""
+        from rest_framework.test import APIClient
+        client = APIClient()
+        token_str = str(self.token_obj.token)
+        
+        # 1. Test image too large (>5MB)
+        large_img = self.generate_mock_image("large.png", bytes_length=6 * 1024 * 1024)
+        back_img = self.generate_mock_image("back.png")
+        payload = {
+            "national_id_number": "1234567890",
+            "front_image": large_img,
+            "back_image": back_img,
+        }
+        response = client.post(
+            f"/api/participants/{self.participant.id}/verification/id/",
+            payload,
+            format="multipart",
+            HTTP_X_PARTICIPANT_TOKEN=token_str
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Image size exceeds the 5MB limit", response.data["detail"])
+        
+        # 2. Test invalid extension (.txt)
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        bad_extension_file = SimpleUploadedFile("front.txt", b"fake file content", content_type="text/plain")
+        payload = {
+            "national_id_number": "1234567890",
+            "front_image": bad_extension_file,
+            "back_image": back_img,
+        }
+        response = client.post(
+            f"/api/participants/{self.participant.id}/verification/id/",
+            payload,
+            format="multipart",
+            HTTP_X_PARTICIPANT_TOKEN=token_str
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Unsupported file format", response.data["detail"])
+
+        # 3. Test corrupted/fake image (correct extension but invalid headers)
+        fake_img_file = SimpleUploadedFile("front.png", b"fake binary content", content_type="image/png")
+        payload = {
+            "national_id_number": "1234567890",
+            "front_image": fake_img_file,
+            "back_image": back_img,
+        }
+        response = client.post(
+            f"/api/participants/{self.participant.id}/verification/id/",
+            payload,
+            format="multipart",
+            HTTP_X_PARTICIPANT_TOKEN=token_str
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Invalid image format or corrupted image", response.data["detail"])
+
+
+from unittest.mock import patch
+import unittest
+
+class NationalIdentityOCRTestCase(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from esign.models import Document, Envelope, Participant, ParticipantToken
+        from django.utils import timezone
+        from datetime import timedelta
+
+        # 1. Setup users & envelope
+        self.owner = User.objects.create_user(username="owner", password="password")
+        self.other_user = User.objects.create_user(username="other", password="password")
+        self.document = Document.objects.create(file="test.pdf", file_hash="hash")
+        self.envelope = Envelope.objects.create(document=self.document, owner=self.owner)
+
+        # 2. Setup participant & token
+        self.participant = Participant.objects.create(
+            envelope=self.envelope,
+            name="Alice Signer",
+            role="signer",
+            step_number=1,
+            order=1,
+        )
+        self.token_obj = ParticipantToken.objects.create(
+            participant=self.participant,
+            expires_at=timezone.now() + timedelta(hours=24),
+            is_used=False
+        )
+
+    def generate_mock_image(self, name="test.png", size=(100, 100)):
+        from io import BytesIO
+        from PIL import Image
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        file_obj = BytesIO()
+        image = Image.new("RGB", size, color="blue")
+        image.save(file_obj, format="PNG")
+        data = file_obj.getvalue()
+        return SimpleUploadedFile(name, data, content_type="image/png")
+
+    @patch("services.national_identity_service.extract_text_with_azure")
+    def test_successful_ocr_extraction(self, mock_extract):
+        """Verify successful OCR extraction, model persistence, masking, and event logging."""
+        mock_extract.return_value = {
+            "raw_text": "Saudi National ID\nالاسم: محمد بن سلمان\nID: 1023456789\nتاريخ الميلاد: 1985-08-31\nانتهاء: 2030-08-31",
+            "ocr_confidence": 0.98,
+            "ocr_provider": "azure"
+        }
+
+        # 1. Upload national ID
+        from services.signer_verification_service import upload_national_id
+        verification = upload_national_id(
+            self.participant,
+            "1023456789",
+            self.generate_mock_image("front.png"),
+            self.generate_mock_image("back.png")
+        )
+
+        # 2. Trigger extraction
+        from rest_framework.test import APIClient
+        client = APIClient()
+        token_str = str(self.token_obj.token)
+
+        response = client.post(
+            f"/api/participants/{self.participant.id}/verification/extract-id/",
+            HTTP_X_PARTICIPANT_TOKEN=token_str
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["full_name"], "محمد بن سلمان")
+        self.assertEqual(response.data["masked_national_id"], "******6789")
+        self.assertEqual(response.data["date_of_birth"], "1985-08-31")
+        self.assertEqual(response.data["expiry_date"], "2030-08-31")
+        self.assertEqual(response.data["document_type"], "saudi_id")
+
+        # 3. Assert database state
+        from esign.models import NationalIdentity, VerificationEvent
+        from esign.constants import EVENT_ID_OCR_STARTED, EVENT_ID_OCR_COMPLETED
+
+        national_identity = NationalIdentity.objects.get(verification=verification)
+        self.assertEqual(national_identity.extraction_status, "success")
+        self.assertEqual(national_identity.national_id_number, "1023456789")
+        expected_raw_text = f"{mock_extract.return_value['raw_text']}\n{mock_extract.return_value['raw_text']}"
+        self.assertEqual(national_identity.raw_text, expected_raw_text)
+        self.assertEqual(national_identity.ocr_confidence, 0.98)
+        self.assertIsNotNone(national_identity.extracted_at)
+
+        # Verify events
+        events = list(VerificationEvent.objects.filter(signer_verification=verification).values_list("event_type", flat=True))
+        self.assertIn(EVENT_ID_OCR_STARTED, events)
+        self.assertIn(EVENT_ID_OCR_COMPLETED, events)
+
+    @patch("services.national_identity_service.extract_text_with_azure")
+    def test_empty_ocr_extraction(self, mock_extract):
+        """Verify graceful failure when OCR returns empty text."""
+        mock_extract.return_value = {
+            "raw_text": "",
+            "ocr_confidence": 0.5,
+            "ocr_provider": "azure"
+        }
+
+        # Upload national ID
+        from services.signer_verification_service import upload_national_id
+        verification = upload_national_id(
+            self.participant,
+            "1023456789",
+            self.generate_mock_image("front.png"),
+            None
+        )
+
+        # Trigger extraction
+        from rest_framework.test import APIClient
+        client = APIClient()
+        token_str = str(self.token_obj.token)
+
+        response = client.post(
+            f"/api/participants/{self.participant.id}/verification/extract-id/",
+            HTTP_X_PARTICIPANT_TOKEN=token_str
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("No text detected", response.data["detail"])
+
+        # Check DB
+        from esign.models import NationalIdentity, VerificationEvent
+        from esign.constants import EVENT_ID_OCR_FAILED
+
+        national_identity = NationalIdentity.objects.get(verification=verification)
+        self.assertEqual(national_identity.extraction_status, "failed")
+        self.assertEqual(national_identity.failure_reason, "no_text_detected")
+
+        events = list(VerificationEvent.objects.filter(signer_verification=verification).values_list("event_type", flat=True))
+        self.assertIn(EVENT_ID_OCR_FAILED, events)
+
+    def test_missing_image_extraction(self):
+        """Verify validation error when front ID image has not been uploaded."""
+        from rest_framework.test import APIClient
+        client = APIClient()
+        token_str = str(self.token_obj.token)
+
+        response = client.post(
+            f"/api/participants/{self.participant.id}/verification/extract-id/",
+            HTTP_X_PARTICIPANT_TOKEN=token_str
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Front ID image is required", response.data["detail"])
+
+    def test_authorization_for_extraction(self):
+        """Verify that unauthorized tokens are rejected and envelope owners can access."""
+        from rest_framework.test import APIClient
+        client = APIClient()
+
+        # No token -> 403
+        response = client.post(f"/api/participants/{self.participant.id}/verification/extract-id/")
+        self.assertEqual(response.status_code, 403)
+
+        # Invalid token -> 403
+        response = client.post(
+            f"/api/participants/{self.participant.id}/verification/extract-id/",
+            HTTP_X_PARTICIPANT_TOKEN="invalid-uuid-value"
+        )
+        self.assertEqual(response.status_code, 403)
+
+        # Envelope owner -> 400 (bypasses auth, but fails due to missing image)
+        client.force_authenticate(user=self.owner)
+        response = client.post(f"/api/participants/{self.participant.id}/verification/extract-id/")
+        self.assertEqual(response.status_code, 400)
+
+    def test_original_bytes_preserved(self):
+        """Verifies that original bytes are not mutated by preprocess_identity_image, preprocessing is non-destructive, and returned bytes are valid image data."""
+        from services.national_identity_service import preprocess_identity_image
+        from PIL import Image
+        from io import BytesIO
+        
+        # 1. Generate standard mock image bytes
+        file_obj = BytesIO()
+        image = Image.new("RGB", (200, 150), color="red")
+        image.save(file_obj, format="PNG")
+        original_bytes = file_obj.getvalue()
+        
+        original_bytes_copy = bytes(original_bytes)
+        
+        # 2. Call preprocess_identity_image
+        result = preprocess_identity_image(original_bytes)
+        
+        # 3. Assert original bytes remain unchanged
+        self.assertEqual(original_bytes, original_bytes_copy)
+        
+        # 4. Verify returned bytes and metadata structure
+        self.assertIn("processed_bytes", result)
+        self.assertIn("metadata", result)
+        
+        processed_bytes = result["processed_bytes"]
+        metadata = result["metadata"]
+        
+        self.assertIsNotNone(processed_bytes)
+        self.assertTrue(len(processed_bytes) > 0)
+        
+        # Returned bytes are valid image data
+        try:
+            with Image.open(BytesIO(processed_bytes)) as final_img:
+                final_img.verify()
+        except Exception as e:
+            self.fail(f"Returned bytes are not valid image data: {e}")
+            
+        # Check metadata
+        self.assertFalse(metadata["fallback_used"])
+        self.assertFalse(metadata["pdf_bypass"])
+        self.assertTrue(metadata["autocontrast_applied"])
+        self.assertEqual(metadata["contrast_factor"], 1.3)
+        self.assertEqual(metadata["sharpness_factor"], 1.3)
+        
+        # Test PDF bypass specifically
+        pdf_bytes = b"%PDF-1.4 mock pdf data"
+        pdf_result = preprocess_identity_image(pdf_bytes)
+        self.assertEqual(pdf_result["processed_bytes"], pdf_bytes)
+        self.assertTrue(pdf_result["metadata"]["pdf_bypass"])
+        self.assertFalse(pdf_result["metadata"]["fallback_used"])
+        
+        # Test fallback gracefully when corrupted bytes are passed
+        corrupted_bytes = b"corrupted random data"
+        fallback_result = preprocess_identity_image(corrupted_bytes)
+        self.assertEqual(fallback_result["processed_bytes"], corrupted_bytes)
+        self.assertTrue(fallback_result["metadata"]["fallback_used"])
+        self.assertFalse(fallback_result["metadata"]["pdf_bypass"])
+
+
+
+class IdentityParserRefinementTestCase(TestCase):
+    def test_aadhaar_parsing(self):
+        """Verify Aadhaar detection, filtering, DOB parse and formatted number extraction."""
+        from services.national_identity_service import detect_document_type, parse_identity_document
+        raw_text = (
+            "Government of India\n"
+            "भारत सरकार\n"
+            "Rahul Gandhi\n"
+            "DOB: 19/06/1970\n"
+            "Male\n"
+            "9411 3106 1656\n"
+            "UIDAI"
+        )
+        doc_type = detect_document_type(raw_text)
+        self.assertEqual(doc_type, "aadhaar")
+
+        parsed = parse_identity_document(raw_text)
+        self.assertEqual(parsed["document_type"], "aadhaar")
+        self.assertEqual(parsed["full_name"], "Rahul Gandhi")
+        self.assertEqual(parsed["national_id_number"], "941131061656")
+        self.assertEqual(parsed["date_of_birth"].isoformat(), "1970-06-19")
+        self.assertIsNone(parsed["expiry_date"])
+
+    def test_saudi_id_parsing(self):
+        """Verify Saudi National ID detection, Arabic candidate name filtering, and ID formats."""
+        from services.national_identity_service import detect_document_type, parse_identity_document
+        raw_text = (
+            "Kingdom of Saudi Arabia\n"
+            "الهوية الوطنية\n"
+            "الاسم: محمد بن سلمان\n"
+            "الرقم: 1023456789\n"
+            "تاريخ الميلاد: 1985-08-31\n"
+            "انتهاء: 2030-08-31"
+        )
+        doc_type = detect_document_type(raw_text)
+        self.assertEqual(doc_type, "saudi_id")
+
+        parsed = parse_identity_document(raw_text)
+        self.assertEqual(parsed["document_type"], "saudi_id")
+        self.assertEqual(parsed["full_name"], "محمد بن سلمان")
+        self.assertEqual(parsed["national_id_number"], "1023456789")
+        self.assertEqual(parsed["date_of_birth"].isoformat(), "1985-08-31")
+        self.assertEqual(parsed["expiry_date"].isoformat(), "2030-08-31")
+
+    def test_iqama_parsing(self):
+        """Verify Iqama permit detection, name filtering, and 10-digit number matching (starting with 2)."""
+        from services.national_identity_service import detect_document_type, parse_identity_document
+        raw_text = (
+            "Residence Permit\n"
+            "إقامة\n"
+            "الاسم: جون دو\n"
+            "رقم الإقامة: 2023456789\n"
+            "تاريخ الميلاد: 1990-01-01\n"
+            "تاريخ الانتهاء: 2028-12-31"
+        )
+        doc_type = detect_document_type(raw_text)
+        self.assertEqual(doc_type, "iqama")
+
+        parsed = parse_identity_document(raw_text)
+        self.assertEqual(parsed["document_type"], "iqama")
+        self.assertEqual(parsed["full_name"], "جون دو")
+        self.assertEqual(parsed["national_id_number"], "2023456789")
+        self.assertEqual(parsed["date_of_birth"].isoformat(), "1990-01-01")
+        self.assertEqual(parsed["expiry_date"].isoformat(), "2028-12-31")
+
+    def test_passport_parsing(self):
+        """Verify Passport detection (includes MRZ check) and birth/expiry date assignments."""
+        from services.national_identity_service import detect_document_type, parse_identity_document
+        raw_text = (
+            "Passport\n"
+            "جواز السفر\n"
+            "P<SAUDI<<ALADDIN<<<<<<<<<<<<<<<<<<<\n"
+            "Name: Aladdin\n"
+            "Number: A12345678\n"
+            "DOB: 1995-05-15\n"
+            "Expiry: 2035-05-15"
+        )
+        doc_type = detect_document_type(raw_text)
+        self.assertEqual(doc_type, "passport")
+
+        parsed = parse_identity_document(raw_text)
+        self.assertEqual(parsed["document_type"], "passport")
+        self.assertEqual(parsed["full_name"], "Aladdin")
+        self.assertEqual(parsed["national_id_number"], "A12345678")
+        self.assertEqual(parsed["date_of_birth"].isoformat(), "1995-05-15")
+        self.assertEqual(parsed["expiry_date"].isoformat(), "2035-05-15")
+
+    def test_unknown_document_parsing(self):
+        """Verify that unstructured documents gracefully fallback to generic parser and 'unknown' type."""
+        from services.national_identity_service import detect_document_type, parse_identity_document
+        raw_text = (
+            "Random Unstructured Document\n"
+            "Some text line\n"
+            "Unrecognized layout\n"
+            "9999-99-99-invalid-date\n"
+            "Reference: 5555555555"
+        )
+        doc_type = detect_document_type(raw_text)
+        self.assertEqual(doc_type, "unknown")
+
+        parsed = parse_identity_document(raw_text)
+        self.assertEqual(parsed["document_type"], "unknown")
+        self.assertEqual(parsed["national_id_number"], "5555555555")
+        self.assertIsNone(parsed["date_of_birth"])
+        self.assertIsNone(parsed["expiry_date"])
+
+
+class IdentityCandidateEngineTestCase(TestCase):
+    def test_name_candidates_extraction(self):
+        """Verify extraction of English, Arabic, and mixed-language name candidates, and check reasons/normalized values."""
+        from services.identity_candidate_service import generate_name_candidates
+        
+        # Test English name
+        text_en = "Name: Mohammed Hamza Rahamathulla\nSome irrelevant line 123"
+        candidates = generate_name_candidates(text_en)
+        self.assertTrue(len(candidates) >= 1)
+        names = [c.value for c in candidates]
+        self.assertIn("Mohammed Hamza Rahamathulla", names)
+        
+        cand = [c for c in candidates if c.value == "Mohammed Hamza Rahamathulla"][0]
+        self.assertEqual(cand.source_line, "Name: Mohammed Hamza Rahamathulla")
+        self.assertIn("latin_name", cand.reasons)
+        self.assertIn("multi_word", cand.reasons)
+        self.assertEqual(cand.normalized_value, "Mohammed Hamza Rahamathulla")
+
+        # Test Arabic name
+        text_ar = "الاسم: عبدالرحمن الدوسري\n12345"
+        candidates = generate_name_candidates(text_ar)
+        names = [c.value for c in candidates]
+        self.assertIn("عبدالرحمن الدوسري", names)
+        
+        cand = [c for c in candidates if c.value == "عبدالرحمن الدوسري"][0]
+        self.assertEqual(cand.source_line, "الاسم: عبدالرحمن الدوسري")
+        self.assertIn("arabic_name", cand.reasons)
+        self.assertIn("multi_word", cand.reasons)
+
+        # Test Mixed language name
+        text_mixed = "Name: Yasser عمر\nLine 2"
+        candidates = generate_name_candidates(text_mixed)
+        names = [c.value for c in candidates]
+        self.assertIn("Yasser عمر", names)
+        
+        cand = [c for c in candidates if c.value == "Yasser عمر"][0]
+        self.assertIn("mixed_language", cand.reasons)
+
+        # Ensure multiple candidates are preserved
+        text_multi = "Name: Aladdin\nالاسم: عمر خالد"
+        candidates = generate_name_candidates(text_multi)
+        names = [c.value for c in candidates]
+        self.assertIn("Aladdin", names)
+        self.assertIn("عمر خالد", names)
+        self.assertEqual(len(candidates), 4)
+
+    def test_identifier_candidates(self):
+        """Verify generic identifier candidate matching, normalization, type classification, and context retention."""
+        from services.identity_candidate_service import generate_identifier_candidates
+        
+        text = (
+            "Saudi National ID: 1023456789\n"
+            "Iqama Number: 2023456789\n"
+            "Aadhaar Number: 9411 3106 1656\n"
+            "Passport Number: A12345678\n"
+            "Random Identifier: 555-5555"
+        )
+        
+        candidates = generate_identifier_candidates(text)
+        
+        # We expect at least the national_ids and passport
+        types = [c.identifier_type for c in candidates]
+        self.assertIn("national_id", types)
+        self.assertIn("passport", types)
+        
+        # Aadhaar check
+        aadhaar_cand = [c for c in candidates if c.normalized_value == "941131061656"][0]
+        self.assertEqual(aadhaar_cand.identifier_type, "national_id")
+        self.assertEqual(aadhaar_cand.source_line, "Aadhaar Number: 9411 3106 1656")
+        
+        # Saudi ID check
+        saudi_cand = [c for c in candidates if c.normalized_value == "1023456789"][0]
+        self.assertEqual(saudi_cand.identifier_type, "national_id")
+        self.assertEqual(saudi_cand.source_line, "Saudi National ID: 1023456789")
+
+        # Iqama check
+        iqama_cand = [c for c in candidates if c.normalized_value == "2023456789"][0]
+        self.assertEqual(iqama_cand.identifier_type, "national_id")
+
+        # Passport check
+        passport_cand = [c for c in candidates if c.normalized_value == "A12345678"][0]
+        self.assertEqual(passport_cand.identifier_type, "passport")
+        self.assertEqual(passport_cand.source_line, "Passport Number: A12345678")
+
+    def test_date_candidates(self):
+        """Verify extraction of date candidates, Hijri conversions, type classifications, and context preservation."""
+        from services.identity_candidate_service import generate_date_candidates
+        import datetime
+        
+        text = (
+            "Date of Birth: 31/08/1985\n"
+            "Expiry: 2030-08-31\n"
+            "Hijri Birth: 15/12/1405\n"
+            "Unrelated Date: 2026 06 24"
+        )
+        
+        candidates = generate_date_candidates(text)
+        
+        # Check birth_date
+        birth_cand = [c for c in candidates if c.date_type == "birth_date" and c.value == datetime.date(1985, 8, 31)][0]
+        self.assertEqual(birth_cand.normalized_value, "1985-08-31")
+        self.assertEqual(birth_cand.source_line, "Date of Birth: 31/08/1985")
+        
+        # Check expiry_date
+        expiry_cand = [c for c in candidates if c.date_type == "expiry_date"][0]
+        self.assertEqual(expiry_cand.value, datetime.date(2030, 8, 31))
+        self.assertEqual(expiry_cand.normalized_value, "2030-08-31")
+        
+        # Check Hijri conversion
+        hijri_cand = [c for c in candidates if "1405" in c.source_line][0]
+        self.assertTrue(1984 <= hijri_cand.value.year <= 1986)
+
+        # Check unknown date type
+        unknown_cand = [c for c in candidates if c.date_type == "unknown"][0]
+        self.assertEqual(unknown_cand.value, datetime.date(2026, 6, 24))
+
+    def test_empty_inputs(self):
+        """Verify that empty inputs return empty candidate lists gracefully."""
+        from services.identity_candidate_service import (
+            generate_name_candidates,
+            generate_identifier_candidates,
+            generate_date_candidates
+        )
+        
+        self.assertEqual(generate_name_candidates(""), [])
+        self.assertEqual(generate_name_candidates(None), [])
+        
+        self.assertEqual(generate_identifier_candidates(""), [])
+        self.assertEqual(generate_identifier_candidates(None), [])
+        
+        self.assertEqual(generate_date_candidates(""), [])
+        self.assertEqual(generate_date_candidates(None), [])
+
+
+class IdentityCandidateScoringTestCase(TestCase):
+    def test_name_candidate_scoring(self):
+        """Verify that standard names score higher than metadata keywords and noisy candidates containing OCR artifacts."""
+        from services.identity_candidate_service import generate_name_candidates
+        from services.identity_scoring_service import score_name_candidates
+        
+        raw_text = (
+            "Name: Mohammed Hamza Rahamathulla\n"
+            "Full Name: Government of India\n"
+            "Name: Mohammed Hamza Rahamathulla ZUÑE ANDOF\n"
+            "DOB: 31/08/2002"
+        )
+        
+        candidates = generate_name_candidates(raw_text)
+        scored = score_name_candidates(candidates, raw_text)
+        
+        # 1. Assert order (sorted by descending score)
+        scores = [sc.score for sc in scored]
+        self.assertEqual(scores, sorted(scores, reverse=True))
+        
+        # 2. Assert specific rank relations
+        scored_dict = {sc.value: sc for sc in scored}
+        
+        hamza_sc = scored_dict["Mohammed Hamza Rahamathulla"]
+        govt_sc = scored_dict["Government of India"]
+        noisy_sc = scored_dict["Mohammed Hamza Rahamathulla ZUÑE ANDOF"]
+        
+        # Standard name should score higher than Government of India (metadata penalty)
+        self.assertTrue(hamza_sc.score > govt_sc.score)
+        self.assertIn("non_name_metadata_keyword", govt_sc.reasons)
+        
+        # Standard name should score higher than the one with 'Ñ' OCR artifact
+        self.assertTrue(hamza_sc.score > noisy_sc.score)
+        self.assertIn("unusual_characters", noisy_sc.reasons)
+
+    def test_date_candidate_scoring(self):
+        """Verify birth date candidate evaluations, adult bonuses vs minor penalties, and expiry dates."""
+        from services.identity_candidate_service import generate_date_candidates
+        from services.identity_scoring_service import score_date_candidates
+        import datetime
+        
+        raw_text = (
+            "Date of Birth: 31/08/2002\n"  # Age 24 in 2026 -> adult_age_range
+            "Date of Birth: 28/12/2013\n"  # Age 13 in 2026 -> standard, but not adult_age_range
+            "Expiry Date: 31/12/2030"      # Future expiry date
+        )
+        
+        candidates = generate_date_candidates(raw_text)
+        scored = score_date_candidates(candidates, raw_text)
+        
+        # Sorted check
+        scores = [sc.score for sc in scored]
+        self.assertEqual(scores, sorted(scores, reverse=True))
+        
+        # Birth date check (31/08/2002 vs 28/12/2013)
+        scored_dict = {sc.value: sc for sc in scored}
+        adult_dob = scored_dict["2002-08-31"]
+        minor_dob = scored_dict["2013-12-28"]
+        
+        self.assertTrue(adult_dob.score > minor_dob.score)
+        self.assertIn("adult_age_range", adult_dob.reasons)
+        self.assertNotIn("adult_age_range", minor_dob.reasons)
+
+    def test_identifier_candidate_scoring(self):
+        """Verify standard identifiers (national ID, passport) receive higher scores than malformed ones."""
+        from services.identity_candidate_service import generate_identifier_candidates
+        from services.identity_scoring_service import score_identifier_candidates
+        
+        raw_text = (
+            "ID: 1023456789\n"             # standard 10 digit ID
+            "Passport: A12345678\n"        # standard passport
+            "Malformed: 12-34-56-78-90\n"  # excessive separators
+            "Unusual: 123456"              # unusual length
+        )
+        
+        candidates = generate_identifier_candidates(raw_text)
+        scored = score_identifier_candidates(candidates, raw_text)
+        
+        scores = [sc.score for sc in scored]
+        self.assertEqual(scores, sorted(scores, reverse=True))
+        
+        scored_dict = {sc.value: sc for sc in scored}
+        valid_id = scored_dict["1023456789"]
+        malformed = scored_dict["12-34-56-78-90"]
+        unusual = scored_dict["123456"]
+        
+        self.assertTrue(valid_id.score > malformed.score)
+        self.assertTrue(valid_id.score > unusual.score)
+        self.assertIn("excessive_separators", malformed.reasons)
+        self.assertIn("unusual_identifier_length", unusual.reasons)
+
+    def test_empty_scoring_inputs(self):
+        """Verify that empty candidate lists produce empty scored candidate lists without errors."""
+        from services.identity_scoring_service import (
+            score_name_candidates,
+            score_identifier_candidates,
+            score_date_candidates
+        )
+        
+        self.assertEqual(score_name_candidates([], ""), [])
+        self.assertEqual(score_name_candidates(None, ""), [])
+        
+        self.assertEqual(score_identifier_candidates([], ""), [])
+        self.assertEqual(score_identifier_candidates(None, ""), [])
+        
+        self.assertEqual(score_date_candidates([], ""), [])
+        self.assertEqual(score_date_candidates(None, ""), [])
+
+    def test_boundary_context_bonus(self):
+        """Verify that candidates ending immediately before identity boundary markers get the boundary context bonus."""
+        from services.identity_candidate_service import generate_name_candidates
+        from services.identity_scoring_service import score_name_candidates
+        
+        raw_text = "Mohammed Hamza Rahamathulla ZUÑE ANDOF /DOB: 31/08/2002 Male"
+        candidates = generate_name_candidates(raw_text)
+        scored = score_name_candidates(candidates, raw_text)
+        
+        scored_dict = {sc.value: sc for sc in scored}
+        
+        target_cand = scored_dict["Mohammed Hamza Rahamathulla"]
+        noisy_cand = scored_dict["Mohammed Hamza Rahamathulla ZUÑE ANDOF"]
+        
+        self.assertIn("boundary_context", target_cand.reasons)
+        self.assertTrue(target_cand.score > noisy_cand.score)
+
+class IdentityCandidateExpansionTestCase(TestCase):
+    def test_candidate_expansion_produces_multiple_candidates(self):
+        from services.identity_candidate_service import generate_name_candidates
+        raw_text = "Mohammed Hamza Rahamathulla ZUÑE ANDOF /DOB: 31/08/2002 Male"
+        candidates = generate_name_candidates(raw_text)
+        
+        # Verify that it produces multiple candidates
+        self.assertTrue(len(candidates) > 1)
+        
+        # Verify that "Mohammed Hamza Rahamathulla" exists among the generated candidates
+        candidate_values = [c.value for c in candidates]
+        self.assertIn("Mohammed Hamza Rahamathulla", candidate_values)
+        
+        # Verify all candidates preserve details
+        for c in candidates:
+            self.assertTrue(hasattr(c, "value"))
+            self.assertTrue(hasattr(c, "source_line"))
+            self.assertTrue(hasattr(c, "reasons"))
+            self.assertTrue(hasattr(c, "normalized_value"))
+            self.assertEqual(c.source_line, "Mohammed Hamza Rahamathulla ZUÑE ANDOF /DOB: 31/08/2002 Male")
+
+    def test_duplicate_candidates_are_removed(self):
+        from services.identity_candidate_service import generate_name_candidates
+        # Repeating lines or duplicate names
+        raw_text = "Mohammed Hamza\nMohammed Hamza"
+        candidates = generate_name_candidates(raw_text)
+        
+        # Verify duplicates are removed (only 1 unique "Mohammed Hamza" should remain)
+        mh_candidates = [c for c in candidates if c.value == "Mohammed Hamza"]
+        self.assertEqual(len(mh_candidates), 1)
+
+    def test_empty_ocr_text_returns_empty_list(self):
+        from services.identity_candidate_service import generate_name_candidates
+        self.assertEqual(generate_name_candidates(""), [])
+        self.assertEqual(generate_name_candidates(None), [])
+
+class IdentityCandidateSelectionTestCase(TestCase):
+    def test_select_highest_name_score(self):
+        from services.identity_scores import ScoredCandidateName
+        from services.identity_selection_service import select_best_name_candidate
+        
+        candidates = [
+            ScoredCandidateName(value="Mohammed Hamza Rahamathulla", score=10.0, reasons=[], source_line=""),
+            ScoredCandidateName(value="Mohammed Hamza Rahamathulla ZUÑE ANDOF", score=7.0, reasons=[], source_line="")
+        ]
+        
+        selected = select_best_name_candidate(candidates)
+        self.assertIsNotNone(selected)
+        self.assertEqual(selected.value, "Mohammed Hamza Rahamathulla")
+
+    def test_name_tie_breaker(self):
+        from services.identity_scores import ScoredCandidateName
+        from services.identity_selection_service import select_best_name_candidate
+        
+        candidates = [
+            ScoredCandidateName(value="Hamza Rahamathulla", score=8.0, reasons=[], source_line=""),
+            ScoredCandidateName(value="Mohammed Hamza Rahamathulla", score=8.0, reasons=[], source_line="")
+        ]
+        
+        selected = select_best_name_candidate(candidates)
+        self.assertIsNotNone(selected)
+        self.assertEqual(selected.value, "Mohammed Hamza Rahamathulla")
+
+    def test_select_birth_date(self):
+        from services.identity_scores import ScoredCandidateDate
+        from services.identity_selection_service import select_best_birth_date_candidate
+        
+        candidates = [
+            ScoredCandidateDate(value="2013-12-28", score=2.0, reasons=[], source_line="", date_type="birth_date"),
+            ScoredCandidateDate(value="2002-08-31", score=9.0, reasons=[], source_line="", date_type="birth_date"),
+            ScoredCandidateDate(value="2030-08-31", score=10.0, reasons=[], source_line="", date_type="expiry_date")
+        ]
+        
+        selected = select_best_birth_date_candidate(candidates)
+        self.assertIsNotNone(selected)
+        self.assertEqual(selected.value, "2002-08-31")
+
+    def test_empty_candidates(self):
+        from services.identity_selection_service import (
+            select_best_name_candidate,
+            select_best_identifier_candidate,
+            select_best_birth_date_candidate,
+            select_best_expiry_date_candidate
+        )
+        
+        self.assertIsNone(select_best_name_candidate([]))
+        self.assertIsNone(select_best_identifier_candidate([]))
+        self.assertIsNone(select_best_birth_date_candidate([]))
+        self.assertIsNone(select_best_expiry_date_candidate([]))
+        
+        self.assertIsNone(select_best_name_candidate(None))
+        self.assertIsNone(select_best_identifier_candidate(None))
+        self.assertIsNone(select_best_birth_date_candidate(None))
+        self.assertIsNone(select_best_expiry_date_candidate(None))
+
+class IdentityConfidenceEngineTestCase(TestCase):
+    def test_clear_name_winner(self):
+        from services.identity_scores import ScoredCandidateName
+        from services.identity_confidence_service import calculate_name_confidence
+        
+        # Scenario A: Clear winner (margin >= 2.0)
+        candidates_a = [
+            ScoredCandidateName(value="Mohammed Hamza", score=10.0, reasons=[], source_line=""),
+            ScoredCandidateName(value="Hamza", score=7.0, reasons=[], source_line="")
+        ]
+        conf_a = calculate_name_confidence(candidates_a, candidates_a[0])
+        self.assertIn("clear_winner", conf_a.reasons)
+        
+        # Scenario B: Close competitor (margin < 2.0, competitor within 1.0)
+        candidates_b = [
+            ScoredCandidateName(value="Mohammed Hamza", score=10.0, reasons=[], source_line=""),
+            ScoredCandidateName(value="Hamza", score=9.8, reasons=[], source_line="")
+        ]
+        conf_b = calculate_name_confidence(candidates_b, candidates_b[0])
+        self.assertNotIn("clear_winner", conf_b.reasons)
+        self.assertIn("multiple_close_candidates", conf_b.reasons)
+        self.assertTrue(conf_a.confidence > conf_b.confidence)
+
+    def test_layout_agreement_bonus(self):
+        from services.identity_scores import ScoredCandidateName
+        from services.identity_confidence_service import calculate_name_confidence
+        
+        candidates = [
+            ScoredCandidateName(value="Mohammed Hamza", score=6.0, reasons=[], source_line="")
+        ]
+        
+        # Layout matches (case/space variations handled by normalization)
+        conf_match = calculate_name_confidence(candidates, candidates[0], layout_name="MOHAMMED HAMZA  ")
+        self.assertIn("layout_agreement", conf_match.reasons)
+        
+        # Layout mismatch
+        conf_mismatch = calculate_name_confidence(candidates, candidates[0], layout_name="Rahul Gandhi")
+        self.assertNotIn("layout_agreement", conf_mismatch.reasons)
+        self.assertTrue(conf_match.confidence > conf_mismatch.confidence)
+
+    def test_overall_confidence(self):
+        from services.identity_confidence import FieldConfidence
+        from services.identity_confidence_service import calculate_overall_confidence
+        
+        name_conf = FieldConfidence(confidence=0.8, reasons=[])
+        ident_conf = FieldConfidence(confidence=0.9, reasons=[])
+        dob_conf = FieldConfidence(confidence=0.7, reasons=[])
+        exp_conf = FieldConfidence(confidence=0.6, reasons=[])
+        
+        # 0.40 * 0.8 + 0.30 * 0.9 + 0.20 * 0.7 + 0.10 * 0.6 = 0.32 + 0.27 + 0.14 + 0.06 = 0.79
+        overall = calculate_overall_confidence(name_conf, ident_conf, dob_conf, exp_conf)
+        self.assertEqual(overall, 0.79)
+
+    def test_missing_expiry_date(self):
+        from services.identity_confidence import FieldConfidence
+        from services.identity_confidence_service import calculate_overall_confidence
+        
+        name_conf = FieldConfidence(confidence=0.8, reasons=[])
+        ident_conf = FieldConfidence(confidence=0.9, reasons=[])
+        dob_conf = FieldConfidence(confidence=0.7, reasons=[])
+        
+        # Weights normalized: (0.40 * 0.8 + 0.30 * 0.9 + 0.20 * 0.7) / 0.90 = (0.32 + 0.27 + 0.14) / 0.90 = 0.73 / 0.90 = 0.8111... -> 0.81
+        overall = calculate_overall_confidence(name_conf, ident_conf, dob_conf, None)
+        self.assertEqual(overall, 0.81)
+
+    def test_empty_inputs(self):
+        from services.identity_confidence_service import (
+            calculate_name_confidence,
+            calculate_identifier_confidence,
+            calculate_birth_date_confidence,
+            calculate_expiry_date_confidence,
+            calculate_overall_confidence
+        )
+        
+        # Test None inputs
+        self.assertEqual(calculate_name_confidence(None, None).confidence, 0.0)
+        self.assertEqual(calculate_identifier_confidence(None, None).confidence, 0.0)
+        self.assertEqual(calculate_birth_date_confidence(None, None).confidence, 0.0)
+        self.assertIsNone(calculate_expiry_date_confidence(None, None))
+        
+        # Test empty list inputs
+        self.assertEqual(calculate_name_confidence([], None).confidence, 0.0)
+        self.assertEqual(calculate_identifier_confidence([], None).confidence, 0.0)
+        self.assertEqual(calculate_birth_date_confidence([], None).confidence, 0.0)
+        self.assertIsNone(calculate_expiry_date_confidence([], None))
+
+
+
+
+
+
+
+
+
+

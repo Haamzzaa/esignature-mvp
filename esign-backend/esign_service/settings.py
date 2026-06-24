@@ -145,7 +145,10 @@ CORS_ALLOWED_ORIGINS = [
     "https://esignature-mvp.vercel.app",
 ]
 
-CORS_ALLOWED_ORIGIN_REGEXES = []
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^http://localhost:\d+$",
+    r"^http://127\.0\.0\.1:\d+$",
+]
 
 # CSRF Configuration
 CSRF_TRUSTED_ORIGINS = [

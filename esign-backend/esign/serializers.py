@@ -2,7 +2,7 @@
 from rest_framework import serializers
 import hashlib
 from django.db import transaction
-from .models import Document, Signer, Envelope, Participant, AuditLog, Template
+from .models import Document, Signer, Envelope, Participant, AuditLog, Template, SignerVerification
 
 class DocumentUploadSerializer(serializers.ModelSerializer):
     class Meta:
@@ -43,6 +43,14 @@ class EnvelopeCreateSerializer(serializers.Serializer):
     send_reminders    = serializers.BooleanField(required=False, default=False)
     send_final_email  = serializers.BooleanField(required=False, default=True)
     allow_printing    = serializers.BooleanField(required=False, default=True)
+
+    email_otp_required = serializers.BooleanField(required=False, default=False)
+    sms_otp_required = serializers.BooleanField(required=False, default=False)
+    national_id_required = serializers.BooleanField(required=False, default=False)
+    face_biometric_required = serializers.BooleanField(required=False, default=False)
+    representative_match_required = serializers.BooleanField(required=False, default=False)
+    terms_acceptance_required = serializers.BooleanField(required=False, default=False)
+
     additional_recipients = serializers.JSONField(required=False, default=list)
     fields            = serializers.JSONField(required=False, default=list)
     # When True: skip participant/signer/field validation and workflow activation.
@@ -131,6 +139,13 @@ class EnvelopeCreateSerializer(serializers.Serializer):
             allow_printing    = validated_data.get('allow_printing', True)
             additional_recipients = validated_data.get('additional_recipients', [])
 
+            email_otp_required = validated_data.get('email_otp_required', False)
+            sms_otp_required = validated_data.get('sms_otp_required', False)
+            national_id_required = validated_data.get('national_id_required', False)
+            face_biometric_required = validated_data.get('face_biometric_required', False)
+            representative_match_required = validated_data.get('representative_match_required', False)
+            terms_acceptance_required = validated_data.get('terms_acceptance_required', False)
+
             document = Document.objects.get(id=document_id)
             envelope = Envelope.objects.create(
                 document=document,
@@ -142,6 +157,12 @@ class EnvelopeCreateSerializer(serializers.Serializer):
                 allow_printing=allow_printing,
                 additional_recipients=additional_recipients,
                 owner=owner,
+                email_otp_required=email_otp_required,
+                sms_otp_required=sms_otp_required,
+                national_id_required=national_id_required,
+                face_biometric_required=face_biometric_required,
+                representative_match_required=representative_match_required,
+                terms_acceptance_required=terms_acceptance_required,
             )
 
             # Map legacy signer to modern participant if no participants are provided
@@ -249,4 +270,12 @@ class TemplateSerializer(serializers.ModelSerializer):
         model = Template
         fields = '__all__'
         read_only_fields = ['owner']
+
+
+class SignerVerificationSerializer(serializers.ModelSerializer):
+    masked_national_id = serializers.ReadOnlyField()
+
+    class Meta:
+        model = SignerVerification
+        fields = ['status', 'verified_at', 'masked_national_id']
 

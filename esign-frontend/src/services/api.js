@@ -128,3 +128,31 @@ export async function getUserMe() {
   return data
 }
 
+export async function analyzeContract(file, envelopeId = null) {
+  const formData = new FormData()
+  formData.append('file', file)
+  if (envelopeId) {
+    formData.append('envelope_id', envelopeId)
+  }
+
+  const { data } = await apiClient.post('/contracts/analyze/', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return data
+}
+
+export async function confirmCandidates(envelopeId, candidateIds) {
+  const { data } = await apiClient.post(`/envelopes/${envelopeId}/confirm-candidates/`, {
+    candidate_ids: candidateIds
+  })
+  return data
+}
+
+export async function ignoreCandidates(envelopeId, candidateIds) {
+  const { data } = await apiClient.post(`/envelopes/${envelopeId}/ignore-candidates/`, {
+    candidate_ids: candidateIds
+  })
+  return data
+}
+
+

@@ -21,6 +21,13 @@ from .views import (
     UserMeView,
     PackageCertificateDownloadView,
     SigningCertificateDownloadView,
+    ContractAnalyzeView,
+    ConfirmCandidatesView,
+    IgnoreCandidatesView,
+    SignerVerificationIDView,
+    SignerVerificationSelfieView,
+    SignerVerificationDetailView,
+    SignerVerificationIDExtractView,
 )
 
 urlpatterns = [
@@ -45,4 +52,11 @@ urlpatterns = [
     path('auth/login/', LoginView.as_view(), name='login'),
     path('auth/logout/', LogoutView.as_view(), name='logout'),
     path('auth/me/', UserMeView.as_view(), name='user-me'),
+    path('contracts/analyze/', ContractAnalyzeView.as_view(), name='contract-analyze'),
+    path('envelopes/<int:envelope_id>/confirm-candidates/', ConfirmCandidatesView.as_view(), name='confirm-candidates'),
+    path('envelopes/<int:envelope_id>/ignore-candidates/', IgnoreCandidatesView.as_view(), name='ignore-candidates'),
+    path('participants/<int:participant_id>/verification/id/', SignerVerificationIDView.as_view(), name='signer-verification-id'),
+    path('participants/<int:participant_id>/verification/selfie/', SignerVerificationSelfieView.as_view(), name='signer-verification-selfie'),
+    path('participants/<int:participant_id>/verification/extract-id/', SignerVerificationIDExtractView.as_view(), name='signer-verification-extract-id'),
+    path('participants/<int:participant_id>/verification/', SignerVerificationDetailView.as_view(), name='signer-verification-detail'),
 ]

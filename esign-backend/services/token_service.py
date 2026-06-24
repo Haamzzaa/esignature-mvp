@@ -14,6 +14,12 @@ def resolve_token(token_str, allow_used=False):
     This preserves the interface expected by handle_token_error/views.
     It queries ParticipantToken first, falling back to legacy SigningToken.
     """
+    import uuid
+    try:
+        uuid.UUID(str(token_str))
+    except ValueError:
+        return None, "Invalid token."
+
     # 1. Look up ParticipantToken
     pt = ParticipantToken.objects.filter(token=token_str).first()
     if pt:

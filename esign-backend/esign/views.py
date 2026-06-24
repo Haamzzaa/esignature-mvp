@@ -299,6 +299,12 @@ class PackageListView(APIView):
                 "active_participant": active_participant,
                 "participants": participants_list,
                 "signed_document": signed_doc_data,
+                "email_otp_required": env.email_otp_required,
+                "sms_otp_required": env.sms_otp_required,
+                "national_id_required": env.national_id_required,
+                "face_biometric_required": env.face_biometric_required,
+                "representative_match_required": env.representative_match_required,
+                "terms_acceptance_required": env.terms_acceptance_required,
             })
             
         return Response(recent_packages, status=status.HTTP_200_OK)
@@ -521,6 +527,12 @@ class PackageDetailView(APIView):
             "send_final_email": envelope.send_final_email,
             "allow_printing": envelope.allow_printing,
             "additional_recipients": envelope.additional_recipients,
+            "email_otp_required": envelope.email_otp_required,
+            "sms_otp_required": envelope.sms_otp_required,
+            "national_id_required": envelope.national_id_required,
+            "face_biometric_required": envelope.face_biometric_required,
+            "representative_match_required": envelope.representative_match_required,
+            "terms_acceptance_required": envelope.terms_acceptance_required,
             "fields": fields_list,
         }, status=status.HTTP_200_OK)
 class PackageSignedPreviewView(APIView):
@@ -688,3 +700,609 @@ class SigningCertificateDownloadView(APIView):
             filename=filename,
             content_type='application/pdf'
         )
+
+
+class ContractAnalyzeView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        import time
+        import fitz
+        import logging
+        from services.ocr_service import (
+            extract_text_from_pdf,
+            extract_text_from_image
+        )
+        from services.authority_extraction_service import analyze_contract_authority
+
+        logger = logging.getLogger(__name__)
+        start_time = time.perf_counter()
+
+        file_obj = request.data.get('file')
+        if not file_obj:
+            return Response({"detail": "No file uploaded."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        filename = (file_obj.name or "").lower()
+        if not (filename.endswith('.pdf') or filename.endswith('.png') or filename.endswith('.jpg') or filename.endswith('.jpeg')):
+            return Response(
+                {"detail": "Unsupported file format. Only PDF, PNG, JPG, and JPEG are supported."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 1. File size validation (Resource protection: Max 20MB)
+        MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024
+        if file_obj.size > MAX_FILE_SIZE_BYTES:
+            return Response(
+                {"detail": "File size exceeds the 20MB limit."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            file_bytes = file_obj.read()
+            
+            # Determine logic based on file type
+            if filename.endswith('.pdf'):
+                # 2. PDF Page count validation (Resource protection: Max 20 pages)
+                try:
+                    doc = fitz.open(stream=file_bytes, filetype="pdf")
+                    page_count = len(doc)
+                    doc.close()
+                except Exception as e:
+                    return Response(
+                        {"detail": f"Failed to parse PDF pages: {str(e)}"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                if page_count > 20:
+                    return Response(
+                        {"detail": f"PDF exceeds the maximum limit of 20 pages (found {page_count})."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                ocr_result = extract_text_from_pdf(file_bytes)
+                raw_text = ocr_result["raw_text"]
+                english_text = ocr_result.get("english_text", raw_text)
+                arabic_text = ocr_result.get("arabic_text", raw_text)
+                ocr_confidence = ocr_result["ocr_confidence"]
+                source = ocr_result["extraction_source"]
+                page_count = ocr_result.get("page_count", page_count)
+                digital_extraction_ms = ocr_result.get("digital_extraction_ms", 0.0)
+                ocr_ms = ocr_result.get("ocr_ms", 0.0)
+                dominant_strategy = ocr_result.get("dominant_strategy", source)
+                page_strategies = ocr_result.get("page_strategies", {1: source})
+                page_quality_scores = ocr_result.get("page_quality_scores", {1: 1.0})
+                dominant_arabic_region = ocr_result.get("dominant_arabic_region", "right")
+                page_regions = ocr_result.get("page_regions", {1: "right"})
+            else:
+                # Image processing
+                logger.info("Processing image upload using OCR")
+                t_ocr_start = time.perf_counter()
+                raw_text, ocr_confidence = extract_text_from_image(file_bytes)
+                ocr_ms = (time.perf_counter() - t_ocr_start) * 1000
+                digital_extraction_ms = 0.0
+                english_text = raw_text
+                arabic_text = raw_text
+                source = "paddleocr"
+                page_count = 1
+                dominant_strategy = "full_page_ocr"
+                page_strategies = {1: "full_page_ocr"}
+                page_quality_scores = {1: 0.0}
+                dominant_arabic_region = "right"
+                page_regions = {1: "right"}
+                ocr_result = {
+                    "ocr_provider": "paddle",
+                    "ocr_confidence": ocr_confidence,
+                    "fallback_used": False,
+                    "ocr_ms": ocr_ms
+                }
+
+            # Extract Authority Information
+            print("\n========== RAW OCR TEXT ==========")
+            print(raw_text.encode('ascii', errors='backslashreplace').decode('ascii'))
+            print("==================================\n")
+            
+            t_auth_start = time.perf_counter()
+            analysis = analyze_contract_authority(raw_text, english_text=english_text, arabic_text=arabic_text)
+            authority_extraction_ms = (time.perf_counter() - t_auth_start) * 1000
+
+            end_time = time.perf_counter()
+            total_processing_ms = (end_time - start_time) * 1000
+
+            extraction_result = ocr_result
+
+            # ── Get or resolve envelope_id ────────────────────────────────────
+            envelope_id = request.data.get('envelope_id') or request.query_params.get('envelope_id')
+            envelope = None
+            if envelope_id:
+                try:
+                    envelope = Envelope.objects.get(id=envelope_id)
+                except Envelope.DoesNotExist:
+                    return Response({"detail": f"Envelope with ID {envelope_id} not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            # ── Generate candidates ──────────────────────────────────────────
+            candidates_data = []
+            if envelope:
+                from services.recipient_discovery_service import generate_candidates
+                candidates = generate_candidates(envelope, analysis)
+                for cand in candidates:
+                    candidates_data.append({
+                        "id": cand.id,
+                        "name_en": cand.name_en,
+                        "name_ar": cand.name_ar,
+                        "title_en": cand.title_en,
+                        "title_ar": cand.title_ar,
+                        "status": cand.status,
+                        "converted_at": cand.converted_at.isoformat() if cand.converted_at else None,
+                        "ignored_at": cand.ignored_at.isoformat() if cand.ignored_at else None,
+                        "authority_clause": cand.authority_clause
+                    })
+                
+                # Create compliance audit log record
+                from esign.models import ContractAnalysisAudit
+                ContractAnalysisAudit.objects.update_or_create(
+                    envelope=envelope,
+                    defaults={
+                        "representative_name": f"{analysis.get('representative_name_en', '')} / {analysis.get('representative_name_ar', '')}".strip(" /"),
+                        "representative_title": f"{analysis.get('title_en', '')} / {analysis.get('title_ar', '')}".strip(" /"),
+                        "authority_clause": f"{analysis.get('authority_clause_en', '')} / {analysis.get('authority_clause_ar', '')}".strip(" /"),
+                        "authority_detected": bool(analysis.get("representative_name_en") or analysis.get("representative_name_ar")),
+                        "ocr_provider": extraction_result.get("ocr_provider", ""),
+                        "ocr_confidence": extraction_result.get("ocr_confidence"),
+                    }
+                )
+            else:
+                # In-memory candidate generation (e.g. for ContractAnalysisPage demo)
+                name_en = analysis.get("representative_name_en", "").strip()
+                name_ar = analysis.get("representative_name_ar", "").strip()
+                title_en = analysis.get("title_en", "").strip()
+                title_ar = analysis.get("title_ar", "").strip()
+                clause_en = analysis.get("authority_clause_en", "").strip()
+                clause_ar = analysis.get("authority_clause_ar", "").strip()
+
+                from services.recipient_discovery_service import TITLE_MAP_EN_TO_AR
+                is_same = False
+                if name_en and name_ar:
+                    mapped_ar_title = TITLE_MAP_EN_TO_AR.get(title_en)
+                    if mapped_ar_title == title_ar or (title_en.lower() == "ceo" and title_ar == "الرئيس التنفيذي"):
+                        is_same = True
+                    else:
+                        is_same = True
+
+                if is_same:
+                    candidates_data.append({
+                        "id": "temp-1",
+                        "name_en": name_en,
+                        "name_ar": name_ar,
+                        "title_en": title_en,
+                        "title_ar": title_ar,
+                        "status": "pending",
+                        "converted_at": None,
+                        "ignored_at": None,
+                        "authority_clause": clause_en or clause_ar
+                    })
+                else:
+                    if name_en:
+                        candidates_data.append({
+                            "id": "temp-1",
+                            "name_en": name_en,
+                            "name_ar": "",
+                            "title_en": title_en,
+                            "title_ar": "",
+                            "status": "pending",
+                            "converted_at": None,
+                            "ignored_at": None,
+                            "authority_clause": clause_en
+                        })
+                    if name_ar:
+                        candidates_data.append({
+                            "id": "temp-2",
+                            "name_en": "",
+                            "name_ar": name_ar,
+                            "title_en": "",
+                            "title_ar": title_ar,
+                            "status": "pending",
+                            "converted_at": None,
+                            "ignored_at": None,
+                            "authority_clause": clause_ar
+                        })
+
+            representatives_found = len(candidates_data) > 0
+            response_data = {
+                "representative_name_en": analysis.get("representative_name_en", ""),
+                "representative_name_ar": analysis.get("representative_name_ar", ""),
+                "title_en": analysis.get("title_en", ""),
+                "title_ar": analysis.get("title_ar", ""),
+                "authority_clause_en": analysis.get("authority_clause_en", ""),
+                "authority_clause_ar": analysis.get("authority_clause_ar", ""),
+                "representatives_found": representatives_found,
+                "authority_detected": representatives_found,
+                "count": len(candidates_data),
+                "candidates": candidates_data
+            }
+
+            # BENCHMARK DEBUG ONLY
+            # TEMPORARY INSTRUMENTATION
+            # SAFE TO REMOVE AFTER OCR TUNING
+            ENABLE_EXTRACTION_DEBUG = os.getenv("ENABLE_EXTRACTION_DEBUG", "false").lower() == "true"
+            if ENABLE_EXTRACTION_DEBUG:
+                try:
+                    debug_dir = os.getenv("EXTRACTION_DEBUG_DIR", "./analysis/debug_responses/")
+                    os.makedirs(debug_dir, exist_ok=True)
+                    
+                    # Extract representative contexts (±150 chars)
+                    def get_context(text, keyword_or_name):
+                        if not text or not keyword_or_name:
+                            return ""
+                        idx = text.lower().find(str(keyword_or_name).lower())
+                        if idx == -1:
+                            return ""
+                        start = max(0, idx - 150)
+                        end = min(len(text), idx + len(str(keyword_or_name)) + 150)
+                        return text[start:end]
+                    
+                    target_name_en = analysis["representative_name_en"]
+                    kw_en = target_name_en if target_name_en else "represented"
+                    context_en = get_context(english_text, kw_en)
+                    
+                    target_name_ar = analysis["representative_name_ar"]
+                    kw_ar = target_name_ar if target_name_ar else "ويمثلها"
+                    context_ar = get_context(arabic_text, kw_ar)
+                    
+                    debug_filename = os.path.splitext(os.path.basename(file_obj.name))[0] + "_debug.json"
+                    debug_filepath = os.path.join(debug_dir, debug_filename)
+                    
+                    debug_payload = {
+                        "raw_text": raw_text,
+                        "english_text": english_text,
+                        "arabic_text": arabic_text,
+                        "representative_name_en": analysis["representative_name_en"],
+                        "representative_name_ar": analysis["representative_name_ar"],
+                        "title_en": analysis["title_en"],
+                        "title_ar": analysis["title_ar"],
+                        "authority_phrase_en": analysis["authority_clause_en"],
+                        "authority_phrase_ar": analysis["authority_clause_ar"],
+                        "confidence_score": analysis["confidence_score"],
+                        "name_similarity_score": analysis.get("name_similarity_score", 0.0),
+                        "title_match_score_en": analysis.get("title_match_score_en", 0.0),
+                        "title_match_score_ar": analysis.get("title_match_score_ar", 0.0),
+                        "title_match_method_en": analysis.get("title_match_method_en", "none"),
+                        "title_match_method_ar": analysis.get("title_match_method_ar", "none"),
+                        "page_count": page_count,
+                        "page_regions": page_regions if 'page_regions' in locals() else {},
+                        "page_quality_scores": page_quality_scores if 'page_quality_scores' in locals() else {},
+                        "page_strategies": page_strategies if 'page_strategies' in locals() else {},
+                        "ocr_confidence": ocr_confidence,
+                        "processing_time_ms": total_processing_ms,
+                        "representative_context_en": context_en,
+                        "representative_context_ar": context_ar,
+                        "requested_provider": os.getenv("OCR_PROVIDER", "paddle").strip(),
+                        "ocr_provider": extraction_result.get("ocr_provider"),
+                        "fallback_used": extraction_result.get("fallback_used"),
+                        "ocr_ms": extraction_result.get("ocr_ms"),
+                        "api_response": response_data
+                    }
+                    
+                    import json
+                    with open(debug_filepath, "w", encoding="utf-8") as df:
+                        json.dump(debug_payload, df, ensure_ascii=False, indent=2)
+                        
+                except Exception as ex:
+                    logger.error(f"[Benchmark Debug] Failed to save debug JSON: {ex}")
+
+            return Response(response_data, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Failed to analyze contract: {str(e)}", exc_info=True)
+            return Response({"detail": f"Failed to analyze contract: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ConfirmCandidatesView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, envelope_id, *args, **kwargs):
+        from esign.models import Envelope, RepresentativeCandidate
+        from services.recipient_discovery_service import convert_candidate_to_recipient
+        from django.shortcuts import get_object_or_404
+        
+        envelope = get_object_or_404(Envelope, id=envelope_id, owner=request.user)
+        candidate_ids = request.data.get("candidate_ids", [])
+        
+        if not isinstance(candidate_ids, list):
+            return Response({"detail": "candidate_ids must be a list of IDs."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        participants_created = []
+        for c_id in candidate_ids:
+            try:
+                candidate = RepresentativeCandidate.objects.get(id=c_id, envelope=envelope)
+                participant = convert_candidate_to_recipient(candidate)
+                if participant:
+                    participants_created.append(participant)
+            except RepresentativeCandidate.DoesNotExist:
+                continue
+                
+        # Return updated list of participants for this envelope
+        from esign.serializers import ParticipantSerializer
+        participants = envelope.participants.all().order_by('step_number', 'order', 'id')
+        serializer = ParticipantSerializer(participants, many=True)
+        
+        return Response({
+            "message": f"Successfully confirmed {len(participants_created)} candidates.",
+            "participants": serializer.data
+        }, status=status.HTTP_200_OK)
+
+
+class IgnoreCandidatesView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, envelope_id, *args, **kwargs):
+        from esign.models import Envelope, RepresentativeCandidate
+        from services.recipient_discovery_service import ignore_candidate
+        from django.shortcuts import get_object_or_404
+        
+        envelope = get_object_or_404(Envelope, id=envelope_id, owner=request.user)
+        candidate_ids = request.data.get("candidate_ids", [])
+        
+        if not isinstance(candidate_ids, list):
+            return Response({"detail": "candidate_ids must be a list of IDs."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        candidates_ignored = []
+        for c_id in candidate_ids:
+            try:
+                candidate = RepresentativeCandidate.objects.get(id=c_id, envelope=envelope)
+                ignored_cand = ignore_candidate(candidate)
+                if ignored_cand:
+                    candidates_ignored.append(ignored_cand.id)
+            except RepresentativeCandidate.DoesNotExist:
+                continue
+                
+        return Response({
+            "message": f"Successfully ignored {len(candidates_ignored)} candidates.",
+            "candidate_ids": candidates_ignored
+        }, status=status.HTTP_200_OK)
+
+
+def check_participant_authorization(request, participant_id):
+    """
+    Validates authorization for a participant.
+    Returns (participant, token_obj, error_response) tuple.
+    If authorized, error_response is None.
+    """
+    from esign.models import Participant
+    from services.token_service import resolve_token
+    
+    try:
+        participant = Participant.objects.get(id=participant_id)
+    except Participant.DoesNotExist:
+        return None, None, Response({"detail": "Participant not found."}, status=status.HTTP_404_NOT_FOUND)
+        
+    # Check owner access
+    if request.user and request.user.is_authenticated:
+        if participant.envelope.owner == request.user:
+            return participant, None, None
+            
+    # Check token access
+    token_str = request.headers.get('X-Participant-Token') or request.query_params.get('token')
+    if not token_str:
+        return None, None, Response({"detail": "Authentication credentials were not provided."}, status=status.HTTP_403_FORBIDDEN)
+        
+    token_obj, error_msg = resolve_token(token_str, allow_used=True)
+    if error_msg:
+        return None, None, Response({"detail": error_msg}, status=status.HTTP_403_FORBIDDEN)
+        
+    # Verify token matches this participant
+    from esign.models import ParticipantToken, SigningToken
+    if isinstance(token_obj, ParticipantToken):
+        if token_obj.participant != participant:
+            return None, None, Response({"detail": "Token does not match the requested participant."}, status=status.HTTP_403_FORBIDDEN)
+    elif isinstance(token_obj, SigningToken):
+        if token_obj.signer.email != participant.email or token_obj.signer.envelope != participant.envelope:
+            return None, None, Response({"detail": "Token does not match the requested participant."}, status=status.HTTP_403_FORBIDDEN)
+            
+    return participant, token_obj, None
+
+
+def validate_image_file(file_obj):
+    """
+    Validates file type and size under ASVS Level 2 guidelines.
+    """
+    if not file_obj:
+        raise ValidationError("No file uploaded.")
+        
+    # 1. Size check: Max 5MB
+    MAX_SIZE = 5 * 1024 * 1024
+    if file_obj.size > MAX_SIZE:
+        raise ValidationError("Image size exceeds the 5MB limit.")
+        
+    # 2. Extension check
+    filename = (file_obj.name or "").lower()
+    if not (filename.endswith('.jpg') or filename.endswith('.jpeg') or filename.endswith('.png')):
+        raise ValidationError("Unsupported file format. Only JPG, JPEG, and PNG are supported.")
+        
+    # 3. Mime type check
+    content_type = getattr(file_obj, 'content_type', None)
+    if content_type and content_type not in ('image/jpeg', 'image/jpg', 'image/png'):
+        raise ValidationError("Invalid image type. Only JPG, JPEG, and PNG are supported.")
+
+    # 4. Integrity check via PIL
+    from PIL import Image
+    try:
+        # Seek to beginning in case file has been read
+        file_obj.seek(0)
+        img = Image.open(file_obj)
+        img.verify()
+        file_obj.seek(0)
+    except Exception:
+        raise ValidationError("Invalid image format or corrupted image.")
+
+
+class SignerVerificationIDView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, participant_id, *args, **kwargs):
+        participant, token_obj, error_resp = check_participant_authorization(request, participant_id)
+        if error_resp:
+            return error_resp
+
+        national_id_number = request.data.get('national_id_number')
+        if not national_id_number or not str(national_id_number).strip():
+            return Response({"detail": "national_id_number is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        front_image = request.data.get('front_image')
+        back_image = request.data.get('back_image')
+
+        if not front_image or not back_image:
+            return Response({"detail": "Both front_image and back_image are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            validate_image_file(front_image)
+            validate_image_file(back_image)
+        except ValidationError as e:
+            return Response({"detail": e.detail[0] if isinstance(e.detail, list) else str(e.detail)}, status=status.HTTP_400_BAD_REQUEST)
+
+        from services.signer_verification_service import upload_national_id
+        from esign.serializers import SignerVerificationSerializer
+
+        verification = upload_national_id(participant, str(national_id_number).strip(), front_image, back_image)
+        serializer = SignerVerificationSerializer(verification)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class SignerVerificationSelfieView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, participant_id, *args, **kwargs):
+        participant, token_obj, error_resp = check_participant_authorization(request, participant_id)
+        if error_resp:
+            return error_resp
+
+        selfie_image = request.data.get('selfie_image')
+        if not selfie_image:
+            return Response({"detail": "selfie_image is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            validate_image_file(selfie_image)
+        except ValidationError as e:
+            return Response({"detail": e.detail[0] if isinstance(e.detail, list) else str(e.detail)}, status=status.HTTP_400_BAD_REQUEST)
+
+        from esign.models import SignerVerification
+        verification_exists = SignerVerification.objects.filter(participant=participant).first()
+        if not verification_exists or verification_exists.status == 'pending':
+            return Response({"detail": "National ID must be uploaded before uploading selfie."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from services.signer_verification_service import upload_selfie
+        from esign.serializers import SignerVerificationSerializer
+
+        verification = upload_selfie(participant, selfie_image)
+        serializer = SignerVerificationSerializer(verification)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class SignerVerificationDetailView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, participant_id, *args, **kwargs):
+        participant, token_obj, error_resp = check_participant_authorization(request, participant_id)
+        if error_resp:
+            return error_resp
+
+        from esign.models import SignerVerification
+        from esign.serializers import SignerVerificationSerializer
+
+        verification = SignerVerification.objects.filter(participant=participant).first()
+        if not verification:
+            return Response({
+                "status": "pending",
+                "verified_at": None,
+                "masked_national_id": ""
+            }, status=status.HTTP_200_OK)
+
+        serializer = SignerVerificationSerializer(verification)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class SignerVerificationIDExtractView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, participant_id, *args, **kwargs):
+        participant, token_obj, error_resp = check_participant_authorization(request, participant_id)
+        if error_resp:
+            return error_resp
+
+        from esign.models import SignerVerification
+        verification = SignerVerification.objects.filter(participant=participant).first()
+        if not verification or not verification.national_id_front:
+            return Response(
+                {"detail": "Front ID image is required. Please upload the National ID front image first."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Log OCR started event
+        from esign.constants import EVENT_ID_OCR_STARTED
+        from esign.models import VerificationEvent
+        VerificationEvent.objects.create(
+            signer_verification=verification,
+            event_type=EVENT_ID_OCR_STARTED,
+            metadata={}
+        )
+
+        from services.national_identity_service import (
+            extract_identity_data,
+            parse_identity_document,
+            save_identity_data
+        )
+
+        try:
+            front_image = verification.national_id_front
+            back_image = verification.national_id_back
+
+            ocr_result = extract_identity_data(front_image, back_image)
+
+            if not ocr_result or not ocr_result.get("raw_text", "").strip():
+                save_identity_data(
+                    verification,
+                    ocr_result=ocr_result,
+                    parsed_fields={},
+                    extraction_status="failed",
+                    failure_reason="no_text_detected"
+                )
+                return Response(
+                    {"detail": "OCR extraction failed: No text detected on the identity document."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Parse fields
+            parsed_fields = parse_identity_document(ocr_result["raw_text"])
+
+            # Save extracted metadata
+            national_identity = save_identity_data(
+                verification,
+                ocr_result=ocr_result,
+                parsed_fields=parsed_fields,
+                extraction_status="success"
+            )
+
+            return Response({
+                "full_name": national_identity.full_name,
+                "masked_national_id": national_identity.masked_national_id,
+                "date_of_birth": national_identity.date_of_birth.isoformat() if national_identity.date_of_birth else None,
+                "expiry_date": national_identity.expiry_date.isoformat() if national_identity.expiry_date else None,
+                "document_type": national_identity.document_type
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.exception("Azure OCR extraction encountered an error.")
+
+            save_identity_data(
+                verification,
+                ocr_result=None,
+                parsed_fields={},
+                extraction_status="failed",
+                failure_reason="azure_error"
+            )
+            return Response(
+                {"detail": f"OCR extraction failed due to Azure service error: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+

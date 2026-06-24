@@ -58,3 +58,27 @@ htmlcov/
 
 # OS files
 Thumbs.db
+
+# Identity OCR Validation & Safe Testing (Phase 10.5)
+temp_test/
+local_test/
+test_ids/
+sample_ids/
+private_docs/
+private_images/
+ocr_validation_outputs/
+
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.pdf
+
+media/verification/
+media/id_front/
+media/id_back/
+media/selfie/
+
+analysis/debug_responses/
+tools/comparison_results.csv
+tools/ocr_comparison_summary.json

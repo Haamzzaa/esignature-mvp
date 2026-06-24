@@ -1,0 +1,8 @@
+{
+  "documents_tested": 5,
+  "azure_success_count": 5,
+  "paddle_success_count": 5,
+  "azure_fallback_count": 0,
+  "average_azure_time_ms": 3600.92,
+  "average_paddle_time_ms": 1023.58
+}
