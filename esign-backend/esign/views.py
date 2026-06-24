@@ -1306,3 +1306,14 @@ class SignerVerificationIDExtractView(APIView):
             )
 
 
+class SignerAuthorizationStatusView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, participant_id, *args, **kwargs):
+        participant = get_object_or_404(Participant, id=participant_id)
+        from services.security_policy_service import get_authorization_status
+        status_data = get_authorization_status(participant)
+        return Response(status_data, status=status.HTTP_200_OK)
+
+
+
