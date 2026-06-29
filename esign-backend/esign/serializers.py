@@ -2,7 +2,7 @@
 from rest_framework import serializers
 import hashlib
 from django.db import transaction
-from .models import Document, Signer, Envelope, Participant, AuditLog, Template, SignerVerification
+from .models import Document, Signer, Envelope, Participant, AuditLog, Template
 
 class DocumentUploadSerializer(serializers.ModelSerializer):
     class Meta:
@@ -31,6 +31,7 @@ class ParticipantSerializer(serializers.ModelSerializer):
     class Meta:
         model = Participant
         fields = ['name', 'email', 'role', 'order', 'step_number', 'status', 'completed_at']
+        read_only_fields = ['status', 'completed_at']
 
 class EnvelopeCreateSerializer(serializers.Serializer):
     document_id       = serializers.IntegerField()
@@ -272,10 +273,5 @@ class TemplateSerializer(serializers.ModelSerializer):
         read_only_fields = ['owner']
 
 
-class SignerVerificationSerializer(serializers.ModelSerializer):
-    masked_national_id = serializers.ReadOnlyField()
 
-    class Meta:
-        model = SignerVerification
-        fields = ['status', 'verified_at', 'masked_national_id']
 

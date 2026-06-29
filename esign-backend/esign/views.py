@@ -12,6 +12,7 @@ from rest_framework.generics import get_object_or_404  # pyright: ignore[reportM
 from django.urls import reverse
 import hashlib
 import logging
+from esign.config import esign_config
 from django.core.files.base import ContentFile
 from django.db import transaction
 from .models import Envelope, Signer, SigningToken, AuditLog, SignedDocument, Participant, ParticipantToken, Template
@@ -21,6 +22,25 @@ import os
 from services.workflow_service import activate_workflow_step, check_and_advance_step
 
 logger = logging.getLogger(__name__)
+
+from services.rate_limiting_service import (
+    check_rate_limit,
+    check_otp_lockout,
+    register_otp_failed_attempt,
+    reset_otp_failed_attempts,
+    get_client_ip
+)
+
+def make_rate_limited_response(retry_after):
+    response = Response(
+        {
+            "detail": f"Too many requests. Please try again in {retry_after} seconds.",
+            "retry_after": retry_after
+        },
+        status=status.HTTP_429_TOO_MANY_REQUESTS
+    )
+    response['Retry-After'] = str(retry_after)
+    return response
 
 def get_token_signer_or_participant(token_str, allow_used=False):
     """
@@ -104,10 +124,11 @@ class EnvelopePatchView(APIView):
 
 class SigningDocumentView(APIView):
     def get(self, request, token, *args, **kwargs):
+        from services.media_auth_service import check_media_authorization
         token_obj, error_msg = get_token_signer_or_participant(token, allow_used=True)
         if error_msg:
             return handle_token_error(error_msg)
-        
+            
         if hasattr(token_obj, 'participant'):
             envelope = token_obj.participant.envelope
         else:
@@ -117,10 +138,15 @@ class SigningDocumentView(APIView):
         if not document.file:
             raise Http404("Document file not found.")
             
-        return FileResponse(document.file.open('rb'), content_type='application/pdf')
+        authorized, auth_err, _ = check_media_authorization(request, document.file.name, token_str=str(token))
+        if not authorized:
+            return Response({"detail": auth_err or "Access Denied."}, status=status.HTTP_403_FORBIDDEN)
+            
+        return stream_protected_file(document.file.name)
 
 class SigningSignedDocumentView(APIView):
     def get(self, request, token, *args, **kwargs):
+        from services.media_auth_service import check_media_authorization
         token_obj, error_msg = get_token_signer_or_participant(token, allow_used=True)
         if error_msg:
             return handle_token_error(error_msg)
@@ -134,10 +160,15 @@ class SigningSignedDocumentView(APIView):
         if not signed_doc.file:
             raise Http404("Signed document file not found.")
             
-        return FileResponse(signed_doc.file.open('rb'), content_type='application/pdf')
+        authorized, auth_err, _ = check_media_authorization(request, signed_doc.file.name, token_str=str(token))
+        if not authorized:
+            return Response({"detail": auth_err or "Access Denied."}, status=status.HTTP_403_FORBIDDEN)
+            
+        return stream_protected_file(signed_doc.file.name)
 
 class SigningDownloadView(APIView):
     def get(self, request, token, *args, **kwargs):
+        from services.media_auth_service import check_media_authorization
         token_obj, error_msg = get_token_signer_or_participant(token, allow_used=True)
         if error_msg:
             return handle_token_error(error_msg)
@@ -151,14 +182,12 @@ class SigningDownloadView(APIView):
         if not signed_doc.file:
             raise Http404("Signed document file not found.")
             
+        authorized, auth_err, _ = check_media_authorization(request, signed_doc.file.name, token_str=str(token))
+        if not authorized:
+            return Response({"detail": auth_err or "Access Denied."}, status=status.HTTP_403_FORBIDDEN)
+            
         original_name = os.path.basename(signed_doc.file.name) or "signed.pdf"
-        
-        return FileResponse(
-            signed_doc.file.open('rb'),
-            as_attachment=True,
-            filename=original_name,
-            content_type='application/pdf'
-        )
+        return stream_protected_file(signed_doc.file.name, as_attachment=True, filename=original_name)
    
 class SigningView(APIView):
     def get(self, request, token, *args, **kwargs):
@@ -169,11 +198,22 @@ class SigningView(APIView):
         return Response(result, status=status.HTTP_200_OK)
 
     def post(self, request, token, *args, **kwargs):
+        ip = get_client_ip(request)
+        is_limited, _, retry_after = check_rate_limit("signing_ip", ip, esign_config.rate_limit_signing, "signing")
+        if is_limited:
+            return make_rate_limited_response(retry_after)
+            
+        is_limited, _, retry_after = check_rate_limit("signing_token", token, esign_config.rate_limit_signing, "signing")
+        if is_limited:
+            return make_rate_limited_response(retry_after)
+
         from services.signing_service import process_action
         result, error_msg = process_action(token, request.data, request)
         if error_msg:
             if error_msg == "ALREADY_PROCESSED":
                 return Response(result, status=status.HTTP_400_BAD_REQUEST)
+            if error_msg == "AUTHORIZATION_REQUIRED":
+                return Response(result, status=status.HTTP_403_FORBIDDEN)
             return handle_token_error(error_msg)
         
         # Determine success status code based on the action
@@ -410,14 +450,13 @@ class PackageDetailView(APIView):
                 except ParticipantToken.DoesNotExist:
                     pt = ParticipantToken.objects.create(
                         participant=p,
-                        expires_at=timezone.now() + timedelta(hours=24),
+                        expires_at=timezone.now() + timedelta(hours=esign_config.signing_link_expiry),
                         is_used=False
                     )
                     token_val = pt.token
                 
                 if token_val:
-                    from django.conf import settings
-                    frontend_base = getattr(settings, "FRONTEND_URL", "http://localhost:3000")
+                    frontend_base = esign_config.frontend_url
                     action_url = f"{frontend_base}/sign/{token_val}"
 
                 participants_list.append({
@@ -446,15 +485,14 @@ class PackageDetailView(APIView):
                 if not token_obj:
                     token_obj = SigningToken.objects.create(
                         signer=signer,
-                        expires_at=timezone.now() + timedelta(hours=24),
+                        expires_at=timezone.now() + timedelta(hours=esign_config.signing_link_expiry),
                         is_used=False
                     )
                 token_val = token_obj.token
 
                 action_url = ""
                 if token_val:
-                    from django.conf import settings
-                    frontend_base = getattr(settings, "FRONTEND_URL", "http://localhost:3000")
+                    frontend_base = esign_config.frontend_url
                     action_url = f"{frontend_base}/sign/{token_val}"
 
                 participants_list.append({
@@ -539,27 +577,34 @@ class PackageSignedPreviewView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, pk, *args, **kwargs):
+        from services.media_auth_service import check_media_authorization
         envelope = get_object_or_404(Envelope, id=pk, owner=request.user)
         signed_doc = get_object_or_404(SignedDocument, envelope=envelope)
         if not signed_doc.file:
             raise Http404("Signed document file not found.")
-        return FileResponse(signed_doc.file.open('rb'), content_type='application/pdf')
+            
+        authorized, auth_err, _ = check_media_authorization(request, signed_doc.file.name)
+        if not authorized:
+            return Response({"detail": auth_err or "Access Denied."}, status=status.HTTP_403_FORBIDDEN)
+            
+        return stream_protected_file(signed_doc.file.name)
 
 class PackageSignedDownloadView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, pk, *args, **kwargs):
+        from services.media_auth_service import check_media_authorization
         envelope = get_object_or_404(Envelope, id=pk, owner=request.user)
         signed_doc = get_object_or_404(SignedDocument, envelope=envelope)
         if not signed_doc.file:
             raise Http404("Signed document file not found.")
+            
+        authorized, auth_err, _ = check_media_authorization(request, signed_doc.file.name)
+        if not authorized:
+            return Response({"detail": auth_err or "Access Denied."}, status=status.HTTP_403_FORBIDDEN)
+            
         original_name = os.path.basename(signed_doc.file.name) or f"signed_package_{pk}.pdf"
-        return FileResponse(
-            signed_doc.file.open('rb'),
-            as_attachment=True,
-            filename=original_name,
-            content_type='application/pdf'
-        )
+        return stream_protected_file(signed_doc.file.name, as_attachment=True, filename=original_name)
 
 
 from rest_framework import generics
@@ -623,6 +668,16 @@ class LoginView(APIView):
         username = request.data.get('username')
         password = request.data.get('password')
 
+        ip = get_client_ip(request)
+        is_limited, _, retry_after = check_rate_limit("login_ip", ip, esign_config.rate_limit_login, "login")
+        if is_limited:
+            return make_rate_limited_response(retry_after)
+
+        if username:
+            is_limited, _, retry_after = check_rate_limit("login_username", username, esign_config.rate_limit_login, "login")
+            if is_limited:
+                return make_rate_limited_response(retry_after)
+
         if not username or not password:
             return Response({"detail": "Username and password are required."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -663,17 +718,19 @@ class PackageCertificateDownloadView(APIView):
 
     def get(self, request, pk, *args, **kwargs):
         from esign.models import CompletionCertificate
+        from services.media_auth_service import check_media_authorization
+        
         envelope = get_object_or_404(Envelope, id=pk, owner=request.user)
         cert = get_object_or_404(CompletionCertificate, envelope=envelope)
         if not cert.file:
             raise Http404("Certificate file not found.")
+            
+        authorized, auth_err, _ = check_media_authorization(request, cert.file.name)
+        if not authorized:
+            return Response({"detail": auth_err or "Access Denied."}, status=status.HTTP_403_FORBIDDEN)
+            
         filename = os.path.basename(cert.file.name) or f"certificate_package_{pk}.pdf"
-        return FileResponse(
-            cert.file.open('rb'),
-            as_attachment=True,
-            filename=filename,
-            content_type='application/pdf'
-        )
+        return stream_protected_file(cert.file.name, as_attachment=True, filename=filename)
 
 
 class SigningCertificateDownloadView(APIView):
@@ -681,6 +738,8 @@ class SigningCertificateDownloadView(APIView):
 
     def get(self, request, token, *args, **kwargs):
         from esign.models import CompletionCertificate
+        from services.media_auth_service import check_media_authorization
+        
         token_obj, error_msg = get_token_signer_or_participant(token, allow_used=True)
         if error_msg:
             return handle_token_error(error_msg)
@@ -693,26 +752,29 @@ class SigningCertificateDownloadView(APIView):
         cert = get_object_or_404(CompletionCertificate, envelope=envelope)
         if not cert.file:
             raise Http404("Certificate file not found.")
+            
+        authorized, auth_err, _ = check_media_authorization(request, cert.file.name, token_str=str(token))
+        if not authorized:
+            return Response({"detail": auth_err or "Access Denied."}, status=status.HTTP_403_FORBIDDEN)
+            
         filename = os.path.basename(cert.file.name) or f"certificate_{envelope.id}.pdf"
-        return FileResponse(
-            cert.file.open('rb'),
-            as_attachment=True,
-            filename=filename,
-            content_type='application/pdf'
-        )
+        return stream_protected_file(cert.file.name, as_attachment=True, filename=filename)
 
 
 class ContractAnalyzeView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request, *args, **kwargs):
+        ip = get_client_ip(request)
+        is_limited, _, retry_after = check_rate_limit("contract_analyze_ip", ip, esign_config.rate_limit_contract_analysis, "contract_analyze")
+        if is_limited:
+            return make_rate_limited_response(retry_after)
+
         import time
         import fitz
         import logging
-        from services.ocr_service import (
-            extract_text_from_pdf,
-            extract_text_from_image
-        )
+        from services.ocr_service import extract_text_from_image
+        from esign.providers.registry import esign_provider_registry
         from services.authority_extraction_service import analyze_contract_authority
 
         logger = logging.getLogger(__name__)
@@ -729,11 +791,10 @@ class ContractAnalyzeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # 1. File size validation (Resource protection: Max 20MB)
-        MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024
+        MAX_FILE_SIZE_BYTES = esign_config.max_upload_size
         if file_obj.size > MAX_FILE_SIZE_BYTES:
             return Response(
-                {"detail": "File size exceeds the 20MB limit."},
+                {"detail": f"File size exceeds the {esign_config.max_upload_size // (1024 * 1024)}MB limit."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -759,7 +820,7 @@ class ContractAnalyzeView(APIView):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
-                ocr_result = extract_text_from_pdf(file_bytes)
+                ocr_result = esign_provider_registry.ocr_provider.extract_text(file_bytes)
                 raw_text = ocr_result["raw_text"]
                 english_text = ocr_result.get("english_text", raw_text)
                 arabic_text = ocr_result.get("arabic_text", raw_text)
@@ -797,9 +858,8 @@ class ContractAnalyzeView(APIView):
                 }
 
             # Extract Authority Information
-            print("\n========== RAW OCR TEXT ==========")
-            print(raw_text.encode('ascii', errors='backslashreplace').decode('ascii'))
-            print("==================================\n")
+            logger.debug("[ContractAnalyzeView] Raw OCR text (ASCII-safe): %s",
+                         raw_text.encode('ascii', errors='backslashreplace').decode('ascii'))
             
             t_auth_start = time.perf_counter()
             analysis = analyze_contract_authority(raw_text, english_text=english_text, arabic_text=arabic_text)
@@ -817,7 +877,13 @@ class ContractAnalyzeView(APIView):
                 try:
                     envelope = Envelope.objects.get(id=envelope_id)
                 except Envelope.DoesNotExist:
+                    logger.warning(f"Contract analysis failed: Envelope {envelope_id} not found.")
                     return Response({"detail": f"Envelope with ID {envelope_id} not found."}, status=status.HTTP_404_NOT_FOUND)
+                
+                # Check envelope ownership
+                if not request.user or not request.user.is_authenticated or envelope.owner != request.user:
+                    logger.warning(f"Unauthorized contract analysis attempt on envelope {envelope_id} by user {request.user}")
+                    return Response({"detail": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN)
 
             # ── Generate candidates ──────────────────────────────────────────
             candidates_data = []
@@ -1068,34 +1134,84 @@ def check_participant_authorization(request, participant_id):
     """
     from esign.models import Participant
     from services.token_service import resolve_token
-    
+    from django.utils import timezone
+    import logging
+
+    logger = logging.getLogger(__name__)
+
     try:
         participant = Participant.objects.get(id=participant_id)
     except Participant.DoesNotExist:
+        logger.warning(f"Authorization denied: Participant {participant_id} not found.")
         return None, None, Response({"detail": "Participant not found."}, status=status.HTTP_404_NOT_FOUND)
         
-    # Check owner access
+    envelope = participant.envelope
+
+    # Check owner access (GET only)
+    is_owner = False
     if request.user and request.user.is_authenticated:
-        if participant.envelope.owner == request.user:
-            return participant, None, None
-            
+        if envelope.owner == request.user:
+            is_owner = True
+
+    if request.method == 'GET' and is_owner:
+        # Owner can view verification detail/status without token
+        return participant, None, None
+
     # Check token access
     token_str = request.headers.get('X-Participant-Token') or request.query_params.get('token')
     if not token_str:
+        logger.warning(f"Authorization denied: Authentication credentials were not provided for participant {participant_id}.")
         return None, None, Response({"detail": "Authentication credentials were not provided."}, status=status.HTTP_403_FORBIDDEN)
         
-    token_obj, error_msg = resolve_token(token_str, allow_used=True)
+    allow_used = (request.method == 'GET')
+    token_obj, error_msg = resolve_token(token_str, allow_used=allow_used)
     if error_msg:
+        logger.warning(f"Authorization denied: Token resolution failed for participant {participant_id}: {error_msg}")
         return None, None, Response({"detail": error_msg}, status=status.HTTP_403_FORBIDDEN)
         
     # Verify token matches this participant
     from esign.models import ParticipantToken, SigningToken
     if isinstance(token_obj, ParticipantToken):
         if token_obj.participant != participant:
+            logger.warning(f"Authorization denied: Token does not match participant {participant_id}.")
             return None, None, Response({"detail": "Token does not match the requested participant."}, status=status.HTTP_403_FORBIDDEN)
     elif isinstance(token_obj, SigningToken):
-        if token_obj.signer.email != participant.email or token_obj.signer.envelope != participant.envelope:
+        if token_obj.signer.email != participant.email or token_obj.signer.envelope != envelope:
+            logger.warning(f"Authorization denied: Token does not match participant {participant_id}.")
             return None, None, Response({"detail": "Token does not match the requested participant."}, status=status.HTTP_403_FORBIDDEN)
+    else:
+        logger.warning(f"Authorization denied: Invalid token type for participant {participant_id}.")
+        return None, None, Response({"detail": "Invalid token type."}, status=status.HTTP_403_FORBIDDEN)
+
+    # For mutating requests (POST), perform strict checks on token/envelope/participant state
+    if request.method != 'GET':
+        # Check token expiration
+        if token_obj.expires_at < timezone.now():
+            logger.warning(f"Authorization denied: Token expired for participant {participant_id}.")
+            return None, None, Response({"detail": "This signing link has expired."}, status=status.HTTP_403_FORBIDDEN)
+
+        # Check token used
+        if token_obj.is_used:
+            logger.warning(f"Authorization denied: Token already used for participant {participant_id}.")
+            return None, None, Response({"detail": "Your step has already been completed."}, status=status.HTTP_403_FORBIDDEN)
+
+        # Check envelope status
+        if envelope.status == "completed":
+            logger.warning(f"Authorization denied: Envelope {envelope.id} already completed.")
+            return None, None, Response({"detail": "This package has already been completed."}, status=status.HTTP_400_BAD_REQUEST)
+        if envelope.status not in ("sent", "viewed"):
+            logger.warning(f"Authorization denied: Envelope {envelope.id} has invalid status '{envelope.status}'.")
+            return None, None, Response({"detail": f"Envelope status '{envelope.status}' does not allow this action."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check participant completion
+        if participant.has_completed or participant.status in ('completed', 'declined', 'returned'):
+            logger.warning(f"Authorization denied: Participant {participant_id} already completed/declined/returned.")
+            return None, None, Response({"detail": "Your step has already been completed."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check workflow stage (active/viewed check)
+        if participant.status not in ('active', 'viewed'):
+            logger.warning(f"Authorization denied: Participant {participant_id} is in status '{participant.status}' (not active/viewed).")
+            return None, None, Response({"detail": "Workflow stage is not yet active for your role. Actions are restricted."}, status=status.HTTP_400_BAD_REQUEST)
             
     return participant, token_obj, None
 
@@ -1107,10 +1223,9 @@ def validate_image_file(file_obj):
     if not file_obj:
         raise ValidationError("No file uploaded.")
         
-    # 1. Size check: Max 5MB
-    MAX_SIZE = 5 * 1024 * 1024
+    MAX_SIZE = esign_config.max_image_size
     if file_obj.size > MAX_SIZE:
-        raise ValidationError("Image size exceeds the 5MB limit.")
+        raise ValidationError(f"Image size exceeds the {esign_config.max_image_size // (1024 * 1024)}MB limit.")
         
     # 2. Extension check
     filename = (file_obj.name or "").lower()
@@ -1134,377 +1249,16 @@ def validate_image_file(file_obj):
         raise ValidationError("Invalid image format or corrupted image.")
 
 
-class SignerVerificationIDView(APIView):
-    permission_classes = [permissions.AllowAny]
 
-    def post(self, request, participant_id, *args, **kwargs):
-        participant, token_obj, error_resp = check_participant_authorization(request, participant_id)
-        if error_resp:
-            return error_resp
-
-        national_id_number = request.data.get('national_id_number')
-        if not national_id_number or not str(national_id_number).strip():
-            return Response({"detail": "national_id_number is required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        front_image = request.data.get('front_image')
-        back_image = request.data.get('back_image')
-
-        if not front_image or not back_image:
-            return Response({"detail": "Both front_image and back_image are required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            validate_image_file(front_image)
-            validate_image_file(back_image)
-        except ValidationError as e:
-            return Response({"detail": e.detail[0] if isinstance(e.detail, list) else str(e.detail)}, status=status.HTTP_400_BAD_REQUEST)
-
-        from services.signer_verification_service import upload_national_id
-        from esign.serializers import SignerVerificationSerializer
-
-        verification = upload_national_id(participant, str(national_id_number).strip(), front_image, back_image)
-        serializer = SignerVerificationSerializer(verification)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-class SignerVerificationSelfieView(APIView):
-    permission_classes = [permissions.AllowAny]
-
-    def post(self, request, participant_id, *args, **kwargs):
-        participant, token_obj, error_resp = check_participant_authorization(request, participant_id)
-        if error_resp:
-            return error_resp
-
-        selfie_image = request.data.get('selfie_image')
-        if not selfie_image:
-            return Response({"detail": "selfie_image is required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            validate_image_file(selfie_image)
-        except ValidationError as e:
-            return Response({"detail": e.detail[0] if isinstance(e.detail, list) else str(e.detail)}, status=status.HTTP_400_BAD_REQUEST)
-
-        from esign.models import SignerVerification
-        verification_exists = SignerVerification.objects.filter(participant=participant).first()
-        if not verification_exists or verification_exists.status == 'pending':
-            return Response({"detail": "National ID must be uploaded before uploading selfie."}, status=status.HTTP_400_BAD_REQUEST)
-
-        from services.signer_verification_service import upload_selfie
-        from esign.serializers import SignerVerificationSerializer
-
-        verification = upload_selfie(participant, selfie_image)
-        serializer = SignerVerificationSerializer(verification)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-class SignerVerificationDetailView(APIView):
-    permission_classes = [permissions.AllowAny]
-
-    def get(self, request, participant_id, *args, **kwargs):
-        participant, token_obj, error_resp = check_participant_authorization(request, participant_id)
-        if error_resp:
-            return error_resp
-
-        from esign.models import SignerVerification
-        from esign.serializers import SignerVerificationSerializer
-
-        verification = SignerVerification.objects.filter(participant=participant).first()
-        if not verification:
-            return Response({
-                "status": "pending",
-                "verified_at": None,
-                "masked_national_id": ""
-            }, status=status.HTTP_200_OK)
-
-        serializer = SignerVerificationSerializer(verification)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-class SignerVerificationIDExtractView(APIView):
-    permission_classes = [permissions.AllowAny]
-
-    def post(self, request, participant_id, *args, **kwargs):
-        participant, token_obj, error_resp = check_participant_authorization(request, participant_id)
-        if error_resp:
-            return error_resp
-
-        from esign.models import SignerVerification
-        verification = SignerVerification.objects.filter(participant=participant).first()
-        if not verification or not verification.national_id_front:
-            return Response(
-                {"detail": "Front ID image is required. Please upload the National ID front image first."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Log OCR started event
-        from esign.constants import EVENT_ID_OCR_STARTED
-        from esign.models import VerificationEvent
-        VerificationEvent.objects.create(
-            signer_verification=verification,
-            event_type=EVENT_ID_OCR_STARTED,
-            metadata={}
-        )
-
-        from services.national_identity_service import (
-            extract_identity_data,
-            parse_identity_document,
-            save_identity_data
-        )
-
-        try:
-            front_image = verification.national_id_front
-            back_image = verification.national_id_back
-
-            ocr_result = extract_identity_data(front_image, back_image)
-
-            if not ocr_result or not ocr_result.get("raw_text", "").strip():
-                save_identity_data(
-                    verification,
-                    ocr_result=ocr_result,
-                    parsed_fields={},
-                    extraction_status="failed",
-                    failure_reason="no_text_detected"
-                )
-                return Response(
-                    {"detail": "OCR extraction failed: No text detected on the identity document."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Parse fields
-            parsed_fields = parse_identity_document(ocr_result["raw_text"])
-
-            # Save extracted metadata
-            national_identity = save_identity_data(
-                verification,
-                ocr_result=ocr_result,
-                parsed_fields=parsed_fields,
-                extraction_status="success"
-            )
-
-            return Response({
-                "full_name": national_identity.full_name,
-                "masked_national_id": national_identity.masked_national_id,
-                "date_of_birth": national_identity.date_of_birth.isoformat() if national_identity.date_of_birth else None,
-                "expiry_date": national_identity.expiry_date.isoformat() if national_identity.expiry_date else None,
-                "document_type": national_identity.document_type
-            }, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.exception("Azure OCR extraction encountered an error.")
-
-            save_identity_data(
-                verification,
-                ocr_result=None,
-                parsed_fields={},
-                extraction_status="failed",
-                failure_reason="azure_error"
-            )
-            return Response(
-                {"detail": f"OCR extraction failed due to Azure service error: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
 
 
 class SignerAuthorizationStatusView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request, participant_id, *args, **kwargs):
-        participant = get_object_or_404(Participant, id=participant_id)
-        from services.security_policy_service import get_authorization_status
-        status_data = get_authorization_status(participant)
-        return Response(status_data, status=status.HTTP_200_OK)
-
-
-class TermsAcceptanceView(APIView):
-    permission_classes = [permissions.AllowAny]
-
-    def post(self, request, participant_id, *args, **kwargs):
         participant, token_obj, error_resp = check_participant_authorization(request, participant_id)
         if error_resp:
             return error_resp
-
-        accepted = request.data.get("accepted")
-        if accepted is not True:
-            return Response(
-                {"detail": "accepted must be true."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-    def post(self, request, participant_id, *args, **kwargs):
-        participant, token_obj, error_resp = check_participant_authorization(request, participant_id)
-        if error_resp:
-            return error_resp
-
-        national_id_number = request.data.get('national_id_number')
-        if not national_id_number or not str(national_id_number).strip():
-            return Response({"detail": "national_id_number is required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        front_image = request.data.get('front_image')
-        back_image = request.data.get('back_image')
-
-        if not front_image or not back_image:
-            return Response({"detail": "Both front_image and back_image are required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            validate_image_file(front_image)
-            validate_image_file(back_image)
-        except ValidationError as e:
-            return Response({"detail": e.detail[0] if isinstance(e.detail, list) else str(e.detail)}, status=status.HTTP_400_BAD_REQUEST)
-
-        from services.signer_verification_service import upload_national_id
-        from esign.serializers import SignerVerificationSerializer
-
-        verification = upload_national_id(participant, str(national_id_number).strip(), front_image, back_image)
-        serializer = SignerVerificationSerializer(verification)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-class SignerVerificationSelfieView(APIView):
-    permission_classes = [permissions.AllowAny]
-
-    def post(self, request, participant_id, *args, **kwargs):
-        participant, token_obj, error_resp = check_participant_authorization(request, participant_id)
-        if error_resp:
-            return error_resp
-
-        selfie_image = request.data.get('selfie_image')
-        if not selfie_image:
-            return Response({"detail": "selfie_image is required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            validate_image_file(selfie_image)
-        except ValidationError as e:
-            return Response({"detail": e.detail[0] if isinstance(e.detail, list) else str(e.detail)}, status=status.HTTP_400_BAD_REQUEST)
-
-        from esign.models import SignerVerification
-        verification_exists = SignerVerification.objects.filter(participant=participant).first()
-        if not verification_exists or verification_exists.status == 'pending':
-            return Response({"detail": "National ID must be uploaded before uploading selfie."}, status=status.HTTP_400_BAD_REQUEST)
-
-        from services.signer_verification_service import upload_selfie
-        from esign.serializers import SignerVerificationSerializer
-
-        verification = upload_selfie(participant, selfie_image)
-        serializer = SignerVerificationSerializer(verification)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-class SignerVerificationDetailView(APIView):
-    permission_classes = [permissions.AllowAny]
-
-    def get(self, request, participant_id, *args, **kwargs):
-        participant, token_obj, error_resp = check_participant_authorization(request, participant_id)
-        if error_resp:
-            return error_resp
-
-        from esign.models import SignerVerification
-        from esign.serializers import SignerVerificationSerializer
-
-        verification = SignerVerification.objects.filter(participant=participant).first()
-        if not verification:
-            return Response({
-                "status": "pending",
-                "verified_at": None,
-                "masked_national_id": ""
-            }, status=status.HTTP_200_OK)
-
-        serializer = SignerVerificationSerializer(verification)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-class SignerVerificationIDExtractView(APIView):
-    permission_classes = [permissions.AllowAny]
-
-    def post(self, request, participant_id, *args, **kwargs):
-        participant, token_obj, error_resp = check_participant_authorization(request, participant_id)
-        if error_resp:
-            return error_resp
-
-        from esign.models import SignerVerification
-        verification = SignerVerification.objects.filter(participant=participant).first()
-        if not verification or not verification.national_id_front:
-            return Response(
-                {"detail": "Front ID image is required. Please upload the National ID front image first."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Log OCR started event
-        from esign.constants import EVENT_ID_OCR_STARTED
-        from esign.models import VerificationEvent
-        VerificationEvent.objects.create(
-            signer_verification=verification,
-            event_type=EVENT_ID_OCR_STARTED,
-            metadata={}
-        )
-
-        from services.national_identity_service import (
-            extract_identity_data,
-            parse_identity_document,
-            save_identity_data
-        )
-
-        try:
-            front_image = verification.national_id_front
-            back_image = verification.national_id_back
-
-            ocr_result = extract_identity_data(front_image, back_image)
-
-            if not ocr_result or not ocr_result.get("raw_text", "").strip():
-                save_identity_data(
-                    verification,
-                    ocr_result=ocr_result,
-                    parsed_fields={},
-                    extraction_status="failed",
-                    failure_reason="no_text_detected"
-                )
-                return Response(
-                    {"detail": "OCR extraction failed: No text detected on the identity document."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Parse fields
-            parsed_fields = parse_identity_document(ocr_result["raw_text"])
-
-            # Save extracted metadata
-            national_identity = save_identity_data(
-                verification,
-                ocr_result=ocr_result,
-                parsed_fields=parsed_fields,
-                extraction_status="success"
-            )
-
-            return Response({
-                "full_name": national_identity.full_name,
-                "masked_national_id": national_identity.masked_national_id,
-                "date_of_birth": national_identity.date_of_birth.isoformat() if national_identity.date_of_birth else None,
-                "expiry_date": national_identity.expiry_date.isoformat() if national_identity.expiry_date else None,
-                "document_type": national_identity.document_type
-            }, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.exception("Azure OCR extraction encountered an error.")
-
-            save_identity_data(
-                verification,
-                ocr_result=None,
-                parsed_fields={},
-                extraction_status="failed",
-                failure_reason="azure_error"
-            )
-            return Response(
-                {"detail": f"OCR extraction failed due to Azure service error: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-
-class SignerAuthorizationStatusView(APIView):
-    permission_classes = [permissions.AllowAny]
-
-    def get(self, request, participant_id, *args, **kwargs):
-        participant = get_object_or_404(Participant, id=participant_id)
         from services.security_policy_service import get_authorization_status
         status_data = get_authorization_status(participant)
         return Response(status_data, status=status.HTTP_200_OK)
@@ -1548,6 +1302,15 @@ class SendEmailOTPView(APIView):
         if error_resp:
             return error_resp
 
+        ip = get_client_ip(request)
+        is_limited, _, retry_after = check_rate_limit("otp_send_ip", ip, esign_config.rate_limit_otp_send, "send_otp")
+        if is_limited:
+            return make_rate_limited_response(retry_after)
+            
+        is_limited, _, retry_after = check_rate_limit("otp_send_participant", participant.id, esign_config.rate_limit_otp_send, "send_otp")
+        if is_limited:
+            return make_rate_limited_response(retry_after)
+
         from services.email_otp_service import send_email_otp
         try:
             send_email_otp(participant)
@@ -1571,6 +1334,17 @@ class VerifyEmailOTPView(APIView):
         if error_resp:
             return error_resp
 
+        is_locked, remaining_seconds = check_otp_lockout(participant.id)
+        if is_locked:
+            return Response(
+                {
+                    "verified": False,
+                    "error": f"Too many failed attempts. Try again in {remaining_seconds} seconds.",
+                    "retry_after": remaining_seconds
+                },
+                status=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+
         otp = request.data.get("otp")
         if not otp:
             return Response(
@@ -1582,7 +1356,179 @@ class VerifyEmailOTPView(APIView):
         result = verify_email_otp(participant, str(otp))
 
         if result["verified"]:
+            reset_otp_failed_attempts(participant.id)
             return Response(result, status=status.HTTP_200_OK)
 
-        # Distinguish expired vs invalid for an informative but uniform error shape
+        register_otp_failed_attempt(participant.id)
+        is_locked, remaining_seconds = check_otp_lockout(participant.id)
+        if is_locked:
+            return Response(
+                {
+                    "verified": False,
+                    "error": f"Too many failed attempts. Try again in {remaining_seconds} seconds.",
+                    "retry_after": remaining_seconds
+                },
+                status=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+
         return Response(result, status=status.HTTP_400_BAD_REQUEST)
+
+
+class FaceVerificationView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, participant_id, *args, **kwargs):
+        participant, token_obj, error_resp = check_participant_authorization(request, participant_id)
+        if error_resp:
+            return error_resp
+
+        ip = get_client_ip(request)
+        is_limited, _, retry_after = check_rate_limit("face_verify_ip", ip, esign_config.rate_limit_face_verification, "face_verification")
+        if is_limited:
+            return make_rate_limited_response(retry_after)
+            
+        is_limited, _, retry_after = check_rate_limit("face_verify_participant", participant.id, esign_config.rate_limit_face_verification, "face_verification")
+        if is_limited:
+            return make_rate_limited_response(retry_after)
+
+        selfie_image = request.data.get('selfie_image') or request.FILES.get('selfie_image')
+
+        if not selfie_image:
+            return Response({"detail": "selfie_image is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            validate_image_file(selfie_image)
+        except ValidationError as e:
+            return Response({"detail": e.detail[0] if isinstance(e.detail, list) else str(e.detail)}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            if hasattr(selfie_image, 'read'):
+                selfie_image_bytes = selfie_image.read()
+            else:
+                selfie_image_bytes = selfie_image
+        except Exception:
+            return Response({"detail": "Failed to read selfie_image."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from services.face_matching_service import perform_face_match
+
+        logger.debug("[FaceVerificationView] BEFORE perform_face_match: participant_id=%s", participant.id)
+        biometric = perform_face_match(participant, selfie_image_bytes)
+        logger.debug("[FaceVerificationView] AFTER perform_face_match: status=%s", biometric.status)
+
+        if biometric.status == "matched":
+            return Response({
+                "matched": True,
+                "similarity_score": biometric.similarity_score,
+                "provider": biometric.provider
+            }, status=status.HTTP_200_OK)
+        elif biometric.status == "failed":
+            return Response({
+                "matched": False,
+                "similarity_score": biometric.similarity_score
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                "matched": False,
+                "status": biometric.status
+            }, status=status.HTTP_200_OK)
+
+
+class SignerIdentityVerificationView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, participant_id, *args, **kwargs):
+        participant, token_obj, error_resp = check_participant_authorization(request, participant_id)
+        if error_resp:
+            return error_resp
+
+        ip = get_client_ip(request)
+        is_limited, _, retry_after = check_rate_limit("identity_verify_ip", ip, esign_config.rate_limit_ocr, "identity_verification")
+        if is_limited:
+            return make_rate_limited_response(retry_after)
+            
+        is_limited, _, retry_after = check_rate_limit("identity_verify_participant", participant.id, esign_config.rate_limit_ocr, "identity_verification")
+        if is_limited:
+            return make_rate_limited_response(retry_after)
+
+        document_image = request.data.get('document_image') or request.FILES.get('document_image')
+        if not document_image:
+            return Response({"detail": "document_image is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            validate_image_file(document_image)
+        except ValidationError as e:
+            return Response({"detail": e.detail[0] if isinstance(e.detail, list) else str(e.detail)}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            if hasattr(document_image, 'read'):
+                document_image_bytes = document_image.read()
+            else:
+                document_image_bytes = document_image
+        except Exception:
+            return Response({"detail": "Failed to read document_image."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from services.identity_verification_service import perform_identity_verification
+        
+        verification = perform_identity_verification(participant, document_image_bytes)
+
+        return Response({
+            "status": verification.status,
+            "full_name": verification.full_name,
+            "document_type": verification.document_type,
+            "failure_reason": verification.failure_reason or "",
+        }, status=status.HTTP_200_OK)
+
+
+import mimetypes
+from django.core.files.storage import default_storage
+
+def stream_protected_file(path, as_attachment=False, filename=None):
+    path = path.replace("\\", "/").lstrip("/")
+    if not default_storage.exists(path):
+        raise Http404("Requested file not found in storage.")
+    
+    try:
+        file_obj = default_storage.open(path, 'rb')
+    except Exception as e:
+        logger.error(f"Failed to open protected file {path}: {str(e)}")
+        raise Http404("Failed to access requested file.")
+
+    content_type, _ = mimetypes.guess_type(path)
+    if not content_type:
+        content_type = 'application/octet-stream'
+
+    if not filename:
+        filename = os.path.basename(path)
+
+    response = FileResponse(
+        file_obj,
+        as_attachment=as_attachment,
+        filename=filename,
+        content_type=content_type
+    )
+    response['Cache-Control'] = 'private, no-store'
+
+    try:
+        response['Content-Length'] = default_storage.size(path)
+    except Exception:
+        pass
+
+    return response
+
+class ProtectedMediaView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, path, *args, **kwargs):
+        import urllib.parse
+        from services.media_auth_service import check_media_authorization
+        
+        cleaned_path = urllib.parse.unquote(path).replace("\\", "/").lstrip("/")
+        
+        authorized, auth_err, envelope = check_media_authorization(request, cleaned_path)
+        if not authorized:
+            return Response({"detail": auth_err or "Access Denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        as_attachment = request.GET.get('download', '').lower() == 'true'
+        return stream_protected_file(cleaned_path, as_attachment=as_attachment)
+
+

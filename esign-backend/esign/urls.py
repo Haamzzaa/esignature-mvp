@@ -24,14 +24,12 @@ from .views import (
     ContractAnalyzeView,
     ConfirmCandidatesView,
     IgnoreCandidatesView,
-    SignerVerificationIDView,
-    SignerVerificationSelfieView,
-    SignerVerificationDetailView,
-    SignerVerificationIDExtractView,
     SignerAuthorizationStatusView,
     TermsAcceptanceView,
     SendEmailOTPView,
     VerifyEmailOTPView,
+    FaceVerificationView,
+    SignerIdentityVerificationView,
 )
 
 urlpatterns = [
@@ -59,12 +57,11 @@ urlpatterns = [
     path('contracts/analyze/', ContractAnalyzeView.as_view(), name='contract-analyze'),
     path('envelopes/<int:envelope_id>/confirm-candidates/', ConfirmCandidatesView.as_view(), name='confirm-candidates'),
     path('envelopes/<int:envelope_id>/ignore-candidates/', IgnoreCandidatesView.as_view(), name='ignore-candidates'),
-    path('participants/<int:participant_id>/verification/id/', SignerVerificationIDView.as_view(), name='signer-verification-id'),
-    path('participants/<int:participant_id>/verification/selfie/', SignerVerificationSelfieView.as_view(), name='signer-verification-selfie'),
-    path('participants/<int:participant_id>/verification/extract-id/', SignerVerificationIDExtractView.as_view(), name='signer-verification-extract-id'),
-    path('participants/<int:participant_id>/verification/', SignerVerificationDetailView.as_view(), name='signer-verification-detail'),
+
     path('participants/<int:participant_id>/authorization-status/', SignerAuthorizationStatusView.as_view(), name='authorization-status'),
     path('participants/<int:participant_id>/accept-terms/', TermsAcceptanceView.as_view(), name='accept-terms'),
     path('participants/<int:participant_id>/send-email-otp/', SendEmailOTPView.as_view(), name='send-email-otp'),
     path('participants/<int:participant_id>/verify-email-otp/', VerifyEmailOTPView.as_view(), name='verify-email-otp'),
+    path('participants/<int:participant_id>/face-verification/', FaceVerificationView.as_view(), name='face-verification'),
+    path('participants/<int:participant_id>/identity-verification/', SignerIdentityVerificationView.as_view(), name='identity-verification'),
 ]

@@ -3,11 +3,19 @@ console.log("VITE_API_URL =", import.meta.env.VITE_API_URL)
 
 export const API_URL = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:8000` : '')
 
-const BASE_URL = API_URL ? `${API_URL}/api` : '/api'
+export const API_BASE = '/api/v1'
+const BASE_URL = API_URL ? `${API_URL}${API_BASE}` : API_BASE
 
 export const apiClient = axios.create({
   baseURL: BASE_URL,
 })
+
+// Request interceptor to log payloads for verification
+apiClient.interceptors.request.use(config => {
+  console.log("API_REQUEST_PAYLOAD:", config.method, config.url, JSON.stringify(config.data))
+  return config;
+})
+
 
 export async function uploadDocument(file) {
   const formData = new FormData()
@@ -154,5 +162,65 @@ export async function ignoreCandidates(envelopeId, candidateIds) {
   })
   return data
 }
+
+export async function getAuthorizationStatus(participantId, token) {
+  const { data } = await apiClient.get(`/participants/${participantId}/authorization-status/`, {
+    headers: { 'X-Participant-Token': token }
+  })
+  return data
+}
+
+export async function acceptTerms(participantId, token) {
+  const { data } = await apiClient.post(`/participants/${participantId}/accept-terms/`, {
+    accepted: true
+  }, {
+    headers: { 'X-Participant-Token': token }
+  })
+  return data
+}
+
+export async function sendEmailOTP(participantId, token) {
+  const { data } = await apiClient.post(`/participants/${participantId}/send-email-otp/`, {}, {
+    headers: { 'X-Participant-Token': token }
+  })
+  return data
+}
+
+export async function verifyEmailOTP(participantId, otp, token) {
+  const { data } = await apiClient.post(`/participants/${participantId}/verify-email-otp/`, {
+    otp
+  }, {
+    headers: { 'X-Participant-Token': token }
+  })
+  return data
+}
+
+export async function submitFaceVerification(participantId, selfieImage, token) {
+  const formData = new FormData()
+  formData.append('selfie_image', selfieImage)
+
+  const { data } = await apiClient.post(`/participants/${participantId}/face-verification/`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+      'X-Participant-Token': token
+    }
+  })
+  return data
+}
+
+export async function submitIdentityVerification(participantId, documentImage, token) {
+  const formData = new FormData()
+  formData.append('document_image', documentImage)
+
+  const { data } = await apiClient.post(`/participants/${participantId}/identity-verification/`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+      'X-Participant-Token': token
+    }
+  })
+  return data
+}
+
+
 
 

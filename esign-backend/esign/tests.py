@@ -4232,283 +4232,18 @@ class DuplicatePrefixCollapseTestCase(TestCase):
         )
 
 
-class SignerVerificationTestCase(TestCase):
-    def setUp(self):
-        from django.contrib.auth.models import User
-        from esign.models import Document, Envelope, Participant, ParticipantToken
-        from django.utils import timezone
-        from datetime import timedelta
-        
-        # 1. Setup users & envelope
-        self.owner = User.objects.create_user(username="owner", password="password")
-        self.other_user = User.objects.create_user(username="other", password="password")
-        self.document = Document.objects.create(file="test.pdf", file_hash="hash")
-        self.envelope = Envelope.objects.create(document=self.document, owner=self.owner)
-        
-        # 2. Setup participant & token
-        self.participant = Participant.objects.create(
-            envelope=self.envelope,
-            name="Alice Signer",
-            email="alice@example.com",
-            role="signer",
-            step_number=1,
-            order=1,
-        )
-        self.token_obj = ParticipantToken.objects.create(
-            participant=self.participant,
-            expires_at=timezone.now() + timedelta(hours=24),
-            is_used=False
-        )
-
-    def generate_mock_image(self, name="test.png", size=(100, 100), bytes_length=None):
-        from io import BytesIO
-        from PIL import Image
-        from django.core.files.uploadedfile import SimpleUploadedFile
-        
-        file_obj = BytesIO()
-        image = Image.new("RGB", size, color="blue")
-        image.save(file_obj, format="PNG")
-        data = file_obj.getvalue()
-        
-        if bytes_length:
-            data = data + b"0" * (bytes_length - len(data))
-            
-        return SimpleUploadedFile(name, data, content_type="image/png")
-
-    def test_signer_verification_model_transitions(self):
-        """Verify state machine constraints on SignerVerification status."""
-        from esign.models import SignerVerification
-        from esign.constants import (
-            VERIFICATION_STATUS_PENDING,
-            VERIFICATION_STATUS_ID_UPLOADED,
-            VERIFICATION_STATUS_SELFIE_UPLOADED,
-            VERIFICATION_STATUS_UNDER_REVIEW,
-            VERIFICATION_STATUS_VERIFIED,
-            VERIFICATION_STATUS_FAILED,
-        )
-        from django.core.exceptions import ValidationError
-        
-        verification = SignerVerification.objects.create(participant=self.participant)
-        self.assertEqual(verification.status, VERIFICATION_STATUS_PENDING)
-        
-        # Invalid transition: pending -> selfie_uploaded
-        with self.assertRaises(ValidationError):
-            verification.transition_to(VERIFICATION_STATUS_SELFIE_UPLOADED)
-            
-        # Valid: pending -> id_uploaded
-        verification.transition_to(VERIFICATION_STATUS_ID_UPLOADED)
-        self.assertEqual(verification.status, VERIFICATION_STATUS_ID_UPLOADED)
-        
-        # Valid: id_uploaded -> selfie_uploaded
-        verification.transition_to(VERIFICATION_STATUS_SELFIE_UPLOADED)
-        self.assertEqual(verification.status, VERIFICATION_STATUS_SELFIE_UPLOADED)
-        
-        # Valid: selfie_uploaded -> under_review
-        verification.transition_to(VERIFICATION_STATUS_UNDER_REVIEW)
-        self.assertEqual(verification.status, VERIFICATION_STATUS_UNDER_REVIEW)
-        
-        # Valid: under_review -> verified
-        verification.transition_to(VERIFICATION_STATUS_VERIFIED)
-        self.assertEqual(verification.status, VERIFICATION_STATUS_VERIFIED)
-
-    def test_verification_event_immutability(self):
-        """Verify that VerificationEvent is strictly append-only."""
-        from esign.models import SignerVerification, VerificationEvent
-        from esign.constants import EVENT_ID_FRONT_UPLOADED
-        from django.core.exceptions import ValidationError
-        
-        verification = SignerVerification.objects.create(participant=self.participant)
-        event = VerificationEvent.objects.create(
-            signer_verification=verification,
-            event_type=EVENT_ID_FRONT_UPLOADED
-        )
-        self.assertIsNotNone(event.pk)
-        
-        # Try to modify
-        event.event_type = "SELFIE_UPLOADED"
-        with self.assertRaises(ValidationError):
-            event.save()
-            
-        # Try to delete
-        with self.assertRaises(ValidationError):
-            event.delete()
-
-    def test_api_unauthorized_access(self):
-        """Verify that requests without token or wrong tokens are rejected (IDOR protection)."""
-        from rest_framework.test import APIClient
-        client = APIClient()
-        
-        # Request details without credentials -> 403
-        response = client.get(f"/api/participants/{self.participant.id}/verification/")
-        self.assertEqual(response.status_code, 403)
-        
-        # Request details with invalid token -> 403
-        response = client.get(
-            f"/api/participants/{self.participant.id}/verification/",
-            HTTP_X_PARTICIPANT_TOKEN="invalid-uuid"
-        )
-        self.assertEqual(response.status_code, 403)
-        
-        # Request details as authenticated non-owner -> 403
-        client.force_authenticate(user=self.other_user)
-        response = client.get(f"/api/participants/{self.participant.id}/verification/")
-        self.assertEqual(response.status_code, 403)
-
-    def test_api_authorized_owner_access(self):
-        """Verify that the envelope owner can access details and upload verification documents."""
-        from rest_framework.test import APIClient
-        client = APIClient()
-        client.force_authenticate(user=self.owner)
-        
-        # GET details -> 200 (returns default pending status)
-        response = client.get(f"/api/participants/{self.participant.id}/verification/")
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["status"], "pending")
-        self.assertEqual(response.data["masked_national_id"], "")
-
-    def test_full_verification_flow_api(self):
-        """Verify complete upload sequence (ID -> Selfie -> Under Review) via public token headers."""
-        from rest_framework.test import APIClient
-        client = APIClient()
-        token_str = str(self.token_obj.token)
-        
-        # Mock files
-        front_img = self.generate_mock_image("front.png")
-        back_img = self.generate_mock_image("back.png")
-        selfie_img = self.generate_mock_image("selfie.png")
-        
-        # 1. Upload ID
-        payload_id = {
-            "national_id_number": "1234567890",
-            "front_image": front_img,
-            "back_image": back_img,
-        }
-        response = client.post(
-            f"/api/participants/{self.participant.id}/verification/id/",
-            payload_id,
-            format="multipart",
-            HTTP_X_PARTICIPANT_TOKEN=token_str
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["status"], "id_uploaded")
-        self.assertEqual(response.data["masked_national_id"], "******7890")
-        
-        # Verify events logged
-        from esign.models import VerificationEvent
-        from esign.constants import EVENT_ID_FRONT_UPLOADED, EVENT_ID_BACK_UPLOADED
-        events = list(VerificationEvent.objects.values_list("event_type", flat=True))
-        self.assertIn(EVENT_ID_FRONT_UPLOADED, events)
-        self.assertIn(EVENT_ID_BACK_UPLOADED, events)
-        
-        # 2. Upload Selfie
-        payload_selfie = {
-            "selfie_image": selfie_img,
-        }
-        response = client.post(
-            f"/api/participants/{self.participant.id}/verification/selfie/",
-            payload_selfie,
-            format="multipart",
-            HTTP_X_PARTICIPANT_TOKEN=token_str
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["status"], "under_review")
-        
-        # Verify details endpoint output (hides full ID number)
-        response_detail = client.get(
-            f"/api/participants/{self.participant.id}/verification/",
-            HTTP_X_PARTICIPANT_TOKEN=token_str
-        )
-        self.assertEqual(response_detail.status_code, 200)
-        self.assertEqual(response_detail.data["status"], "under_review")
-        self.assertEqual(response_detail.data["masked_national_id"], "******7890")
-        self.assertNotIn("national_id_number", response_detail.data)
-
-    def test_file_type_and_size_validation(self):
-        """Verify that files exceeding size limits or having invalid extensions/mimetypes are rejected."""
-        from rest_framework.test import APIClient
-        client = APIClient()
-        token_str = str(self.token_obj.token)
-        
-        # 1. Test image too large (>5MB)
-        large_img = self.generate_mock_image("large.png", bytes_length=6 * 1024 * 1024)
-        back_img = self.generate_mock_image("back.png")
-        payload = {
-            "national_id_number": "1234567890",
-            "front_image": large_img,
-            "back_image": back_img,
-        }
-        response = client.post(
-            f"/api/participants/{self.participant.id}/verification/id/",
-            payload,
-            format="multipart",
-            HTTP_X_PARTICIPANT_TOKEN=token_str
-        )
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("Image size exceeds the 5MB limit", response.data["detail"])
-        
-        # 2. Test invalid extension (.txt)
-        from django.core.files.uploadedfile import SimpleUploadedFile
-        bad_extension_file = SimpleUploadedFile("front.txt", b"fake file content", content_type="text/plain")
-        payload = {
-            "national_id_number": "1234567890",
-            "front_image": bad_extension_file,
-            "back_image": back_img,
-        }
-        response = client.post(
-            f"/api/participants/{self.participant.id}/verification/id/",
-            payload,
-            format="multipart",
-            HTTP_X_PARTICIPANT_TOKEN=token_str
-        )
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("Unsupported file format", response.data["detail"])
-
-        # 3. Test corrupted/fake image (correct extension but invalid headers)
-        fake_img_file = SimpleUploadedFile("front.png", b"fake binary content", content_type="image/png")
-        payload = {
-            "national_id_number": "1234567890",
-            "front_image": fake_img_file,
-            "back_image": back_img,
-        }
-        response = client.post(
-            f"/api/participants/{self.participant.id}/verification/id/",
-            payload,
-            format="multipart",
-            HTTP_X_PARTICIPANT_TOKEN=token_str
-        )
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("Invalid image format or corrupted image", response.data["detail"])
-
-
 from unittest.mock import patch
 import unittest
 
+
 class NationalIdentityOCRTestCase(TestCase):
+    """Tests for OCR parsing and image preprocessing functions in national_identity_service.
+    Legacy endpoint-dependent tests (test_successful_ocr_extraction, test_empty_ocr_extraction,
+    test_missing_image_extraction, test_authorization_for_extraction) have been removed as part of
+    the identity verification consolidation milestone (removal of legacy SignerVerification pipeline).
+    """
     def setUp(self):
-        from django.contrib.auth.models import User
-        from esign.models import Document, Envelope, Participant, ParticipantToken
-        from django.utils import timezone
-        from datetime import timedelta
-
-        # 1. Setup users & envelope
-        self.owner = User.objects.create_user(username="owner", password="password")
-        self.other_user = User.objects.create_user(username="other", password="password")
-        self.document = Document.objects.create(file="test.pdf", file_hash="hash")
-        self.envelope = Envelope.objects.create(document=self.document, owner=self.owner)
-
-        # 2. Setup participant & token
-        self.participant = Participant.objects.create(
-            envelope=self.envelope,
-            name="Alice Signer",
-            role="signer",
-            step_number=1,
-            order=1,
-        )
-        self.token_obj = ParticipantToken.objects.create(
-            participant=self.participant,
-            expires_at=timezone.now() + timedelta(hours=24),
-            is_used=False
-        )
+        pass  # setUp not required for OCR parsing unit tests
 
     def generate_mock_image(self, name="test.png", size=(100, 100)):
         from io import BytesIO
@@ -4521,134 +4256,8 @@ class NationalIdentityOCRTestCase(TestCase):
         data = file_obj.getvalue()
         return SimpleUploadedFile(name, data, content_type="image/png")
 
-    @patch("services.national_identity_service.extract_text_with_azure")
-    def test_successful_ocr_extraction(self, mock_extract):
-        """Verify successful OCR extraction, model persistence, masking, and event logging."""
-        mock_extract.return_value = {
-            "raw_text": "Saudi National ID\nالاسم: محمد بن سلمان\nID: 1023456789\nتاريخ الميلاد: 1985-08-31\nانتهاء: 2030-08-31",
-            "ocr_confidence": 0.98,
-            "ocr_provider": "azure"
-        }
 
-        # 1. Upload national ID
-        from services.signer_verification_service import upload_national_id
-        verification = upload_national_id(
-            self.participant,
-            "1023456789",
-            self.generate_mock_image("front.png"),
-            self.generate_mock_image("back.png")
-        )
 
-        # 2. Trigger extraction
-        from rest_framework.test import APIClient
-        client = APIClient()
-        token_str = str(self.token_obj.token)
-
-        response = client.post(
-            f"/api/participants/{self.participant.id}/verification/extract-id/",
-            HTTP_X_PARTICIPANT_TOKEN=token_str
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["full_name"], "محمد بن سلمان")
-        self.assertEqual(response.data["masked_national_id"], "******6789")
-        self.assertEqual(response.data["date_of_birth"], "1985-08-31")
-        self.assertEqual(response.data["expiry_date"], "2030-08-31")
-        self.assertEqual(response.data["document_type"], "saudi_id")
-
-        # 3. Assert database state
-        from esign.models import NationalIdentity, VerificationEvent
-        from esign.constants import EVENT_ID_OCR_STARTED, EVENT_ID_OCR_COMPLETED
-
-        national_identity = NationalIdentity.objects.get(verification=verification)
-        self.assertEqual(national_identity.extraction_status, "success")
-        self.assertEqual(national_identity.national_id_number, "1023456789")
-        expected_raw_text = f"{mock_extract.return_value['raw_text']}\n{mock_extract.return_value['raw_text']}"
-        self.assertEqual(national_identity.raw_text, expected_raw_text)
-        self.assertEqual(national_identity.ocr_confidence, 0.98)
-        self.assertIsNotNone(national_identity.extracted_at)
-
-        # Verify events
-        events = list(VerificationEvent.objects.filter(signer_verification=verification).values_list("event_type", flat=True))
-        self.assertIn(EVENT_ID_OCR_STARTED, events)
-        self.assertIn(EVENT_ID_OCR_COMPLETED, events)
-
-    @patch("services.national_identity_service.extract_text_with_azure")
-    def test_empty_ocr_extraction(self, mock_extract):
-        """Verify graceful failure when OCR returns empty text."""
-        mock_extract.return_value = {
-            "raw_text": "",
-            "ocr_confidence": 0.5,
-            "ocr_provider": "azure"
-        }
-
-        # Upload national ID
-        from services.signer_verification_service import upload_national_id
-        verification = upload_national_id(
-            self.participant,
-            "1023456789",
-            self.generate_mock_image("front.png"),
-            None
-        )
-
-        # Trigger extraction
-        from rest_framework.test import APIClient
-        client = APIClient()
-        token_str = str(self.token_obj.token)
-
-        response = client.post(
-            f"/api/participants/{self.participant.id}/verification/extract-id/",
-            HTTP_X_PARTICIPANT_TOKEN=token_str
-        )
-
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("No text detected", response.data["detail"])
-
-        # Check DB
-        from esign.models import NationalIdentity, VerificationEvent
-        from esign.constants import EVENT_ID_OCR_FAILED
-
-        national_identity = NationalIdentity.objects.get(verification=verification)
-        self.assertEqual(national_identity.extraction_status, "failed")
-        self.assertEqual(national_identity.failure_reason, "no_text_detected")
-
-        events = list(VerificationEvent.objects.filter(signer_verification=verification).values_list("event_type", flat=True))
-        self.assertIn(EVENT_ID_OCR_FAILED, events)
-
-    def test_missing_image_extraction(self):
-        """Verify validation error when front ID image has not been uploaded."""
-        from rest_framework.test import APIClient
-        client = APIClient()
-        token_str = str(self.token_obj.token)
-
-        response = client.post(
-            f"/api/participants/{self.participant.id}/verification/extract-id/",
-            HTTP_X_PARTICIPANT_TOKEN=token_str
-        )
-
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("Front ID image is required", response.data["detail"])
-
-    def test_authorization_for_extraction(self):
-        """Verify that unauthorized tokens are rejected and envelope owners can access."""
-        from rest_framework.test import APIClient
-        client = APIClient()
-
-        # No token -> 403
-        response = client.post(f"/api/participants/{self.participant.id}/verification/extract-id/")
-        self.assertEqual(response.status_code, 403)
-
-        # Invalid token -> 403
-        response = client.post(
-            f"/api/participants/{self.participant.id}/verification/extract-id/",
-            HTTP_X_PARTICIPANT_TOKEN="invalid-uuid-value"
-        )
-        self.assertEqual(response.status_code, 403)
-
-        # Envelope owner -> 400 (bypasses auth, but fails due to missing image)
-        client.force_authenticate(user=self.owner)
-        response = client.post(f"/api/participants/{self.participant.id}/verification/extract-id/")
-        self.assertEqual(response.status_code, 400)
 
     def test_original_bytes_preserved(self):
         """Verifies that original bytes are not mutated by preprocess_identity_image, preprocessing is non-destructive, and returned bytes are valid image data."""
@@ -4708,6 +4317,44 @@ class NationalIdentityOCRTestCase(TestCase):
         self.assertTrue(fallback_result["metadata"]["fallback_used"])
         self.assertFalse(fallback_result["metadata"]["pdf_bypass"])
 
+    def test_metadata_label_not_selected_as_name(self):
+        """
+        Regression test — Phase 11.2 OCR Metadata Suppression bugfix.
+
+        Raw OCR text beginning with 'Saudi National ID' must never produce
+        'National ID', 'Saudi', or 'Saudi National ID' as the selected name.
+        The Arabic name on the following line must win.
+        """
+        from services.identity_candidate_service import generate_name_candidates, BLOCKED_NAME_CANDIDATES
+        from services.identity_selection_service import select_best_name_candidate
+        from services.identity_scoring_service import score_name_candidates
+
+        raw_text = (
+            "Saudi National ID\n"
+            "محمد بن سلمان\n"
+            "1012345678"
+        )
+
+        candidates = generate_name_candidates(raw_text)
+        candidate_values = [c.value for c in candidates]
+
+        # No blocked label should appear as a candidate at all
+        for blocked in BLOCKED_NAME_CANDIDATES:
+            self.assertNotIn(
+                blocked,
+                [v.lower() for v in candidate_values],
+                msg=f"Blocked metadata label '{blocked}' leaked into name candidates",
+            )
+
+        scored = score_name_candidates(candidates, raw_text)
+        best = select_best_name_candidate(scored)
+
+        self.assertIsNotNone(best, "Expected a name candidate to be selected")
+        self.assertEqual(
+            best.value,
+            "محمد بن سلمان",
+            f"Expected Arabic name 'محمد بن سلمان' but got '{best.value if best else None}'",
+        )
 
 
 class IdentityParserRefinementTestCase(TestCase):
@@ -5292,6 +4939,7 @@ class TermsAcceptanceTestCase(TestCase):
             email="terms@test.com",
             role="signer",
             order=1,
+            status="active",
         )
         self.token_obj = ParticipantToken.objects.create(
             participant=self.participant,
@@ -5453,6 +5101,7 @@ class EmailOTPTestCase(TestCase):
             email="otp@test.com",
             role="signer",
             order=1,
+            status="active",
         )
         self.token_obj = ParticipantToken.objects.create(
             participant=self.participant,
@@ -5475,8 +5124,8 @@ class EmailOTPTestCase(TestCase):
             state = send_email_otp(self.participant)
 
         self.assertIsNotNone(state.email_otp_code)
-        self.assertEqual(len(state.email_otp_code), 6)
-        self.assertTrue(state.email_otp_code.isdigit())
+        self.assertEqual(len(state.email_otp_code), 64)
+        self.assertTrue(all(c in '0123456789abcdef' for c in state.email_otp_code))
         self.assertIsNotNone(state.email_otp_sent_at)
         self.assertIsNotNone(state.email_otp_expires_at)
         self.assertGreater(state.email_otp_expires_at, timezone.now())
@@ -5491,7 +5140,9 @@ class EmailOTPTestCase(TestCase):
         with self.settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"):
             state = send_email_otp(self.participant)
 
-        stored_otp = state.email_otp_code
+        from django.core import mail
+        import re
+        stored_otp = re.search(r"code is:\s*(\d{6})", mail.outbox[-1].body).group(1)
         result = verify_email_otp(self.participant, stored_otp)
 
         self.assertEqual(result, {"verified": True})
@@ -5522,8 +5173,11 @@ class EmailOTPTestCase(TestCase):
         with self.settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"):
             state = send_email_otp(self.participant)
 
+        from django.core import mail
+        import re
+        stored_otp = re.search(r"code is:\s*(\d{6})", mail.outbox[-1].body).group(1)
+
         # Backdate the expiry to simulate expiration
-        stored_otp = state.email_otp_code
         state.email_otp_expires_at = timezone.now() - timedelta(minutes=1)
         state.save(update_fields=["email_otp_expires_at"])
 
@@ -5543,7 +5197,9 @@ class EmailOTPTestCase(TestCase):
         with self.settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"):
             state = send_email_otp(self.participant)
 
-        stored_otp = state.email_otp_code
+        from django.core import mail
+        import re
+        stored_otp = re.search(r"code is:\s*(\d{6})", mail.outbox[-1].body).group(1)
         verify_email_otp(self.participant, stored_otp)
 
         status_data = get_authorization_status(self.participant)
@@ -5580,16 +5236,17 @@ class EmailOTPTestCase(TestCase):
 
     def test_api_verify_email_otp_correct(self):
         """Correct OTP via API returns verified=True."""
-        from .models import ParticipantAuthorizationState
+        from django.core import mail
+        import re
 
         with self.settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"):
             self._post("send-email-otp", self.participant.id, {}, token=self.token)
 
-        state = ParticipantAuthorizationState.objects.get(participant=self.participant)
+        stored_otp = re.search(r"code is:\s*(\d{6})", mail.outbox[-1].body).group(1)
         response = self._post(
             "verify-email-otp",
             self.participant.id,
-            {"otp": state.email_otp_code},
+            {"otp": stored_otp},
             token=self.token,
         )
         self.assertEqual(response.status_code, 200)
@@ -5619,3 +5276,748 @@ class EmailOTPTestCase(TestCase):
             token=self.token,
         )
         self.assertEqual(response.status_code, 400)
+
+
+class VerificationSessionTestCase(TestCase):
+    """
+    Phase 11.5 — Verification Session Foundation Tests.
+    """
+
+    def setUp(self):
+        from .models import Document, Envelope, Participant
+        self.document = Document.objects.create(
+            file="verification_test.pdf",
+            file_hash="verificationhash001"
+        )
+        self.envelope = Envelope.objects.create(
+            document=self.document,
+            status="sent",
+            signature_page=1,
+        )
+        self.participant = Participant.objects.create(
+            envelope=self.envelope,
+            name="Session Tester",
+            email="session@test.com",
+            role="signer",
+            order=1,
+        )
+
+    def test_create_session(self):
+        from services.verification_session_service import get_or_create_verification_session
+        session = get_or_create_verification_session(self.participant)
+        self.assertEqual(session.status, "pending")
+        self.assertEqual(session.failure_reason, "")
+        self.assertIsNotNone(session.started_at)
+        self.assertIsNone(session.completed_at)
+
+    def test_mark_processing(self):
+        from services.verification_session_service import mark_verification_processing
+        session = mark_verification_processing(self.participant)
+        self.assertEqual(session.status, "processing")
+        self.assertEqual(session.failure_reason, "")
+
+    def test_mark_approved(self):
+        from services.verification_session_service import mark_verification_approved
+        session = mark_verification_approved(self.participant)
+        self.assertEqual(session.status, "approved")
+        self.assertIsNotNone(session.completed_at)
+
+    def test_mark_failed(self):
+        from services.verification_session_service import mark_verification_failed
+        session = mark_verification_failed(self.participant, reason="Face did not match")
+        self.assertEqual(session.status, "failed")
+        self.assertEqual(session.failure_reason, "Face did not match")
+        self.assertIsNotNone(session.completed_at)
+
+    def test_mark_manual_review(self):
+        from services.verification_session_service import mark_verification_manual_review
+        session = mark_verification_manual_review(self.participant, reason="Low confidence score")
+        self.assertEqual(session.status, "requires_manual_review")
+        self.assertEqual(session.failure_reason, "Low confidence score")
+        self.assertIsNotNone(session.completed_at)
+
+    def test_get_or_create_idempotent(self):
+        from services.verification_session_service import get_or_create_verification_session
+        session1 = get_or_create_verification_session(self.participant)
+        session2 = get_or_create_verification_session(self.participant)
+        self.assertEqual(session1.id, session2.id)
+
+
+class BiometricVerificationTestCase(TestCase):
+    """
+    Phase 12 — Face Biometrics Foundation Tests.
+    """
+
+    def setUp(self):
+        from .models import Document, Envelope, Participant
+        self.document = Document.objects.create(
+            file="biometric_test.pdf",
+            file_hash="biometrichash001"
+        )
+        self.envelope = Envelope.objects.create(
+            document=self.document,
+            status="sent",
+            signature_page=1,
+        )
+        self.participant = Participant.objects.create(
+            envelope=self.envelope,
+            name="Biometric Tester",
+            email="biometric@test.com",
+            role="signer",
+            order=1,
+        )
+
+    def test_create_biometric_verification(self):
+        from services.biometric_verification_service import get_or_create_biometric_verification
+        biometric = get_or_create_biometric_verification(self.participant)
+        self.assertEqual(biometric.status, "pending")
+        self.assertIsNone(biometric.similarity_score)
+        self.assertIsNone(biometric.liveness_score)
+        self.assertEqual(biometric.provider, "")
+        self.assertEqual(biometric.failure_reason, "")
+        self.assertIsNotNone(biometric.started_at)
+        self.assertIsNone(biometric.completed_at)
+        # Verify it created a parent VerificationSession automatically
+        self.assertIsNotNone(biometric.verification_session)
+        self.assertEqual(biometric.verification_session.participant, self.participant)
+
+    def test_mark_processing(self):
+        from services.biometric_verification_service import mark_biometric_processing
+        biometric = mark_biometric_processing(self.participant)
+        self.assertEqual(biometric.status, "processing")
+
+    def test_mark_matched(self):
+        from services.biometric_verification_service import mark_biometric_matched
+        biometric = mark_biometric_matched(
+            self.participant,
+            similarity_score=0.92,
+            liveness_score=0.88,
+            provider="mock_azure_biometrics"
+        )
+        self.assertEqual(biometric.status, "matched")
+        self.assertEqual(biometric.similarity_score, 0.92)
+        self.assertEqual(biometric.liveness_score, 0.88)
+        self.assertEqual(biometric.provider, "mock_azure_biometrics")
+        self.assertIsNotNone(biometric.completed_at)
+
+    def test_mark_failed(self):
+        from services.biometric_verification_service import mark_biometric_failed
+        biometric = mark_biometric_failed(self.participant, reason="Liveness check failed")
+        self.assertEqual(biometric.status, "failed")
+        self.assertEqual(biometric.failure_reason, "Liveness check failed")
+        self.assertIsNotNone(biometric.completed_at)
+
+    def test_mark_manual_review(self):
+        from services.biometric_verification_service import mark_biometric_manual_review
+        biometric = mark_biometric_manual_review(self.participant, reason="Lighting too dark")
+        self.assertEqual(biometric.status, "requires_manual_review")
+        self.assertEqual(biometric.failure_reason, "Lighting too dark")
+        self.assertIsNotNone(biometric.completed_at)
+
+    def test_get_or_create_idempotent(self):
+        from services.biometric_verification_service import get_or_create_biometric_verification
+        biometric1 = get_or_create_biometric_verification(self.participant)
+        biometric2 = get_or_create_biometric_verification(self.participant)
+        self.assertEqual(biometric1.id, biometric2.id)
+
+
+from unittest.mock import patch
+
+
+# ---------------------------------------------------------------------------
+# Phase 12.1 & 12.2 — Face Matching Engine and API tests
+# ---------------------------------------------------------------------------
+class FaceMatchingTestCase(TestCase):
+    """Phase 12.1 & 12.2 — Face Matching Engine and API tests."""
+
+    def setUp(self):
+        from .models import Document, Envelope, Participant, ParticipantToken, SignerIdentityVerification
+        from django.utils import timezone
+        from datetime import timedelta
+        from django.core.files.base import ContentFile
+
+        self.document = Document.objects.create(
+            file="face_test.pdf",
+            file_hash="facehash001"
+        )
+        self.envelope = Envelope.objects.create(
+            document=self.document,
+            status="sent",
+            signature_page=1,
+            face_biometric_required=True,
+        )
+        self.participant = Participant.objects.create(
+            envelope=self.envelope,
+            name="Face Tester",
+            email="face@test.com",
+            role="signer",
+            order=1,
+            status="active",
+        )
+        self.token_obj = ParticipantToken.objects.create(
+            participant=self.participant,
+            expires_at=timezone.now() + timedelta(hours=24),
+            is_used=False,
+        )
+        self.token = str(self.token_obj.token)
+
+        # Create SignerIdentityVerification so perform_face_match can fetch the ref image
+        self.identity_verification = SignerIdentityVerification.objects.create(
+            participant=self.participant,
+            status="verified"
+        )
+        self.identity_verification.reference_face_image.save(
+            "ref_face.jpg",
+            ContentFile(b"ref_data"),
+            save=True
+        )
+
+    @patch('services.face_matching_service.calculate_face_similarity')
+    def test_high_similarity(self, mock_similarity):
+        mock_similarity.return_value = 0.83
+        from services.face_matching_service import perform_face_match
+
+        biometric = perform_face_match(self.participant, b"selfie_data")
+        self.assertEqual(biometric.status, "matched")
+        self.assertEqual(biometric.similarity_score, 0.83)
+        self.assertEqual(biometric.provider, "insightface")
+
+    @patch('services.face_matching_service.calculate_face_similarity')
+    def test_low_similarity(self, mock_similarity):
+        mock_similarity.return_value = 0.42
+        from services.face_matching_service import perform_face_match
+
+        biometric = perform_face_match(self.participant, b"selfie_data")
+        self.assertEqual(biometric.status, "failed")
+        self.assertEqual(biometric.similarity_score, 0.42)
+        self.assertEqual(biometric.failure_reason, "similarity_below_threshold")
+
+    @patch('services.face_matching_service.calculate_face_similarity')
+    def test_exception(self, mock_similarity):
+        mock_similarity.side_effect = Exception("General error")
+        from services.face_matching_service import perform_face_match
+
+        biometric = perform_face_match(self.participant, b"selfie_data")
+        self.assertEqual(biometric.status, "requires_manual_review")
+        self.assertEqual(biometric.failure_reason, "General error")
+
+    @patch('services.face_matching_service.calculate_face_similarity')
+    def test_no_face_detected(self, mock_similarity):
+        mock_similarity.side_effect = ValueError("no_face_detected")
+        from services.face_matching_service import perform_face_match
+
+        biometric = perform_face_match(self.participant, b"selfie_data")
+        self.assertEqual(biometric.status, "requires_manual_review")
+        self.assertEqual(biometric.failure_reason, "no_face_detected")
+
+    def _post(self, participant_id, data, token=None):
+        from rest_framework.test import APIClient
+        from django.urls import reverse
+        client = APIClient()
+        url = reverse("face-verification", kwargs={"participant_id": participant_id})
+        if token:
+            return client.post(url, data, format="multipart", HTTP_X_PARTICIPANT_TOKEN=token)
+        return client.post(url, data, format="multipart")
+
+    @patch('esign.views.validate_image_file')
+    @patch('services.face_matching_service.calculate_face_similarity')
+    def test_api_success(self, mock_similarity, mock_validate):
+        mock_similarity.return_value = 0.83
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        selfie = SimpleUploadedFile("selfie.jpg", b"selfie_content", content_type="image/jpeg")
+        response = self._post(self.participant.id, {"selfie_image": selfie}, token=self.token)
+        self.assertEqual(response.status_code, 200)
+        res_json = response.json()
+        self.assertTrue(res_json["matched"])
+        self.assertEqual(res_json["similarity_score"], 0.83)
+        self.assertEqual(res_json["provider"], "insightface")
+
+    @patch('esign.views.validate_image_file')
+    @patch('services.face_matching_service.calculate_face_similarity')
+    def test_api_failure(self, mock_similarity, mock_validate):
+        mock_similarity.return_value = 0.42
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        selfie = SimpleUploadedFile("selfie.jpg", b"selfie_content", content_type="image/jpeg")
+        response = self._post(self.participant.id, {"selfie_image": selfie}, token=self.token)
+        self.assertEqual(response.status_code, 200)
+        res_json = response.json()
+        self.assertFalse(res_json["matched"])
+        self.assertEqual(res_json["similarity_score"], 0.42)
+
+
+# ---------------------------------------------------------------------------
+# Phase 12.2.5 — Identity Verification (National ID Upload & Reference Face)
+# ---------------------------------------------------------------------------
+class IdentityVerificationTestCase(TestCase):
+    """Phase 12.2.5 — Tests for SignerIdentityVerification model, identity extraction,
+    and reference face storage features."""
+
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from esign.models import Document, Envelope, Participant, ParticipantToken
+        from django.utils import timezone
+        from datetime import timedelta
+
+        self.owner = User.objects.create_user(username="owner_id", password="password")
+        self.document = Document.objects.create(file="id_test.pdf", file_hash="idhash001")
+        self.envelope = Envelope.objects.create(
+            document=self.document,
+            owner=self.owner,
+            status="sent",
+            national_id_required=True
+        )
+        self.participant = Participant.objects.create(
+            envelope=self.envelope,
+            name="ID Tester",
+            email="id@test.com",
+            role="signer",
+            order=1,
+            status="active",
+        )
+        self.token_obj = ParticipantToken.objects.create(
+            participant=self.participant,
+            expires_at=timezone.now() + timedelta(hours=24),
+            is_used=False,
+        )
+        self.token = str(self.token_obj.token)
+
+    # ------------------------------------------------------------------
+    # Helpers: shared mock return values
+    # ------------------------------------------------------------------
+    def _ocr_return(self):
+        return {
+            "raw_text": "Aadhaar Card\nName: Alice Tester\nID: 1234 5678 9012\nDOB: 01/01/1990",
+            "ocr_confidence": 0.95,
+            "ocr_provider": "azure",
+        }
+
+    def _parse_return(self):
+        import datetime
+        return {
+            "full_name": "Alice Tester",
+            "national_id_number": "123456789012",
+            "date_of_birth": datetime.date(1990, 1, 1),
+            "document_type": "aadhaar",
+        }
+
+    # ------------------------------------------------------------------
+    # Test 1 — OCR succeeds -> status becomes verified
+    # ------------------------------------------------------------------
+    @patch('services.identity_verification_service.extract_reference_face')
+    @patch('services.identity_verification_service.extract_identity_data')
+    @patch('services.identity_verification_service.parse_identity_document')
+    def test_successful_identity_verification(self, mock_parse, mock_extract, mock_crop_face):
+        self.participant.name = "Alice Tester"
+        self.participant.save()
+        mock_extract.return_value = self._ocr_return()
+        mock_parse.return_value = self._parse_return()
+        mock_crop_face.return_value = b"cropped_face_bytes"
+
+        from services.identity_verification_service import perform_identity_verification
+        verification = perform_identity_verification(self.participant, b"mock_id_card_image_bytes")
+
+        self.assertEqual(verification.status, "verified")
+        self.assertEqual(verification.full_name, "Alice Tester")
+        self.assertEqual(verification.national_id_number, "123456789012")
+        self.assertEqual(verification.document_type, "aadhaar")
+
+    # ------------------------------------------------------------------
+    # Test 2 — Reference face bytes are persisted to the image field
+    # ------------------------------------------------------------------
+    @patch('services.identity_verification_service.extract_reference_face')
+    @patch('services.identity_verification_service.extract_identity_data')
+    @patch('services.identity_verification_service.parse_identity_document')
+    def test_reference_face_saved(self, mock_parse, mock_extract, mock_crop_face):
+        self.participant.name = "Alice Tester"
+        self.participant.save()
+        mock_extract.return_value = self._ocr_return()
+        mock_parse.return_value = self._parse_return()
+        mock_crop_face.return_value = b"cropped_face_bytes"
+
+        from services.identity_verification_service import perform_identity_verification
+        verification = perform_identity_verification(self.participant, b"mock_id_card_image_bytes")
+
+        self.assertTrue(verification.document_image.name.endswith(".jpg"))
+        self.assertTrue(verification.reference_face_image.name.endswith(".jpg"))
+
+        verification.reference_face_image.open("rb")
+        stored = verification.reference_face_image.read()
+        verification.reference_face_image.close()
+        self.assertEqual(stored, b"cropped_face_bytes")
+
+    # ------------------------------------------------------------------
+    # Test 3 — Exception during OCR -> status becomes requires_manual_review
+    # ------------------------------------------------------------------
+    @patch('services.identity_verification_service.extract_reference_face')
+    @patch('services.identity_verification_service.extract_identity_data')
+    def test_manual_review_on_exception(self, mock_extract, mock_crop_face):
+        mock_extract.side_effect = Exception("Azure OCR API error")
+
+        from services.identity_verification_service import perform_identity_verification
+        verification = perform_identity_verification(self.participant, b"mock_id_card_image_bytes")
+
+        self.assertEqual(verification.status, "requires_manual_review")
+        self.assertEqual(verification.failure_reason, "Azure OCR API error")
+        self.assertEqual(verification.full_name, "")
+        self.assertEqual(verification.national_id_number, "")
+
+    # ------------------------------------------------------------------
+    # Test 4 — POST /identity-verification/ -> 200 + verified payload
+    # ------------------------------------------------------------------
+    @patch('esign.views.validate_image_file')
+    @patch('services.identity_verification_service.extract_reference_face')
+    @patch('services.identity_verification_service.extract_identity_data')
+    @patch('services.identity_verification_service.parse_identity_document')
+    def test_view_success(self, mock_parse, mock_extract, mock_crop_face, mock_validate):
+        self.participant.name = "Khalid"
+        self.participant.save()
+        import datetime
+        mock_extract.return_value = {
+            "raw_text": "Saudi ID\nName: Khalid\nID: 1029384756",
+            "ocr_confidence": 0.98,
+            "ocr_provider": "azure",
+        }
+        mock_parse.return_value = {
+            "full_name": "Khalid",
+            "national_id_number": "1029384756",
+            "date_of_birth": datetime.date(1985, 5, 20),
+            "document_type": "saudi_id",
+        }
+        mock_crop_face.return_value = b"cropped_face_bytes"
+
+        from rest_framework.test import APIClient
+        from django.urls import reverse
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        client = APIClient()
+        url = reverse("identity-verification", kwargs={"participant_id": self.participant.id})
+        doc_image = SimpleUploadedFile("id_front.jpg", b"fake_id_bytes", content_type="image/jpeg")
+
+        response = client.post(
+            url,
+            {"document_image": doc_image},
+            format="multipart",
+            HTTP_X_PARTICIPANT_TOKEN=self.token,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        res_json = response.json()
+        self.assertEqual(res_json["status"], "verified")
+        self.assertEqual(res_json["full_name"], "Khalid")
+        self.assertEqual(res_json["document_type"], "saudi_id")
+
+        self.participant.refresh_from_db()
+        self.assertTrue(hasattr(self.participant, "signer_identity_verification"))
+        self.assertEqual(self.participant.signer_identity_verification.status, "verified")
+
+    # ------------------------------------------------------------------
+    # Test 5 — POST /identity-verification/ when OCR raises -> 200 + manual_review
+    # ------------------------------------------------------------------
+    @patch('esign.views.validate_image_file')
+    @patch('services.identity_verification_service.extract_reference_face')
+    @patch('services.identity_verification_service.extract_identity_data')
+    def test_view_exception(self, mock_extract, mock_crop_face, mock_validate):
+        mock_extract.side_effect = Exception("OCR downstream failure")
+
+        from rest_framework.test import APIClient
+        from django.urls import reverse
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        client = APIClient()
+        url = reverse("identity-verification", kwargs={"participant_id": self.participant.id})
+        doc_image = SimpleUploadedFile("id_front.jpg", b"fake_id_bytes", content_type="image/jpeg")
+
+        response = client.post(
+            url,
+            {"document_image": doc_image},
+            format="multipart",
+            HTTP_X_PARTICIPANT_TOKEN=self.token,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        res_json = response.json()
+        self.assertEqual(res_json["status"], "requires_manual_review")
+        self.assertIn("failure_reason", res_json)
+
+
+class LivenessServiceTestCase(TestCase):
+    def test_liveness_placeholder(self):
+        from services.liveness_service import perform_liveness_check
+        result = perform_liveness_check(b"fake_selfie_data")
+        self.assertTrue(result.passed)
+        self.assertEqual(result.score, 1.0)
+        self.assertEqual(result.provider, "local-placeholder")
+        self.assertEqual(result.reason, "")
+
+
+class ParticipantMatchingTestCase(TestCase):
+    def test_normalize_string(self):
+        from services.participant_matching_service import normalize_string
+        # Case insensitivity
+        self.assertEqual(normalize_string("john doe"), "JOHN DOE")
+        # Leading/trailing/collapsed whitespace
+        self.assertEqual(normalize_string("  john   doe  "), "JOHN DOE")
+        # Punctuation
+        self.assertEqual(normalize_string("john. doe,!"), "JOHN DOE")
+        # Unicode normalization
+        self.assertEqual(normalize_string("jôhn dôe"), "JOHN DOE")
+        # Separators replaced with spaces
+        self.assertEqual(normalize_string("john-doe_test/one.two"), "JOHN DOE TEST ONE TWO")
+        # Arabic diacritics (tashkeel)
+        self.assertEqual(normalize_string("مُحَمَّد"), "محمد")
+
+    def test_name_matching_thresholds(self):
+        from services.participant_matching_service import match_participant_identity
+        from unittest.mock import MagicMock
+        
+        participant = MagicMock()
+        participant.name = "John Doe"
+        
+        # Exact match
+        self.assertTrue(match_participant_identity(participant, {"full_name": "John Doe"})["matched"])
+        # Case insensitive and punctuation/whitespace
+        self.assertTrue(match_participant_identity(participant, {"full_name": "  john.   doe! "})["matched"])
+        # Close match (within 0.85)
+        self.assertTrue(match_participant_identity(participant, {"full_name": "John Doee"})["matched"])
+        # Obvious mismatch
+        self.assertFalse(match_participant_identity(participant, {"full_name": "Jane Smith"})["matched"])
+
+    @patch('services.identity_verification_service.extract_identity_data')
+    @patch('services.identity_verification_service.extract_reference_face')
+    def test_identity_verification_matching_flow(self, mock_crop_face, mock_extract_ocr):
+        from .models import Document, Envelope, Participant, SignerIdentityVerification
+        from services.identity_verification_service import perform_identity_verification
+        
+        doc = Document.objects.create(file="test.pdf", file_hash="hash")
+        envelope = Envelope.objects.create(document=doc, status="sent", national_id_required=True)
+        
+        # 1. Matching case
+        participant_match = Participant.objects.create(envelope=envelope, name="John Doe", email="match@test.com", role="signer")
+        mock_extract_ocr.return_value = {"raw_text": "Name: John Doe"}
+        mock_crop_face.return_value = b"cropped_bytes"
+        
+        with patch('services.identity_verification_service.parse_identity_document') as mock_parse:
+            mock_parse.return_value = {"full_name": "John Doe", "national_id_number": "123"}
+            verification = perform_identity_verification(participant_match, b"fake_image_bytes")
+            
+            self.assertEqual(verification.status, "verified")
+            self.assertTrue(verification.identity_matched)
+            self.assertGreaterEqual(verification.identity_match_score, 0.85)
+            self.assertEqual(verification.failure_reason, "")
+
+        # 2. Mismatched case (routes to requires_manual_review)
+        participant_mismatch = Participant.objects.create(envelope=envelope, name="Jane Smith", email="mismatch@test.com", role="signer")
+        with patch('services.identity_verification_service.parse_identity_document') as mock_parse:
+            mock_parse.return_value = {"full_name": "John Doe", "national_id_number": "123"}
+            verification = perform_identity_verification(participant_mismatch, b"fake_image_bytes")
+            
+            self.assertEqual(verification.status, "requires_manual_review")
+            self.assertFalse(verification.identity_matched)
+            self.assertLess(verification.identity_match_score, 0.85)
+            self.assertEqual(verification.failure_reason, "identity_name_mismatch")
+
+
+class ConfigurationRegistryTestCase(TestCase):
+    def test_config_registry_defaults(self):
+        from esign.config import esign_config
+        self.assertEqual(esign_config.face_match_threshold, 0.6)
+        self.assertEqual(esign_config.identity_match_threshold, 0.85)
+        self.assertEqual(esign_config.otp_expiry, 10)
+        self.assertEqual(esign_config.signing_link_expiry, 24)
+        self.assertEqual(esign_config.max_otp_attempts, 5)
+        self.assertEqual(esign_config.max_upload_size, 20 * 1024 * 1024)
+        self.assertEqual(esign_config.api_version, "v1")
+
+    def test_config_validation(self):
+        from esign.config import ESignatureConfig
+        from django.core.exceptions import ImproperlyConfigured
+        from django.test import override_settings
+
+        # Valid override
+        with override_settings(FACE_MATCH_THRESHOLD=0.7):
+            config = ESignatureConfig()
+            self.assertEqual(config.face_match_threshold, 0.7)
+
+        # Invalid face threshold
+        with override_settings(FACE_MATCH_THRESHOLD=1.5):
+            with self.assertRaises(ImproperlyConfigured):
+                ESignatureConfig()
+
+        # Invalid OTP expiry
+        with override_settings(ESIGN_OTP_EXPIRY_MINUTES=-1):
+            with self.assertRaises(ImproperlyConfigured):
+                ESignatureConfig()
+
+
+class ProviderRegistryTestCase(TestCase):
+    def test_provider_registry_resolution(self):
+        from esign.providers.registry import ESignatureProviderRegistry
+        from esign.providers.ocr import CombinedOCRProvider, AzureOCRProvider
+        from esign.providers.face import InsightFaceMatchingProvider
+        from django.core.exceptions import ImproperlyConfigured
+        from django.test import override_settings
+
+        # Test defaults
+        registry = ESignatureProviderRegistry()
+        self.assertIsInstance(registry.ocr_provider, CombinedOCRProvider)
+        self.assertIsInstance(registry.face_provider, InsightFaceMatchingProvider)
+
+        # Test Azure OCR selection
+        with override_settings(ESIGN_OCR_PROVIDER="azure"):
+            registry_azure = ESignatureProviderRegistry()
+            self.assertIsInstance(registry_azure.ocr_provider, AzureOCRProvider)
+
+        # Test invalid provider raising error
+        with override_settings(ESIGN_OCR_PROVIDER="invalid_ocr"):
+            registry_invalid = ESignatureProviderRegistry()
+            with self.assertRaises(ImproperlyConfigured):
+                _ = registry_invalid.ocr_provider
+
+
+class EventDispatcherTestCase(TestCase):
+    def test_event_registration_and_publishing(self):
+        from esign.events.dispatcher import EventDispatcher
+        from esign.events.base import DomainEvent
+
+        dispatcher = EventDispatcher()
+        executed_events = []
+
+        def dummy_handler(event: DomainEvent):
+            executed_events.append(event)
+
+        dispatcher.register("test.event", dummy_handler)
+        event = DomainEvent("test.event", {"foo": "bar"})
+        dispatcher.publish(event)
+
+        self.assertEqual(len(executed_events), 1)
+        self.assertEqual(executed_events[0].payload["foo"], "bar")
+
+    def test_handler_error_isolation(self):
+        from esign.events.dispatcher import EventDispatcher
+        from esign.events.base import DomainEvent
+
+        dispatcher = EventDispatcher()
+        execution_order = []
+
+        def failing_handler(event: DomainEvent):
+            execution_order.append("failing")
+            raise ValueError("Boom!")
+
+        def succeeding_handler(event: DomainEvent):
+            execution_order.append("succeeding")
+
+        dispatcher.register("isolate.event", failing_handler)
+        dispatcher.register("isolate.event", succeeding_handler)
+
+        event = DomainEvent("isolate.event", {})
+        # Should not raise exception
+        dispatcher.publish(event)
+
+        self.assertEqual(execution_order, ["failing", "succeeding"])
+
+    @patch("requests.post")
+    def test_webhook_delivery(self, mock_post):
+        from esign.models import WebhookSubscription
+        from esign.events.handlers import handle_webhooks
+        from esign.events.base import DomainEvent
+        from django.test import override_settings
+        import json
+
+        # Configure mock post
+        mock_post.return_value.status_code = 200
+
+        # Create active subscription
+        sub = WebhookSubscription.objects.create(
+            url="https://test-webhook.url/endpoint",
+            is_active=True,
+            events=["envelope.completed"]
+        )
+
+        event = DomainEvent("envelope.completed", {"envelope_id": 42})
+        
+        with override_settings(ESIGN_WEBHOOKS_ENABLED=True):
+            handle_webhooks(event)
+            
+        mock_post.assert_called_once()
+        args, kwargs = mock_post.call_args
+        self.assertEqual(args[0], "https://test-webhook.url/endpoint")
+        payload = json.loads(kwargs["data"])
+        self.assertEqual(payload["event"], "envelope.completed")
+        self.assertEqual(payload["data"]["envelope_id"], 42)
+
+
+class ObservabilityTestCase(TestCase):
+    def test_request_id_middleware(self):
+        from rest_framework.test import APIClient
+        client = APIClient()
+        response = client.get("/api/v1/swagger/")
+        
+        # Verify X-Request-ID header is present in the response
+        self.assertIn("X-Request-ID", response)
+        request_id = response["X-Request-ID"]
+        self.assertTrue(len(request_id) > 0)
+
+        # Propagates an existing header if provided
+        custom_id = "test-custom-request-id-1234"
+        response2 = client.get("/api/v1/swagger/", HTTP_X_REQUEST_ID=custom_id)
+        self.assertEqual(response2.get("X-Request-ID"), custom_id)
+
+    def test_request_context_thread_local(self):
+        from esign.request_context import set_request_id, get_request_id, clear_request_id
+        set_request_id("thread-test-id")
+        self.assertEqual(get_request_id(), "thread-test-id")
+        clear_request_id()
+        self.assertEqual(get_request_id(), "no-request-id")
+
+    def test_exceptions_hierarchy(self):
+        from esign.exceptions import (
+            ESignValidationError, ESignProviderError, ESignBusinessRuleViolation,
+            ESignExternalServiceError, ESignNotFoundError, ESignAuthorizationError
+        )
+        val_err = ESignValidationError("validation failure", detail={"field": "error"})
+        self.assertEqual(val_err.category, "validation_error")
+        self.assertIn("validation failure", str(val_err))
+        self.assertEqual(val_err.detail, {"field": "error"})
+
+
+class HealthEndpointTestCase(TestCase):
+    def test_liveness_endpoint(self):
+        from django.test import Client
+        client = Client()
+        response = client.get("/live")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["status"], "ok")
+        self.assertEqual(data["module"], "esignature")
+        self.assertIn("version", data)
+        self.assertIn("timestamp", data)
+        self.assertIn("request_id", data)
+
+    def test_readiness_endpoint(self):
+        from django.test import Client
+        client = Client()
+        response = client.get("/ready")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["status"], "ok")
+        self.assertIn("database", data["checks"])
+        self.assertEqual(data["checks"]["database"]["status"], "ok")
+        self.assertIn("storage", data["checks"])
+        self.assertEqual(data["checks"]["storage"]["status"], "ok")
+        self.assertIn("config", data["checks"])
+        self.assertEqual(data["checks"]["config"]["status"], "ok")
+        self.assertIn("providers", data["checks"])
+
+    def test_health_endpoint(self):
+        from django.test import Client
+        client = Client()
+        response = client.get("/health")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["status"], "ok")
+        self.assertIn("checks", data)
+        self.assertEqual(data["checks"]["database"]["status"], "ok")
+
+

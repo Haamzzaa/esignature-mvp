@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 def get_signing_session_data(token_str, request):
     try:
-        context = get_token_context(token_str)
+        context = get_token_context(token_str, allow_used=True)
     except ValueError as e:
         return None, str(e)
 
@@ -47,6 +47,7 @@ def get_signing_session_data(token_str, request):
         })
 
     data = {
+        "participant_id": participant.id if participant else None,
         "signer_name": name,
         "signer_email": email,
         "participant_role": role,
@@ -144,9 +145,9 @@ def process_action(token_str, request_data, request):
             "status": envelope.status,
         }, None
 
-    # Check if already completed/signed
-    signed_doc = SignedDocument.objects.filter(envelope=envelope).first()
-    if envelope.status == "completed" or signed_doc or envelope.status == "declined":
+    # Check if already completed/declined
+    if envelope.status in ("completed", "declined"):
+        signed_doc = SignedDocument.objects.filter(envelope=envelope).first()
         return {
             "detail": "Envelope already processed or declined.",
             "status": envelope.status,
@@ -158,6 +159,26 @@ def process_action(token_str, request_data, request):
     # Enforce that only active/viewed participants can act
     if p_status not in ('active', 'viewed'):
         return None, "Workflow stage is not yet active for your role. Actions are restricted."
+
+    # Check authorization requirements for completing actions (approve, acknowledge, sign)
+    is_completing_action = False
+    if role == "signer":
+        is_completing_action = True
+    elif role != "signer" and action in ("approve", "acknowledge"):
+        is_completing_action = True
+
+    if is_completing_action:
+        from services.security_policy_service import get_authorization_status
+        auth_status = get_authorization_status(participant)
+        if not auth_status["authorized"]:
+            logger.warning(
+                f"Authorization denied for participant {participant.id} on action '{action}'. "
+                f"Missing requirements: {auth_status['missing_requirements']}"
+            )
+            return {
+                "detail": "Authorization requirements not satisfied.",
+                "missing_requirements": auth_status["missing_requirements"]
+            }, "AUTHORIZATION_REQUIRED"
 
     # ── Non-Signer Role Actions handling ───────────────────────────────────────────
     if role != "signer":
@@ -292,10 +313,6 @@ def process_action(token_str, request_data, request):
         }, None
 
     # ── Signer Role logic (PDF embedding) ──────────────────────────────────────────
-    document = envelope.document
-    if not document.file:
-        return None, "Original document file is missing."
-
     sig_type = request_data.get("signature_type", "typed")
 
     if sig_type == "typed":
@@ -335,34 +352,6 @@ def process_action(token_str, request_data, request):
     else:
         return None, f"Unsupported signature_type: '{sig_type}'. Use 'typed', 'upload', or 'draw'."
 
-    # Read document bytes (outside transaction)
-    document.file.open("rb")
-    try:
-        original_bytes = document.file.read()
-    finally:
-        document.file.close()
-
-    final_hash    = hashlib.sha256(original_bytes).hexdigest()
-    original_name = document.file.name.rsplit("/", 1)[-1] or "signed.pdf"
-
-    # PDF Signing (outside transaction)
-    fields_payload = request_data.get('fields', {})
-
-    try:
-        pdf_bytes = sign_document(
-            envelope=envelope,
-            participant_rec=participant,
-            name=name,
-            sig_type=sig_type,
-            signature_text=signature_text,
-            signature_image_b64=signature_image_b64,
-            fields_payload=fields_payload,
-            original_bytes=original_bytes,
-        )
-    except Exception as e:
-        logger.error(f"Image/PDF processing failed: {str(e)}", exc_info=True)
-        return None, "Unable to process uploaded signature image."
-
     # Database mutations under lock
     with transaction.atomic():
         # Acquire locks: Token -> Participant -> Envelope
@@ -383,8 +372,55 @@ def process_action(token_str, request_data, request):
         if (locked_token and locked_token.is_used) or (locked_legacy_token and locked_legacy_token.is_used) or locked_envelope.status in ('completed', 'declined'):
             return None, "Envelope already processed or declined."
 
-        signed_doc = SignedDocument(envelope=locked_envelope, final_hash=final_hash)
-        signed_doc.file.save(original_name, ContentFile(pdf_bytes), save=True)
+        # Fetch latest SignedDocument while lock is held
+        signed_doc = SignedDocument.objects.filter(envelope=locked_envelope).select_for_update().first()
+
+        # Deterministic document source resolution
+        locked_document = locked_envelope.document
+        if not locked_document or not locked_document.file:
+            raise ValidationError("Original document file is missing.")
+
+        if signed_doc and signed_doc.file:
+            signed_doc.file.open("rb")
+            try:
+                original_bytes = signed_doc.file.read()
+            finally:
+                signed_doc.file.close()
+        else:
+            locked_document.file.open("rb")
+            try:
+                original_bytes = locked_document.file.read()
+            finally:
+                locked_document.file.close()
+
+        final_hash    = hashlib.sha256(original_bytes).hexdigest()
+        original_name = locked_document.file.name.rsplit("/", 1)[-1] or "signed.pdf"
+
+        # PDF Signing (inside lock transaction)
+        fields_payload = request_data.get('fields', {})
+
+        try:
+            pdf_bytes = sign_document(
+                envelope=locked_envelope,
+                participant_rec=locked_participant,
+                name=name,
+                sig_type=sig_type,
+                signature_text=signature_text,
+                signature_image_b64=signature_image_b64,
+                fields_payload=fields_payload,
+                original_bytes=original_bytes,
+            )
+        except Exception as e:
+            logger.error(f"Image/PDF processing failed: {str(e)}", exc_info=True)
+            raise ValidationError("Unable to process uploaded signature image.")
+
+        # Update existing SignedDocument record in place or create new one
+        if signed_doc:
+            signed_doc.final_hash = final_hash
+            signed_doc.file.save(original_name, ContentFile(pdf_bytes), save=True)
+        else:
+            signed_doc = SignedDocument(envelope=locked_envelope, final_hash=final_hash)
+            signed_doc.file.save(original_name, ContentFile(pdf_bytes), save=True)
 
         if locked_token:
             locked_token.is_used   = True

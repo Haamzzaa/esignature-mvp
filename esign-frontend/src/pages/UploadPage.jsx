@@ -3,7 +3,7 @@ import { createEnvelope, sendEnvelope, uploadDocument, createTemplate, getTempla
 import UserNav from '../components/UserNav.jsx'
 import { Document, Page, pdfjs } from 'react-pdf'
 import { motion, AnimatePresence } from 'framer-motion'
-import { UploadCloud, User, Mail, FileText, X, ArrowRight, CheckCircle2, Sparkles, Crosshair, Plus, Trash2, Edit3, UserPlus, Check, ChevronDown, Sparkles as SparkleIcon, Bell, Share2, Printer, Settings, Activity, Eye, ArrowLeft } from 'lucide-react'
+import { UploadCloud, User, Mail, FileText, X, ArrowRight, CheckCircle2, Sparkles, Crosshair, Plus, Trash2, Edit3, UserPlus, Check, ChevronDown, Sparkles as SparkleIcon, Bell, Share2, Printer, Settings, Activity, Eye, ArrowLeft, Shield, AlertCircle } from 'lucide-react'
 import { useNavigate, Link } from 'react-router-dom'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
@@ -74,11 +74,10 @@ function CustomSelect({ value, onChange, options, disabled }) {
                       onChange(opt.value)
                       setIsOpen(false)
                     }}
-                    className={`w-full text-left px-4 py-3 rounded-xl text-sm transition-all duration-200 flex items-center justify-between cursor-pointer ${
-                      isSelected 
-                        ? 'bg-cyan-500 text-black font-semibold border border-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.25)]' 
+                    className={`w-full text-left px-4 py-3 rounded-xl text-sm transition-all duration-200 flex items-center justify-between cursor-pointer ${isSelected
+                        ? 'bg-cyan-500 text-black font-semibold border border-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.25)]'
                         : 'text-text-primary hover:bg-cyan-500 hover:text-black border border-transparent'
-                    }`}
+                      }`}
                   >
                     <span className="font-medium">{opt.label}</span>
                     {isSelected && <Check className="h-4 w-4 text-black shrink-0" />}
@@ -176,7 +175,7 @@ function SuccessScreen({ sentPackageInfo, onTrackProgress, onViewDetails, onRetu
             <Activity className="h-4 w-4" />
             Track Progress
           </button>
-          
+
           <button
             type="button"
             onClick={onViewDetails}
@@ -308,6 +307,28 @@ export default function UploadPage() {
 
   // ── Request settings state ───────────────────────────────────────────
   const [sendReminders, setSendReminders] = useState(false)
+  const [securitySettings, setSecuritySettings] = useState({
+    terms_acceptance_required: true,
+    email_otp_required: false,
+    sms_otp_required: false,
+    national_id_required: false,
+    face_biometric_required: false,
+    representative_match_required: false,
+  })
+
+  const handleSecuritySettingChange = (key, value) => {
+    setSecuritySettings(prev => {
+      const updated = { ...prev, [key]: value }
+      if (key === 'face_biometric_required' && value === true) {
+        updated.national_id_required = true
+      }
+      if (key === 'representative_match_required' && value === true) {
+        updated.face_biometric_required = true
+        updated.national_id_required = true
+      }
+      return updated
+    })
+  }
   const [sendFinalEmail, setSendFinalEmail] = useState(true)
   const [allowPrinting, setAllowPrinting] = useState(true)
   const [additionalRecipients, setAdditionalRecipients] = useState([])
@@ -514,7 +535,7 @@ export default function UploadPage() {
   }
 
   const handleToggleCandidate = (id) => {
-    setSelectedCandidateIds(prev => 
+    setSelectedCandidateIds(prev =>
       prev.includes(id) ? prev.filter(cId => cId !== id) : [...prev, id]
     )
   }
@@ -592,13 +613,13 @@ export default function UploadPage() {
     setTemplateModalError('')
     setIsSavingTemplate(true)
     try {
-      const workflowDef = workflowSteps.flatMap(s => 
+      const workflowDef = workflowSteps.flatMap(s =>
         s.participants.map(p => ({
           step: s.stepNumber,
           role: p.role
         }))
       )
-      
+
       const reqSettings = {
         send_reminders: sendReminders,
         send_final_email: sendFinalEmail,
@@ -632,7 +653,7 @@ export default function UploadPage() {
           const tpl = await getTemplateDetail(templateId)
           if (tpl) {
             setLoadedTemplate(tpl)
-            
+
             // 1. request_settings
             if (tpl.request_settings) {
               if (tpl.request_settings.send_reminders !== undefined) setSendReminders(tpl.request_settings.send_reminders)
@@ -640,7 +661,7 @@ export default function UploadPage() {
               if (tpl.request_settings.allow_printing !== undefined) setAllowPrinting(tpl.request_settings.allow_printing)
               if (tpl.request_settings.additional_recipients !== undefined) setAdditionalRecipients(tpl.request_settings.additional_recipients)
             }
-            
+
             // 2. workflow_definition / steps
             if (tpl.workflow_definition && Array.isArray(tpl.workflow_definition) && tpl.workflow_definition.length > 0) {
               const grouped = {}
@@ -656,7 +677,7 @@ export default function UploadPage() {
                   role: item.role || 'signer'
                 })
               })
-              
+
               const sortedSteps = Object.keys(grouped)
                 .map(Number)
                 .sort((a, b) => a - b)
@@ -664,7 +685,7 @@ export default function UploadPage() {
                   stepNumber: idx + 1,
                   participants: grouped[stepNum]
                 }))
-              
+
               if (sortedSteps.length > 0) {
                 setWorkflowSteps(sortedSteps)
               }
@@ -690,6 +711,14 @@ export default function UploadPage() {
             if (res.send_final_email !== undefined) setSendFinalEmail(res.send_final_email)
             if (res.allow_printing !== undefined) setAllowPrinting(res.allow_printing)
             if (res.additional_recipients !== undefined) setAdditionalRecipients(res.additional_recipients || [])
+            setSecuritySettings({
+              terms_acceptance_required: res.terms_acceptance_required !== undefined ? res.terms_acceptance_required : true,
+              email_otp_required: !!res.email_otp_required,
+              sms_otp_required: !!res.sms_otp_required,
+              national_id_required: !!res.national_id_required,
+              face_biometric_required: !!res.face_biometric_required,
+              representative_match_required: !!res.representative_match_required,
+            })
 
             // 2. document info
             if (res.document) {
@@ -715,7 +744,7 @@ export default function UploadPage() {
                   role: p.role || 'signer'
                 })
               })
-              
+
               const sortedSteps = Object.keys(grouped)
                 .map(Number)
                 .sort((a, b) => a - b)
@@ -723,7 +752,7 @@ export default function UploadPage() {
                   stepNumber: idx + 1,
                   participants: grouped[stepNum]
                 }))
-              
+
               if (sortedSteps.length > 0) {
                 setWorkflowSteps(sortedSteps)
               }
@@ -764,6 +793,14 @@ export default function UploadPage() {
             if (res.send_final_email !== undefined) setSendFinalEmail(res.send_final_email)
             if (res.allow_printing !== undefined) setAllowPrinting(res.allow_printing)
             if (res.additional_recipients !== undefined) setAdditionalRecipients(res.additional_recipients || [])
+            setSecuritySettings({
+              terms_acceptance_required: res.terms_acceptance_required !== undefined ? res.terms_acceptance_required : true,
+              email_otp_required: !!res.email_otp_required,
+              sms_otp_required: !!res.sms_otp_required,
+              national_id_required: !!res.national_id_required,
+              face_biometric_required: !!res.face_biometric_required,
+              representative_match_required: !!res.representative_match_required,
+            })
             if (res.document) {
               setExistingDocId(res.document.id)
               setExistingDocName(res.document.filename || 'document.pdf')
@@ -859,6 +896,12 @@ export default function UploadPage() {
           send_final_email: sendFinalEmail,
           allow_printing: allowPrinting,
           additional_recipients: additionalRecipients,
+          terms_acceptance_required: securitySettings.terms_acceptance_required,
+          email_otp_required: securitySettings.email_otp_required,
+          sms_otp_required: securitySettings.sms_otp_required,
+          national_id_required: securitySettings.national_id_required,
+          face_biometric_required: securitySettings.face_biometric_required,
+          representative_match_required: securitySettings.representative_match_required,
           ...sigPayload,
         })
       } else {
@@ -871,6 +914,12 @@ export default function UploadPage() {
           send_final_email: sendFinalEmail,
           allow_printing: allowPrinting,
           additional_recipients: additionalRecipients,
+          terms_acceptance_required: securitySettings.terms_acceptance_required,
+          email_otp_required: securitySettings.email_otp_required,
+          sms_otp_required: securitySettings.sms_otp_required,
+          national_id_required: securitySettings.national_id_required,
+          face_biometric_required: securitySettings.face_biometric_required,
+          representative_match_required: securitySettings.representative_match_required,
           ...sigPayload,
         })
         if (res?.envelope_id) setDraftId(res.envelope_id.toString())
@@ -960,6 +1009,12 @@ export default function UploadPage() {
         send_final_email: sendFinalEmail,
         allow_printing: allowPrinting,
         additional_recipients: additionalRecipients,
+        terms_acceptance_required: securitySettings.terms_acceptance_required,
+        email_otp_required: securitySettings.email_otp_required,
+        sms_otp_required: securitySettings.sms_otp_required,
+        national_id_required: securitySettings.national_id_required,
+        face_biometric_required: securitySettings.face_biometric_required,
+        representative_match_required: securitySettings.representative_match_required,
         fields: placedFields,
       })
       const envelopeId = envelopeRes?.envelope_id
@@ -1077,8 +1132,8 @@ export default function UploadPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
       >
-            {/* ── Upload / signer form card ── */}
-            <div className="glass-panel rounded-3xl p-8 sm:p-12 relative overflow-hidden">
+        {/* ── Upload / signer form card ── */}
+        <div className="glass-panel rounded-3xl p-8 sm:p-12 relative overflow-hidden">
           {/* Subtle gradient background behind the card content */}
           <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/[0.02] via-transparent to-violet-500/[0.02] opacity-50 pointer-events-none" />
 
@@ -1121,1213 +1176,1329 @@ export default function UploadPage() {
               </div>
 
 
-          {/* Progress Bar */}
-          <div className="relative w-full bg-border-color/30 rounded-full h-1.5 mb-6 overflow-hidden z-10">
-            <div
-              className="bg-cyan-500 h-full rounded-full transition-all duration-500 ease-out shadow-[0_0_8px_#22d3ee]"
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
+              {/* Progress Bar */}
+              <div className="relative w-full bg-border-color/30 rounded-full h-1.5 mb-6 overflow-hidden z-10">
+                <div
+                  className="bg-cyan-500 h-full rounded-full transition-all duration-500 ease-out shadow-[0_0_8px_#22d3ee]"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
 
-          {/* Promoted Step Header */}
-          <div className="flex flex-col gap-1 mb-6 z-10 relative">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-accent">
-              STEP {currentStepInfo.num} OF {steps.length}
-            </span>
-            <h2 className="text-3xl font-extrabold tracking-tight text-text-primary sm:text-4xl">
-              {currentStepInfo.title}
-            </h2>
-          </div>
+              {/* Promoted Step Header */}
+              <div className="flex flex-col gap-1 mb-6 z-10 relative">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-accent">
+                  STEP {currentStepInfo.num} OF {steps.length}
+                </span>
+                <h2 className="text-3xl font-extrabold tracking-tight text-text-primary sm:text-4xl">
+                  {currentStepInfo.title}
+                </h2>
+              </div>
 
-          {/* Stepper Header */}
-          <div className="relative z-10 mb-8 border-b border-border-color pb-6">
-            <div className="relative flex flex-col md:flex-row items-stretch justify-between w-full gap-6 md:gap-6">
-              {steps.map((tab, idx) => {
-                const currentStepIdx = steps.findIndex(s => s.id === currentTab);
-                const isCompleted = idx < currentStepIdx;
-                const isActive = idx === currentStepIdx;
-                const isClickable = getStepClickable(tab.id);
+              {/* Stepper Header */}
+              <div className="relative z-10 mb-8 border-b border-border-color pb-6">
+                <div className="relative flex flex-col md:flex-row items-stretch justify-between w-full gap-6 md:gap-6">
+                  {steps.map((tab, idx) => {
+                    const currentStepIdx = steps.findIndex(s => s.id === currentTab);
+                    const isCompleted = idx < currentStepIdx;
+                    const isActive = idx === currentStepIdx;
+                    const isClickable = getStepClickable(tab.id);
 
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    disabled={!isClickable || isSubmitting}
-                    onClick={() => {
-                      setCurrentTab(tab.id);
-                      setError('');
-                    }}
-                    className={`flex-1 text-left glass-panel rounded-2xl py-7 px-6 min-h-[110px] transition-all duration-200 relative overflow-hidden group hover:-translate-y-[2px] ${
-                      isActive 
-                        ? 'bg-cyan-500/5 border-cyan-500/30 shadow-md'
-                        : isCompleted
-                          ? 'bg-emerald-500/5 border-emerald-500/25'
-                          : 'hover:bg-text-primary/[0.01]'
-                    } disabled:opacity-50 disabled:cursor-not-allowed`}
-                  >
-                    {/* Tiny side accent color bar */}
-                    <div className={`absolute left-0 top-0 bottom-0 w-1 transition-all ${
-                      isActive ? 'bg-accent' : isCompleted ? 'bg-emerald-400' : 'bg-transparent'
-                    }`} />
-                    
-                    <div className="flex items-center justify-between mb-1.5 pl-1.5">
-                      <span className={`text-[10px] font-bold uppercase tracking-widest ${
-                        isActive ? 'text-accent' : isCompleted ? 'text-emerald-400' : 'text-text-secondary'
-                      }`}>
-                        {idx + 1}. {tab.title}
-                      </span>
-                      {isCompleted ? (
-                        <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-                      ) : isActive ? (
-                        <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
-                      ) : null}
-                    </div>
-                    <p className="text-[10px] font-normal text-text-secondary/70 pl-1.5 truncate group-hover:text-accent transition-colors">
-                      {tab.description}
-                    </p>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        disabled={!isClickable || isSubmitting}
+                        onClick={() => {
+                          setCurrentTab(tab.id);
+                          setError('');
+                        }}
+                        className={`flex-1 text-left glass-panel rounded-2xl py-7 px-6 min-h-[110px] transition-all duration-200 relative overflow-hidden group hover:-translate-y-[2px] ${isActive
+                            ? 'bg-cyan-500/5 border-cyan-500/30 shadow-md'
+                            : isCompleted
+                              ? 'bg-emerald-500/5 border-emerald-500/25'
+                              : 'hover:bg-text-primary/[0.01]'
+                          } disabled:opacity-50 disabled:cursor-not-allowed`}
+                      >
+                        {/* Tiny side accent color bar */}
+                        <div className={`absolute left-0 top-0 bottom-0 w-1 transition-all ${isActive ? 'bg-accent' : isCompleted ? 'bg-emerald-400' : 'bg-transparent'
+                          }`} />
 
-          <form onSubmit={handleSubmit} className="relative z-10 space-y-6">
+                        <div className="flex items-center justify-between mb-1.5 pl-1.5">
+                          <span className={`text-[10px] font-bold uppercase tracking-widest ${isActive ? 'text-accent' : isCompleted ? 'text-emerald-400' : 'text-text-secondary'
+                            }`}>
+                            {idx + 1}. {tab.title}
+                          </span>
+                          {isCompleted ? (
+                            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                          ) : isActive ? (
+                            <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
+                          ) : null}
+                        </div>
+                        <p className="text-[10px] font-normal text-text-secondary/70 pl-1.5 truncate group-hover:text-accent transition-colors">
+                          {tab.description}
+                        </p>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
 
-            {/* Step 1 Panel: Documents */}
-            {currentTab === 'documents' && (
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <h3 className="text-base font-semibold text-text-primary flex items-center gap-2 mb-2">
-                    <FileText className="h-4.5 w-4.5 text-accent" />
-                    Encrypted Payload (PDF)
-                  </h3>
-                  <div className="relative group/upload">
-                    <input
-                      id="pdf-upload"
-                      type="file"
-                      accept="application/pdf,.pdf"
-                      onChange={async (e) => {
-                        setSigPosition(null)
-                        setNumPages(null)
-                        setError('')
-                        setUploadError('')
-                        setExistingDocId(null)
-                        setCandidates([])
-                        setCandidatesConfirmed(false)
-                        setSelectedCandidateIds([])
-                        setAnalysisError('')
-                        const selectedFile = e.target.files?.[0] ?? null
-                        setFile(selectedFile)
-                        if (selectedFile) {
-                          setUploadTimestamp(new Date().toLocaleString())
-                          
-                          const isFilePdf = selectedFile.type === 'application/pdf' || selectedFile.name?.toLowerCase().endsWith('.pdf')
-                          if (!isFilePdf) {
-                            setUploadError('Only PDF documents are supported.')
-                            return
-                          }
-                          
-                          setIsValidating(true)
-                          try {
-                            const uploadRes = await uploadDocument(selectedFile)
-                            const docId = uploadRes?.document_id
-                            setExistingDocId(docId)
+              <form onSubmit={handleSubmit} className="relative z-10 space-y-6">
+
+                {/* Step 1 Panel: Documents */}
+                {currentTab === 'documents' && (
+                  <div className="space-y-6">
+                    <div className="space-y-2">
+                      <h3 className="text-base font-semibold text-text-primary flex items-center gap-2 mb-2">
+                        <FileText className="h-4.5 w-4.5 text-accent" />
+                        Encrypted Payload (PDF)
+                      </h3>
+                      <div className="relative group/upload">
+                        <input
+                          id="pdf-upload"
+                          type="file"
+                          accept="application/pdf,.pdf"
+                          onChange={async (e) => {
+                            setSigPosition(null)
+                            setNumPages(null)
+                            setError('')
                             setUploadError('')
-                            
-                            setIsAnalyzing(true)
+                            setExistingDocId(null)
+                            setCandidates([])
+                            setCandidatesConfirmed(false)
+                            setSelectedCandidateIds([])
                             setAnalysisError('')
-                            try {
-                              const draftRes = await saveDraft({ documentId: docId })
-                              const envId = draftRes?.envelope_id
-                              if (envId) {
-                                setDraftId(envId.toString())
-                                
-                                const analysisData = await analyzeContract(selectedFile, envId)
-                                if (analysisData && analysisData.candidates) {
-                                  setCandidates(analysisData.candidates)
-                                  const candIds = analysisData.candidates.map(c => c.id)
-                                  setSelectedCandidateIds(candIds)
-                                  
-                                  const updatedPackage = await getPackageDetail(envId)
-                                  if (updatedPackage && updatedPackage.participants) {
-                                    updateWorkflowStepsFromParticipants(updatedPackage.participants)
+                            const selectedFile = e.target.files?.[0] ?? null
+                            setFile(selectedFile)
+                            if (selectedFile) {
+                              setUploadTimestamp(new Date().toLocaleString())
+
+                              const isFilePdf = selectedFile.type === 'application/pdf' || selectedFile.name?.toLowerCase().endsWith('.pdf')
+                              if (!isFilePdf) {
+                                setUploadError('Only PDF documents are supported.')
+                                return
+                              }
+
+                              setIsValidating(true)
+                              try {
+                                const uploadRes = await uploadDocument(selectedFile)
+                                const docId = uploadRes?.document_id
+                                setExistingDocId(docId)
+                                setUploadError('')
+
+                                setIsAnalyzing(true)
+                                setAnalysisError('')
+                                try {
+                                  const draftRes = await saveDraft({ documentId: docId })
+                                  const envId = draftRes?.envelope_id
+                                  if (envId) {
+                                    setDraftId(envId.toString())
+
+                                    const analysisData = await analyzeContract(selectedFile, envId)
+                                    if (analysisData && analysisData.candidates) {
+                                      setCandidates(analysisData.candidates)
+                                      const candIds = analysisData.candidates.map(c => c.id)
+                                      setSelectedCandidateIds(candIds)
+
+                                      const updatedPackage = await getPackageDetail(envId)
+                                      if (updatedPackage && updatedPackage.participants) {
+                                        updateWorkflowStepsFromParticipants(updatedPackage.participants)
+                                      }
+                                    }
+                                  }
+                                } catch (analysisErr) {
+                                  console.error("Auto draft/analysis failed:", analysisErr)
+                                  setAnalysisError(
+                                    analysisErr?.response?.data?.detail ||
+                                    analysisErr?.message ||
+                                    'Failed to analyze contract authority.'
+                                  )
+                                } finally {
+                                  setIsAnalyzing(false)
+                                }
+
+                                if (templateId) {
+                                  setTimeout(() => {
+                                    setCurrentTab('recipients')
+                                  }, 400)
+                                }
+                              } catch (err) {
+                                let msg = '';
+                                if (err?.response?.data) {
+                                  if (typeof err.response.data === 'string') {
+                                    msg = err.response.data;
+                                  } else if (err.response.data.detail) {
+                                    msg = err.response.data.detail;
+                                  } else if (err.response.data.file) {
+                                    msg = Array.isArray(err.response.data.file) ? err.response.data.file[0] : err.response.data.file;
+                                  } else {
+                                    const firstKey = Object.keys(err.response.data)[0];
+                                    if (firstKey) {
+                                      const val = err.response.data[firstKey];
+                                      msg = Array.isArray(val) ? val[0] : val;
+                                    }
                                   }
                                 }
-                              }
-                            } catch (analysisErr) {
-                              console.error("Auto draft/analysis failed:", analysisErr)
-                              setAnalysisError(
-                                analysisErr?.response?.data?.detail ||
-                                analysisErr?.message ||
-                                'Failed to analyze contract authority.'
-                              )
-                            } finally {
-                              setIsAnalyzing(false)
-                            }
-
-                            if (templateId) {
-                              setTimeout(() => {
-                                setCurrentTab('recipients')
-                              }, 400)
-                            }
-                          } catch (err) {
-                            let msg = '';
-                            if (err?.response?.data) {
-                              if (typeof err.response.data === 'string') {
-                                msg = err.response.data;
-                              } else if (err.response.data.detail) {
-                                msg = err.response.data.detail;
-                              } else if (err.response.data.file) {
-                                msg = Array.isArray(err.response.data.file) ? err.response.data.file[0] : err.response.data.file;
-                              } else {
-                                const firstKey = Object.keys(err.response.data)[0];
-                                if (firstKey) {
-                                  const val = err.response.data[firstKey];
-                                  msg = Array.isArray(val) ? val[0] : val;
+                                if (!msg) {
+                                  msg = err?.message || 'Something went wrong. Please try again.';
                                 }
+                                setUploadError(msg)
+                              } finally {
+                                setIsValidating(false)
                               }
+                            } else {
+                              setUploadTimestamp(null)
                             }
-                            if (!msg) {
-                              msg = err?.message || 'Something went wrong. Please try again.';
-                            }
-                            setUploadError(msg)
-                          } finally {
-                            setIsValidating(false)
-                          }
-                        } else {
-                          setUploadTimestamp(null)
-                        }
-                      }}
-                      disabled={isSubmitting || isValidating}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-20"
-                    />
-                    <div className={`flex flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-all duration-300 p-8 sm:p-10 ${(file || existingDocName) ? 'border-cyan-500/50 bg-cyan-500/10' : 'border-border-color bg-card-bg group-hover/upload:border-cyan-500/30 group-hover/upload:bg-cyan-500/5'}`}>
-                      <motion.div
-                        animate={(file || existingDocName) ? { y: 0, scale: 1 } : { y: [0, -5, 0] }}
-                        transition={(file || existingDocName) ? {} : { repeat: Infinity, duration: 3, ease: "easeInOut" }}
-                        className={`mb-4 rounded-full p-4 ${(file || existingDocName) ? 'bg-cyan-500/20 text-accent' : 'bg-border-color text-text-secondary group-hover/upload:text-accent group-hover/upload:bg-cyan-500/10 transition-colors'}`}
-                      >
-                        {(file || existingDocName) ? <FileText className="h-8 w-8" /> : <UploadCloud className="h-8 w-8" />}
-                      </motion.div>
-                      {(file || existingDocName) ? (
-                        <div className="text-center">
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-accent/70 mb-1.5 block">PDF Document • Secure upload</span>
-                          <p className="text-sm font-medium text-accent">{file ? file.name : existingDocName}</p>
-                          <p className="mt-1 text-xs text-accent/75">Ready for processing</p>
-                        </div>
-                      ) : (
-                        <div className="text-center">
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/70 mb-1.5 block">PDF Document • Secure upload</span>
-                          <p className="text-sm font-medium text-text-primary">Drag & drop or click to browse</p>
-                          <p className="mt-1 text-xs text-text-secondary">Only PDF files are supported</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  {isValidating && (
-                    <div className="mt-3 flex items-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-4 py-2.5 text-xs text-accent">
-                      <span className="h-3.5 w-3.5 rounded-full border-2 border-accent border-t-transparent animate-spin shrink-0" />
-                      <span>Validating document payload...</span>
-                    </div>
-                  )}
-                  {uploadError && (
-                    <div className="mt-3 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-2.5 text-xs text-red-400">
-                      <span className="font-bold shrink-0">⚠️ Error:</span>
-                      <span>{uploadError}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex justify-between items-center pt-6 border-t border-border-color">
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      disabled={!isDocumentValid || isSavingDraft}
-                      onClick={handleSaveDraft}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isSavingDraft ? 'Saving…' : draftSaved ? '✓ Saved' : 'Save Draft'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={openTemplateModal}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
-                    >
-                      <SparkleIcon className="h-4 w-4 shrink-0 text-text-secondary" />
-                      Save as Template
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={!isDocumentValid}
-                    onClick={() => setCurrentTab('recipients')}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-6 py-3.5 text-xs font-bold transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.45)] uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Continue to Recipients
-                    <ArrowRight className="h-4 w-4 stroke-[2.5]" />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 2 Panel: Participants & Workflow */}
-            {currentTab === 'recipients' && (
-              <div className="space-y-6 pt-2">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <h3 className="text-base font-semibold tracking-wide text-text-primary flex items-center gap-2">
-                      <UserPlus className="h-5 w-5 text-accent" />
-                      Workflow Builder
-                    </h3>
-                    <p className="text-xs text-text-secondary mt-1">
-                      Design a sequential routing workflow. Participants in each step will receive the document in order.
-                    </p>
-                  </div>
-                  
-                  <button
-                    type="button"
-                    onClick={addStep}
-                    disabled={isSubmitting}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 hover:bg-cyan-500 hover:text-black hover:border-cyan-400 px-4 py-2.5 text-xs font-semibold text-accent transition-all duration-300 shadow-[0_0_15px_rgba(34,211,238,0.05)] cursor-pointer shrink-0 self-start sm:self-auto"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add Workflow Step
-                  </button>
-                </div>
-
-                {/* AI Authority Extraction Banners/Checklist */}
-                {isAnalyzing && (
-                  <div className="flex items-center gap-3 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-4 text-sm text-cyan-200 animate-pulse">
-                    <Sparkles className="h-5 w-5 text-cyan-400 shrink-0 animate-spin" />
-                    <div>
-                      <p className="font-semibold text-cyan-300">Analyzing Signing Authority...</p>
-                      <p className="text-xs text-cyan-200/80 mt-0.5 font-mono">
-                        Extracting representatives and validation parameters. Please hold.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {analysisError && (
-                  <div className="flex items-center gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-4 text-xs text-red-200">
-                    <AlertCircle className="h-5 w-5 text-red-400 shrink-0" />
-                    <span>{analysisError}</span>
-                  </div>
-                )}
-
-                {!isAnalyzing && candidates && candidates.length === 1 && (
-                  <div className="flex items-start gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200">
-                    <Sparkles className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-semibold text-emerald-300 font-mono">Representative Pre-populated</p>
-                      <p className="text-xs text-emerald-200/80 mt-0.5 leading-relaxed">
-                        We automatically detected <strong>{candidates[0].name_en || candidates[0].name_ar}</strong> ({candidates[0].title_en || candidates[0].title_ar}) as the authorized signatory and pre-populated them in the list. Please add their email below.
-                      </p>
-                      {candidates[0].authority_clause && (
-                        <p className="text-[11px] text-emerald-200/60 mt-1.5 border-t border-emerald-500/20 pt-1.5 italic">
-                          Clause: "{candidates[0].authority_clause}"
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {!isAnalyzing && pendingCandidates && pendingCandidates.length > 1 && !candidatesConfirmed && (
-                  <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-5 space-y-4">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="h-5 w-5 text-cyan-400 animate-pulse" />
-                      <h4 className="text-sm font-semibold text-text-primary">
-                        Signing Representatives Detected
-                      </h4>
-                    </div>
-                    <p className="text-xs text-text-secondary">
-                      Multiple authorized signatories were found in this contract. Select who you would like to include as signers in the workflow:
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-1">
-                      {pendingCandidates.map((cand) => {
-                        const isSelected = selectedCandidateIds.includes(cand.id);
-                        return (
-                          <label
-                            key={cand.id}
-                            className={`flex items-start gap-3 rounded-xl border p-4 transition-all cursor-pointer select-none ${
-                              isSelected
-                                ? 'border-cyan-500 bg-cyan-500/10'
-                                : 'border-border-color bg-card-bg hover:border-cyan-500/20'
-                            }`}
+                          }}
+                          disabled={isSubmitting || isValidating}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-20"
+                        />
+                        <div className={`flex flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-all duration-300 p-8 sm:p-10 ${(file || existingDocName) ? 'border-cyan-500/50 bg-cyan-500/10' : 'border-border-color bg-card-bg group-hover/upload:border-cyan-500/30 group-hover/upload:bg-cyan-500/5'}`}>
+                          <motion.div
+                            animate={(file || existingDocName) ? { y: 0, scale: 1 } : { y: [0, -5, 0] }}
+                            transition={(file || existingDocName) ? {} : { repeat: Infinity, duration: 3, ease: "easeInOut" }}
+                            className={`mb-4 rounded-full p-4 ${(file || existingDocName) ? 'bg-cyan-500/20 text-accent' : 'bg-border-color text-text-secondary group-hover/upload:text-accent group-hover/upload:bg-cyan-500/10 transition-colors'}`}
                           >
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => handleToggleCandidate(cand.id)}
-                              className="mt-1 h-4.5 w-4.5 rounded border-border-color bg-card-bg text-cyan-500 focus:ring-cyan-500 cursor-pointer shrink-0"
-                            />
-                            <div className="text-xs space-y-1">
-                              <p className="font-bold text-text-primary">
-                                {cand.name_en || cand.name_ar}
-                              </p>
-                              <p className="text-[10px] text-text-secondary">
-                                {cand.title_en || cand.title_ar}
-                              </p>
-                              {cand.authority_clause && (
-                                <p className="text-[10px] text-zinc-500 italic mt-1 leading-relaxed line-clamp-2" title={cand.authority_clause}>
-                                  "{cand.authority_clause}"
-                                </p>
-                              )}
+                            {(file || existingDocName) ? <FileText className="h-8 w-8" /> : <UploadCloud className="h-8 w-8" />}
+                          </motion.div>
+                          {(file || existingDocName) ? (
+                            <div className="text-center">
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-accent/70 mb-1.5 block">PDF Document • Secure upload</span>
+                              <p className="text-sm font-medium text-accent">{file ? file.name : existingDocName}</p>
+                              <p className="mt-1 text-xs text-accent/75">Ready for processing</p>
                             </div>
-                          </label>
-                        );
-                      })}
-                    </div>
-                    <div className="flex items-center gap-3 pt-2 border-t border-border-color/50">
-                      <button
-                        type="button"
-                        onClick={handleConfirmCandidates}
-                        disabled={selectedCandidateIds.length === 0 || isSubmitting}
-                        className="rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-2.5 text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
-                      >
-                        Add Selected Signers
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleSkipCandidates}
-                        disabled={isSubmitting}
-                        className="rounded-xl bg-transparent border border-border-color text-text-secondary hover:text-text-primary px-4 py-2.5 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
-                      >
-                        Skip
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {!isAnalyzing && candidates && candidates.length === 0 && file && (
-                  <div className="flex items-center gap-3 rounded-2xl border border-border-color bg-card-bg/50 px-4 py-4 text-xs text-text-secondary">
-                    <AlertCircle className="h-4 w-4 text-zinc-500 shrink-0" />
-                    <span>No representatives detected in this contract. Please add participants manually.</span>
-                  </div>
-                )}
-
-                <div className="space-y-4">
-                  {workflowSteps.map((step, stepIdx) => (
-                    <div key={step.stepNumber} className="flex flex-col items-center w-full">
-                      {/* Step Card */}
-                      <div className="w-full glass-panel rounded-2xl overflow-visible p-6 relative hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
-                        {/* Step Header */}
-                        <div className="flex items-center justify-between mb-4 pb-3 border-b border-border-color">
-                          <div className="flex items-center gap-3">
-                            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-cyan-500/10 border border-cyan-500/30 text-xs font-bold text-accent">
-                              {step.stepNumber}
-                            </span>
-                            <div>
-                              <h4 className="text-sm font-semibold text-text-primary uppercase tracking-wider">
-                                Step {step.stepNumber} Recipients
-                              </h4>
-                              <p className="text-[10px] text-text-secondary">Executes in parallel at this sequence number</p>
+                          ) : (
+                            <div className="text-center">
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/70 mb-1.5 block">PDF Document • Secure upload</span>
+                              <p className="text-sm font-medium text-text-primary">Drag & drop or click to browse</p>
+                              <p className="mt-1 text-xs text-text-secondary">Only PDF files are supported</p>
                             </div>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            {/* Move Up */}
-                            <button
-                              type="button"
-                              disabled={isSubmitting || stepIdx === 0}
-                              onClick={() => moveStep(step.stepNumber, 'up')}
-                              className="rounded-lg p-1.5 text-text-secondary hover:text-accent hover:bg-cyan-500/10 transition-all disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed animate-none"
-                              title="Move Step Up"
-                            >
-                              <ChevronDown className="h-4 w-4 rotate-180" />
-                            </button>
-
-                            {/* Move Down */}
-                            <button
-                              type="button"
-                              disabled={isSubmitting || stepIdx === workflowSteps.length - 1}
-                              onClick={() => moveStep(step.stepNumber, 'down')}
-                              className="rounded-lg p-1.5 text-text-secondary hover:text-accent hover:bg-cyan-500/10 transition-all disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed animate-none"
-                              title="Move Step Down"
-                            >
-                              <ChevronDown className="h-4 w-4" />
-                            </button>
-
-                            {/* Delete Step */}
-                            <button
-                              type="button"
-                              disabled={isSubmitting || workflowSteps.length <= 1}
-                              onClick={() => removeStep(step.stepNumber)}
-                              className="rounded-lg p-1.5 text-text-secondary hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed animate-none"
-                              title="Delete Step"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
+                          )}
                         </div>
-
-                        {/* Step Recipients List/Table */}
-                        <div className="overflow-visible">
-                          <table className="w-full text-left border-collapse text-sm">
-                            <thead>
-                              <tr className="text-text-secondary uppercase text-[9px] font-bold tracking-wider bg-bg-primary/5 border-b border-border-color">
-                                <th className="px-4 py-2 min-w-[200px]">Name</th>
-                                <th className="px-4 py-2 min-w-[220px]">Email Address</th>
-                                <th className="px-4 py-2 min-w-[200px]">Role</th>
-                                <th className="px-4 py-2 text-center w-[80px]">Actions</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border-color">
-                              {step.participants.length === 0 ? (
-                                <tr>
-                                  <td colSpan="4" className="px-4 py-8 text-center text-text-secondary">
-                                    <div className="flex flex-col items-center justify-center">
-                                      <User className="h-6 w-6 text-text-secondary/55 mb-1 stroke-[1.5]" />
-                                      <p className="text-xs font-medium text-text-secondary">No participants in this step.</p>
-                                      <button
-                                        type="button"
-                                        onClick={() => addParticipantToStep(step.stepNumber)}
-                                        className="mt-2 text-[10px] text-accent hover:underline font-semibold"
-                                      >
-                                        + Add Participant
-                                      </button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              ) : (
-                                step.participants.map((p) => (
-                                  <tr key={p.id} className="hover:bg-bg-primary/30 transition-colors group/row">
-                                    <td className="px-3 py-2.5 align-middle">
-                                      <div className="relative">
-                                        <User className="absolute left-3 h-4 w-4 text-text-secondary/60 top-1/2 -translate-y-1/2" />
-                                        <input
-                                          type="text"
-                                          value={p.name}
-                                          onChange={(e) => updateParticipant(step.stepNumber, p.id, 'name', e.target.value)}
-                                          placeholder="Full Name"
-                                          disabled={isSubmitting}
-                                          className={`${cellInputClass} pl-9`}
-                                        />
-                                      </div>
-                                    </td>
-                                    <td className="px-3 py-2.5 align-middle">
-                                      <div className="relative">
-                                        <Mail className={`absolute left-3 h-4 w-4 top-1/2 -translate-y-1/2 ${participantErrors[p.id] ? 'text-red-400' : 'text-text-secondary/60'}`} />
-                                        <input
-                                          type="email"
-                                          value={p.email}
-                                          onChange={(e) => {
-                                            updateParticipant(step.stepNumber, p.id, 'email', e.target.value)
-                                            // Clear inline error as user types
-                                            if (participantErrors[p.id]) {
-                                              setParticipantErrors(prev => {
-                                                const next = { ...prev }
-                                                delete next[p.id]
-                                                return next
-                                              })
-                                            }
-                                          }}
-                                          placeholder="Email Address"
-                                          disabled={isSubmitting}
-                                          className={`${cellInputClass} pl-9 font-mono ${
-                                            participantErrors[p.id]
-                                              ? 'border-red-500/60 focus:border-red-500/60 focus:ring-red-500/20 bg-red-950/10'
-                                              : ''
-                                          }`}
-                                        />
-                                      </div>
-                                      {participantErrors[p.id] && (
-                                        <p className="mt-1 px-1 text-[10px] text-red-400 font-medium flex items-center gap-1">
-                                          <span aria-hidden="true">⚠</span> {participantErrors[p.id]}
-                                        </p>
-                                      )}
-                                    </td>
-                                    <td className="px-3 py-2.5 align-middle">
-                                      <CustomSelect
-                                        value={p.role}
-                                        onChange={(val) => updateParticipant(step.stepNumber, p.id, 'role', val)}
-                                        disabled={isSubmitting}
-                                        options={[
-                                          { value: 'signer', label: 'Signer (Signs)' },
-                                          { value: 'approver', label: 'Approver (Approves)' },
-                                          { value: 'reviewer', label: 'Reviewer (Reviews)' },
-                                          { value: 'cc', label: 'CC (Receives copy)' }
-                                        ]}
-                                      />
-                                    </td>
-                                    <td className="px-3 py-2.5 align-middle text-center">
-                                      <button
-                                        type="button"
-                                        onClick={() => removeParticipant(step.stepNumber, p.id)}
-                                        disabled={isSubmitting}
-                                        className="rounded-lg p-2 text-text-secondary hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer inline-flex items-center justify-center cursor-pointer"
-                                        title="Remove Recipient"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </button>
-                                    </td>
-                                  </tr>
-                                ))
-                              )}
-                            </tbody>
-                          </table>
-                        </div>
-
-                        {/* Add Recipient to Step button inside the step card */}
-                        {step.participants.length > 0 && (
-                          <div className="mt-4 flex justify-end">
-                            <button
-                              type="button"
-                              onClick={() => addParticipantToStep(step.stepNumber)}
-                              disabled={isSubmitting}
-                              className="inline-flex items-center gap-1.5 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-primary hover:text-cyan-400 px-3 py-1.5 text-xs font-semibold transition-all duration-200 cursor-pointer"
-                            >
-                              <Plus className="h-3 w-3" />
-                              Add Recipient to Step {step.stepNumber}
-                            </button>
-                          </div>
-                        )}
                       </div>
-
-                      {/* Down Arrow separator between steps */}
-                      {stepIdx < workflowSteps.length - 1 && (
-                        <div className="flex flex-col items-center my-3 relative">
-                          <div className="h-8 w-[1px] bg-gradient-to-b from-cyan-500/50 to-transparent" />
-                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-cyan-500/10 border border-cyan-500/30 text-accent shadow-[0_0_10px_rgba(34,211,238,0.15)] backdrop-blur-md">
-                            <ChevronDown className="h-4 w-4 animate-pulse" />
-                          </div>
-                          <div className="h-8 w-[1px] bg-gradient-to-t from-cyan-500/50 to-transparent" />
+                      {isValidating && (
+                        <div className="mt-3 flex items-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-4 py-2.5 text-xs text-accent">
+                          <span className="h-3.5 w-3.5 rounded-full border-2 border-accent border-t-transparent animate-spin shrink-0" />
+                          <span>Validating document payload...</span>
+                        </div>
+                      )}
+                      {uploadError && (
+                        <div className="mt-3 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-2.5 text-xs text-red-400">
+                          <span className="font-bold shrink-0">⚠️ Error:</span>
+                          <span>{uploadError}</span>
                         </div>
                       )}
                     </div>
-                  ))}
-                </div>
 
-                {/* Back and Continue Buttons */}
-                <div className="flex justify-between pt-6 border-t border-border-color">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setCurrentTab('documents')}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-6 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
-                    >
-                      Back
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isSavingDraft}
-                      onClick={handleSaveDraft}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isSavingDraft ? 'Saving…' : draftSaved ? '✓ Saved' : 'Save Draft'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={openTemplateModal}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
-                    >
-                      <SparkleIcon className="h-4 w-4 shrink-0 text-text-secondary" />
-                      Save as Template
-                    </button>
-                  </div>
-
-                  <div className="flex flex-col items-end gap-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        // Validate all participant emails inline before advancing
-                        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-                        const errors = {}
-                        workflowSteps.forEach(step => {
-                          step.participants.forEach(p => {
-                            const email = p.email.trim()
-                            if (!email) {
-                              errors[p.id] = 'Email address is required.'
-                            } else if (!emailRegex.test(email)) {
-                              errors[p.id] = 'Enter a valid email address.'
-                            }
-                          })
-                        })
-                        if (Object.keys(errors).length > 0) {
-                          setParticipantErrors(errors)
-                          return
-                        }
-                        setParticipantErrors({})
-                        if (!hasSignerRole) return
-                        setCurrentTab('prepare')
-                      }}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-6 py-3.5 text-xs font-bold transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.45)] uppercase tracking-wider cursor-pointer"
-                    >
-                      Continue to Prepare
-                      <ArrowRight className="h-4 w-4 stroke-[2.5]" />
-                    </button>
-                    {!hasSignerRole && (
-                      <p className="text-[10px] text-amber-400 font-semibold mt-1">
-                        At least one participant must be assigned the "Signer" role.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Step 3 Panel: Prepare */}
-            {currentTab === 'prepare' && (
-              <div className="space-y-6 pt-2">
-                <div>
-                  <h3 className="text-base font-semibold tracking-wide text-text-primary flex items-center gap-2">
-                    <Crosshair className="h-5 w-5 text-accent" />
-                    Place Fields on Document
-                  </h3>
-                  <p className="text-xs text-text-secondary mt-1">
-                    Select a recipient, choose the field type, and click directly on the PDF pages below to position signature fields.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {/* Summary Card 1: Fields Count */}
-                  <div className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[140px] relative hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
-                    <div className="flex justify-between items-start">
-                      <span className="text-[10px] uppercase font-bold tracking-widest text-text-secondary">Summary</span>
-                      <FileText className="h-5 w-5 text-accent" />
-                    </div>
-                    <div className="mt-4 space-y-1">
-                      <h4 className="text-sm font-bold text-text-primary">Total Placed Fields</h4>
-                      <p className="text-[10px] text-text-secondary">Signature fields placed on document pages.</p>
-                      <div className="text-3xl font-light text-accent font-mono mt-2">
-                        {placedFields.length}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Summary Card 2: Instructions */}
-                  <div className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[140px] md:col-span-2 relative hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
-                    <div className="flex justify-between items-start">
-                      <span className="text-[10px] uppercase font-bold tracking-widest text-text-secondary">Instructions</span>
-                      <SparkleIcon className="h-5 w-5 text-violet-400" />
-                    </div>
-                    <div className="mt-4 space-y-1">
-                      <h4 className="text-sm font-bold text-text-primary">How to position signature zones</h4>
-                      <p className="text-xs text-text-secondary leading-relaxed">
-                        1. Select a recipient from the dropdown below or in the document editor.<br />
-                        2. Scroll down to the document editor below.<br />
-                        3. Click on any page where you want the signer to sign.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Placed Fields List / Summary */}
-                <div className="glass-panel rounded-2xl p-6 space-y-4 hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
-                  <div>
-                    <h4 className="text-sm font-bold uppercase tracking-wider text-text-primary flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 text-accent" />
-                      Placed Fields Summary
-                    </h4>
-                    <p className="text-[10px] text-text-secondary mt-0.5">List of all active signature zones placed on the document.</p>
-                  </div>
-
-                  {placedFields.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-border-color bg-card-bg/40 p-8 text-center text-xs text-text-secondary">
-                      No fields placed yet. Scroll down to position your first signature zone on the PDF page.
-                    </div>
-                  ) : (
-                    <div className="max-h-60 overflow-y-auto custom-scrollbar divide-y divide-border-color">
-                      {placedFields.map((field) => (
-                        <div key={field.id} className="py-3 flex items-center justify-between text-xs hover:bg-cyan-500/[0.02] px-2 rounded-xl transition-all">
-                          <div className="flex items-center gap-4">
-                            <span className="flex h-5 w-5 items-center justify-center rounded bg-cyan-500/10 text-[10px] font-bold text-accent">
-                              P{field.page}
-                            </span>
-                            <div>
-                              <span className="font-semibold text-text-primary">{field.participant_name || 'Signer'}</span>
-                              <span className="text-[10px] text-text-secondary font-mono ml-2">({field.participant_email})</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-4">
-                            <span className="text-[10px] font-mono text-text-secondary">
-                              X: {field.x_ratio.toFixed(2)} Y: {field.y_ratio.toFixed(2)}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => removeField(field.id)}
-                              className="rounded-lg p-1 text-text-secondary hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
-                              title="Delete Field"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Back and Continue Buttons */}
-                <div className="flex justify-between pt-6 border-t border-border-color">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setCurrentTab('recipients')}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-6 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
-                    >
-                      Back
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isSavingDraft}
-                      onClick={handleSaveDraft}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isSavingDraft ? 'Saving…' : draftSaved ? '✓ Saved' : 'Save Draft'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={openTemplateModal}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
-                    >
-                      <SparkleIcon className="h-4 w-4 shrink-0 text-text-secondary" />
-                      Save as Template
-                    </button>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <button
-                      type="button"
-                      disabled={!isSignaturePlaced}
-                      onClick={() => setCurrentTab('settings')}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-6 py-3.5 text-xs font-bold transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.45)] uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Continue to Settings
-                      <ArrowRight className="h-4 w-4 stroke-[2.5]" />
-                    </button>
-                    {!isSignaturePlaced && (
-                      <p className="text-[10px] text-amber-400 font-semibold mt-1">
-                        Please scroll down and place at least one signature zone.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Step 4 Panel: Request Settings */}
-            {currentTab === 'settings' && (
-              <div className="space-y-6 pt-2">
-                <div>
-                  <h3 className="text-base font-semibold tracking-wide text-text-primary flex items-center gap-2">
-                    <Settings className="h-5 w-5 text-accent" />
-                    Request Settings
-                  </h3>
-                  <p className="text-xs text-text-secondary mt-1">
-                    Configure request alerts, document distribution, and delivery settings before dispatching.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {/* Switch 1: Reminders */}
-                  <div className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[140px] relative hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
-                    <div className="flex justify-between items-start">
-                      <span className="text-[10px] uppercase font-bold tracking-widest text-text-secondary">Alerts</span>
-                      <Bell className={`h-5 w-5 ${sendReminders ? 'text-accent' : 'text-text-secondary'}`} />
-                    </div>
-                    <div className="mt-4 space-y-3">
-                      <div>
-                        <h4 className="text-sm font-bold text-text-primary">Automatic Reminders</h4>
-                        <p className="text-[10px] text-text-secondary mt-0.5">Send status email alerts to pending signers.</p>
-                      </div>
-                      <label className="flex items-center gap-2 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={sendReminders}
-                          onChange={(e) => setSendReminders(e.target.checked)}
-                          disabled={isSubmitting}
-                          className="sr-only peer"
-                        />
-                        <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
-                        <span className="text-xs text-text-secondary peer-checked:text-accent font-medium">
-                          {sendReminders ? 'Enabled' : 'Disabled'}
-                        </span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Switch 2: Final Document Delivery */}
-                  <div className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[140px] relative hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
-                    <div className="flex justify-between items-start">
-                      <span className="text-[10px] uppercase font-bold tracking-widest text-text-secondary">Distribution</span>
-                      <Share2 className={`h-5 w-5 ${sendFinalEmail ? 'text-accent' : 'text-text-secondary'}`} />
-                    </div>
-                    <div className="mt-4 space-y-3">
-                      <div>
-                        <h4 className="text-sm font-bold text-text-primary">Final Delivery</h4>
-                        <p className="text-[10px] text-text-secondary mt-0.5">Deliver completed copy to all participants.</p>
-                      </div>
-                      <label className="flex items-center gap-2 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={sendFinalEmail}
-                          onChange={(e) => setSendFinalEmail(e.target.checked)}
-                          disabled={isSubmitting}
-                          className="sr-only peer"
-                        />
-                        <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
-                        <span className="text-xs text-text-secondary peer-checked:text-accent font-medium">
-                          {sendFinalEmail ? 'Deliver' : 'Do Not Deliver'}
-                        </span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Switch 3: Allow Printing */}
-                  <div className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[140px] relative hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
-                    <div className="flex justify-between items-start">
-                      <span className="text-[10px] uppercase font-bold tracking-widest text-text-secondary">Permissions</span>
-                      <Printer className={`h-5 w-5 ${allowPrinting ? 'text-accent' : 'text-text-secondary'}`} />
-                    </div>
-                    <div className="mt-4 space-y-3">
-                      <div>
-                        <h4 className="text-sm font-bold text-text-primary">Allow Printing</h4>
-                        <p className="text-[10px] text-text-secondary mt-0.5">Allow recipients to download or print copies.</p>
-                      </div>
-                      <label className="flex items-center gap-2 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={allowPrinting}
-                          onChange={(e) => setAllowPrinting(e.target.checked)}
-                          disabled={isSubmitting}
-                          className="sr-only peer"
-                        />
-                        <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
-                        <span className="text-xs text-text-secondary peer-checked:text-accent font-medium">
-                          {allowPrinting ? 'Allowed' : 'Restricted'}
-                        </span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 4. Additional Recipients Input Section */}
-                <div className="glass-panel rounded-2xl p-6 space-y-4 hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
-                  <div>
-                    <h4 className="text-base font-semibold text-text-primary flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-accent" />
-                      Additional Recipients
-                    </h4>
-                    <p className="text-[10px] text-text-secondary mt-0.5">Receive a carbon copy (CC) of the completed transaction record.</p>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <div className="flex-1 relative">
-                      <Mail className="absolute left-3 h-4 w-4 text-text-secondary/60 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="email"
-                        value={newRecipientEmail}
-                        onChange={(e) => {
-                          setNewRecipientEmail(e.target.value)
-                          setRecipientEmailError('')
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            addRecipientEmail()
-                          }
-                        }}
-                        placeholder="Add observer email address (e.g. admin@company.com)"
-                        disabled={isSubmitting}
-                        className={`${inputClass} pl-10`}
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={addRecipientEmail}
-                      disabled={isSubmitting || !newRecipientEmail.trim()}
-                      className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-card-bg hover:bg-cyan-500 hover:text-black border border-border-color hover:border-cyan-400 px-5 py-3.5 text-xs font-semibold text-text-primary transition-all duration-300 cursor-pointer shrink-0"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Add Recipient
-                    </button>
-                  </div>
-
-                  {recipientEmailError && (
-                    <p className="text-xs text-red-400 font-semibold">{recipientEmailError}</p>
-                  )}
-
-                  {/* Email Tag chips */}
-                  {additionalRecipients.length > 0 && (
-                    <div className="flex flex-wrap gap-2 pt-2">
-                      {additionalRecipients.map((email) => (
-                        <span
-                          key={email}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-300 font-mono animate-none"
+                    <div className="flex justify-between items-center pt-6 border-t border-border-color">
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          disabled={!isDocumentValid || isSavingDraft}
+                          onClick={handleSaveDraft}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {email}
+                          {isSavingDraft ? 'Saving…' : draftSaved ? '✓ Saved' : 'Save Draft'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={openTemplateModal}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
+                        >
+                          <SparkleIcon className="h-4 w-4 shrink-0 text-text-secondary" />
+                          Save as Template
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={!isDocumentValid}
+                        onClick={() => setCurrentTab('recipients')}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-6 py-3.5 text-xs font-bold transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.45)] uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Continue to Recipients
+                        <ArrowRight className="h-4 w-4 stroke-[2.5]" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 2 Panel: Participants & Workflow */}
+                {currentTab === 'recipients' && (
+                  <div className="space-y-6 pt-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <h3 className="text-base font-semibold tracking-wide text-text-primary flex items-center gap-2">
+                          <UserPlus className="h-5 w-5 text-accent" />
+                          Workflow Builder
+                        </h3>
+                        <p className="text-xs text-text-secondary mt-1">
+                          Design a sequential routing workflow. Participants in each step will receive the document in order.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={addStep}
+                        disabled={isSubmitting}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 hover:bg-cyan-500 hover:text-black hover:border-cyan-400 px-4 py-2.5 text-xs font-semibold text-accent transition-all duration-300 shadow-[0_0_15px_rgba(34,211,238,0.05)] cursor-pointer shrink-0 self-start sm:self-auto"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Add Workflow Step
+                      </button>
+                    </div>
+
+                    {/* AI Authority Extraction Banners/Checklist */}
+                    {isAnalyzing && (
+                      <div className="flex items-center gap-3 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-4 text-sm text-cyan-200 animate-pulse">
+                        <Sparkles className="h-5 w-5 text-cyan-400 shrink-0 animate-spin" />
+                        <div>
+                          <p className="font-semibold text-cyan-300">Analyzing Signing Authority...</p>
+                          <p className="text-xs text-cyan-200/80 mt-0.5 font-mono">
+                            Extracting representatives and validation parameters. Please hold.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {analysisError && (
+                      <div className="flex items-center gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-4 text-xs text-red-200">
+                        <AlertCircle className="h-5 w-5 text-red-400 shrink-0" />
+                        <span>{analysisError}</span>
+                      </div>
+                    )}
+
+                    {!isAnalyzing && candidates && candidates.length === 1 && (
+                      <div className="flex items-start gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200">
+                        <Sparkles className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-semibold text-emerald-300 font-mono">Representative Pre-populated</p>
+                          <p className="text-xs text-emerald-200/80 mt-0.5 leading-relaxed">
+                            We automatically detected <strong>{candidates[0].name_en || candidates[0].name_ar}</strong> ({candidates[0].title_en || candidates[0].title_ar}) as the authorized signatory and pre-populated them in the list. Please add their email below.
+                          </p>
+                          {candidates[0].authority_clause && (
+                            <p className="text-[11px] text-emerald-200/60 mt-1.5 border-t border-emerald-500/20 pt-1.5 italic">
+                              Clause: "{candidates[0].authority_clause}"
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {!isAnalyzing && pendingCandidates && pendingCandidates.length > 1 && !candidatesConfirmed && (
+                      <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/5 p-5 space-y-4">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="h-5 w-5 text-cyan-400 animate-pulse" />
+                          <h4 className="text-sm font-semibold text-text-primary">
+                            Signing Representatives Detected
+                          </h4>
+                        </div>
+                        <p className="text-xs text-text-secondary">
+                          Multiple authorized signatories were found in this contract. Select who you would like to include as signers in the workflow:
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-1">
+                          {pendingCandidates.map((cand) => {
+                            const isSelected = selectedCandidateIds.includes(cand.id);
+                            return (
+                              <label
+                                key={cand.id}
+                                className={`flex items-start gap-3 rounded-xl border p-4 transition-all cursor-pointer select-none ${isSelected
+                                    ? 'border-cyan-500 bg-cyan-500/10'
+                                    : 'border-border-color bg-card-bg hover:border-cyan-500/20'
+                                  }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => handleToggleCandidate(cand.id)}
+                                  className="mt-1 h-4.5 w-4.5 rounded border-border-color bg-card-bg text-cyan-500 focus:ring-cyan-500 cursor-pointer shrink-0"
+                                />
+                                <div className="text-xs space-y-1">
+                                  <p className="font-bold text-text-primary">
+                                    {cand.name_en || cand.name_ar}
+                                  </p>
+                                  <p className="text-[10px] text-text-secondary">
+                                    {cand.title_en || cand.title_ar}
+                                  </p>
+                                  {cand.authority_clause && (
+                                    <p className="text-[10px] text-zinc-500 italic mt-1 leading-relaxed line-clamp-2" title={cand.authority_clause}>
+                                      "{cand.authority_clause}"
+                                    </p>
+                                  )}
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                        <div className="flex items-center gap-3 pt-2 border-t border-border-color/50">
                           <button
                             type="button"
-                            onClick={() => removeRecipientEmail(email)}
-                            disabled={isSubmitting}
-                            className="rounded p-0.5 hover:bg-cyan-500/20 text-cyan-400 hover:text-cyan-200 transition-colors cursor-pointer"
+                            onClick={handleConfirmCandidates}
+                            disabled={selectedCandidateIds.length === 0 || isSubmitting}
+                            className="rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-2.5 text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
                           >
-                            <X className="h-3 w-3" />
+                            Add Selected Signers
                           </button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Back and Continue Buttons */}
-                <div className="flex justify-between pt-6 border-t border-border-color">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setCurrentTab('prepare')}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-6 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
-                    >
-                      Back
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isSavingDraft}
-                      onClick={handleSaveDraft}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isSavingDraft ? 'Saving…' : draftSaved ? '✓ Saved' : 'Save Draft'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={openTemplateModal}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
-                    >
-                      <SparkleIcon className="h-4 w-4 shrink-0 text-text-secondary" />
-                      Save as Template
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setCurrentTab('review')}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-6 py-3.5 text-xs font-bold transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.45)] uppercase tracking-wider cursor-pointer"
-                  >
-                    Continue to Review
-                    <ArrowRight className="h-4 w-4 stroke-[2.5]" />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 4 Panel: Review & Prepare */}
-            {currentTab === 'review' && (
-              <div className="space-y-6 pt-2">
-                <div>
-                  <h3 className="text-base font-semibold tracking-wide text-text-primary flex items-center gap-2">
-                    <Sparkles className="h-5 w-5 text-accent" />
-                    Review & Prepare
-                  </h3>
-                  <p className="text-xs text-text-secondary mt-1">
-                    Preflight checklist validation and configuration summary before dispatch.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Grid Item 1: Workflow Ready Summary */}
-                  <div className="glass-panel rounded-2xl p-6 flex flex-col justify-between hover:-translate-y-1 transition-all duration-200 hover:shadow-lg">
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between border-b border-border-color pb-3">
-                        <h4 className="text-sm font-bold uppercase tracking-wider text-text-primary flex items-center gap-2">
-                          <Sparkles className="h-4 w-4 text-violet-400" />
-                          Workflow Ready
-                        </h4>
-                        <span className="text-[10px] text-text-secondary font-mono uppercase">Routing Overview</span>
-                      </div>
-                      
-                      <div className="flex items-center justify-between bg-card-bg border border-border-color rounded-2xl p-4 shadow-sm hover:-translate-y-0.5 hover:shadow-md transition-all duration-200">
-                        <div className="space-y-0.5">
-                          <span className="text-[10px] text-text-secondary uppercase tracking-widest font-bold">Participants Enrolled</span>
-                          <h4 className="text-xs font-bold text-text-primary">Enrolled routing sequence</h4>
+                          <button
+                            type="button"
+                            onClick={handleSkipCandidates}
+                            disabled={isSubmitting}
+                            className="rounded-xl bg-transparent border border-border-color text-text-secondary hover:text-text-primary px-4 py-2.5 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
+                          >
+                            Skip
+                          </button>
                         </div>
-                        <span className="text-2xl font-light text-violet-400 font-mono">
-                          {workflowSteps.flatMap(s => s.participants).length}
-                        </span>
                       </div>
+                    )}
 
-                      {/* Step-by-step visual routing timeline */}
-                      <div className="space-y-3 pt-2">
-                        {workflowSteps.map((step, stepIdx) => {
-                          const isFirst = step.stepNumber === 1;
-                          return (
-                            <div key={step.stepNumber} className="relative pl-6 border-l border-border-color space-y-1">
-                              {/* Indicator dot */}
-                              <div className={`absolute -left-[5.5px] top-1.5 h-2.5 w-2.5 rounded-full border border-bg-primary ${
-                                isFirst ? 'bg-violet-400 shadow-[0_0_8px_rgba(167,139,250,0.5)]' : 'bg-zinc-700'
-                              }`} />
-                              
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="font-semibold text-text-primary">Step {step.stepNumber}</span>
-                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold uppercase ${
-                                  isFirst ? 'bg-violet-500/10 text-violet-400 border border-violet-500/20' : 'bg-card-bg text-text-secondary border border-border-color'
-                                }`}>
-                                  {isFirst ? 'Active on launch' : 'Pending'}
+                    {!isAnalyzing && candidates && candidates.length === 0 && file && (
+                      <div className="flex items-center gap-3 rounded-2xl border border-border-color bg-card-bg/50 px-4 py-4 text-xs text-text-secondary">
+                        <AlertCircle className="h-4 w-4 text-zinc-500 shrink-0" />
+                        <span>No representatives detected in this contract. Please add participants manually.</span>
+                      </div>
+                    )}
+
+                    <div className="space-y-4">
+                      {workflowSteps.map((step, stepIdx) => (
+                        <div key={step.stepNumber} className="flex flex-col items-center w-full">
+                          {/* Step Card */}
+                          <div className="w-full glass-panel rounded-2xl overflow-visible p-6 relative hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
+                            {/* Step Header */}
+                            <div className="flex items-center justify-between mb-4 pb-3 border-b border-border-color">
+                              <div className="flex items-center gap-3">
+                                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-cyan-500/10 border border-cyan-500/30 text-xs font-bold text-accent">
+                                  {step.stepNumber}
                                 </span>
+                                <div>
+                                  <h4 className="text-sm font-semibold text-text-primary uppercase tracking-wider">
+                                    Step {step.stepNumber} Recipients
+                                  </h4>
+                                  <p className="text-[10px] text-text-secondary">Executes in parallel at this sequence number</p>
+                                </div>
                               </div>
-                              <div className="flex flex-wrap gap-1.5 pt-0.5">
-                                {step.participants.map(p => (
-                                  <span key={p.id} className={`inline-flex px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${
-                                    p.role === 'signer' ? 'bg-cyan-500/10 text-accent border-cyan-500/20' :
-                                    p.role === 'approver' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                                    p.role === 'reviewer' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' :
-                                    'bg-card-bg text-text-primary border-border-color'
-                                  }`}>
-                                    {p.name || 'Unnamed'} ({p.role})
-                                  </span>
-                                ))}
+
+                              <div className="flex items-center gap-2">
+                                {/* Move Up */}
+                                <button
+                                  type="button"
+                                  disabled={isSubmitting || stepIdx === 0}
+                                  onClick={() => moveStep(step.stepNumber, 'up')}
+                                  className="rounded-lg p-1.5 text-text-secondary hover:text-accent hover:bg-cyan-500/10 transition-all disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed animate-none"
+                                  title="Move Step Up"
+                                >
+                                  <ChevronDown className="h-4 w-4 rotate-180" />
+                                </button>
+
+                                {/* Move Down */}
+                                <button
+                                  type="button"
+                                  disabled={isSubmitting || stepIdx === workflowSteps.length - 1}
+                                  onClick={() => moveStep(step.stepNumber, 'down')}
+                                  className="rounded-lg p-1.5 text-text-secondary hover:text-accent hover:bg-cyan-500/10 transition-all disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed animate-none"
+                                  title="Move Step Down"
+                                >
+                                  <ChevronDown className="h-4 w-4" />
+                                </button>
+
+                                {/* Delete Step */}
+                                <button
+                                  type="button"
+                                  disabled={isSubmitting || workflowSteps.length <= 1}
+                                  onClick={() => removeStep(step.stepNumber)}
+                                  className="rounded-lg p-1.5 text-text-secondary hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed animate-none"
+                                  title="Delete Step"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
                               </div>
                             </div>
-                          );
-                        })}
-                      </div>
 
-                      <div className="flex justify-between items-center bg-violet-500/10 border border-violet-500/20 rounded-xl px-4 py-3 text-xs mt-4">
-                        <span className="text-text-secondary font-semibold">Launch Status</span>
-                        <span className="text-violet-400 font-bold uppercase tracking-wider animate-pulse">
-                          Ready To Launch
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                            {/* Step Recipients List/Table */}
+                            <div className="overflow-visible">
+                              <table className="w-full text-left border-collapse text-sm">
+                                <thead>
+                                  <tr className="text-text-secondary uppercase text-[9px] font-bold tracking-wider bg-bg-primary/5 border-b border-border-color">
+                                    <th className="px-4 py-2 min-w-[200px]">Name</th>
+                                    <th className="px-4 py-2 min-w-[220px]">Email Address</th>
+                                    <th className="px-4 py-2 min-w-[200px]">Role</th>
+                                    <th className="px-4 py-2 text-center w-[80px]">Actions</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border-color">
+                                  {step.participants.length === 0 ? (
+                                    <tr>
+                                      <td colSpan="4" className="px-4 py-8 text-center text-text-secondary">
+                                        <div className="flex flex-col items-center justify-center">
+                                          <User className="h-6 w-6 text-text-secondary/55 mb-1 stroke-[1.5]" />
+                                          <p className="text-xs font-medium text-text-secondary">No participants in this step.</p>
+                                          <button
+                                            type="button"
+                                            onClick={() => addParticipantToStep(step.stepNumber)}
+                                            className="mt-2 text-[10px] text-accent hover:underline font-semibold"
+                                          >
+                                            + Add Participant
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ) : (
+                                    step.participants.map((p) => (
+                                      <tr key={p.id} className="hover:bg-bg-primary/30 transition-colors group/row">
+                                        <td className="px-3 py-2.5 align-middle">
+                                          <div className="relative">
+                                            <User className="absolute left-3 h-4 w-4 text-text-secondary/60 top-1/2 -translate-y-1/2" />
+                                            <input
+                                              type="text"
+                                              value={p.name}
+                                              onChange={(e) => updateParticipant(step.stepNumber, p.id, 'name', e.target.value)}
+                                              placeholder="Full Name"
+                                              disabled={isSubmitting}
+                                              className={`${cellInputClass} pl-9`}
+                                            />
+                                          </div>
+                                        </td>
+                                        <td className="px-3 py-2.5 align-middle">
+                                          <div className="relative">
+                                            <Mail className={`absolute left-3 h-4 w-4 top-1/2 -translate-y-1/2 ${participantErrors[p.id] ? 'text-red-400' : 'text-text-secondary/60'}`} />
+                                            <input
+                                              type="email"
+                                              value={p.email}
+                                              onChange={(e) => {
+                                                updateParticipant(step.stepNumber, p.id, 'email', e.target.value)
+                                                // Clear inline error as user types
+                                                if (participantErrors[p.id]) {
+                                                  setParticipantErrors(prev => {
+                                                    const next = { ...prev }
+                                                    delete next[p.id]
+                                                    return next
+                                                  })
+                                                }
+                                              }}
+                                              placeholder="Email Address"
+                                              disabled={isSubmitting}
+                                              className={`${cellInputClass} pl-9 font-mono ${participantErrors[p.id]
+                                                  ? 'border-red-500/60 focus:border-red-500/60 focus:ring-red-500/20 bg-red-950/10'
+                                                  : ''
+                                                }`}
+                                            />
+                                          </div>
+                                          {participantErrors[p.id] && (
+                                            <p className="mt-1 px-1 text-[10px] text-red-400 font-medium flex items-center gap-1">
+                                              <span aria-hidden="true">⚠</span> {participantErrors[p.id]}
+                                            </p>
+                                          )}
+                                        </td>
+                                        <td className="px-3 py-2.5 align-middle">
+                                          <CustomSelect
+                                            value={p.role}
+                                            onChange={(val) => updateParticipant(step.stepNumber, p.id, 'role', val)}
+                                            disabled={isSubmitting}
+                                            options={[
+                                              { value: 'signer', label: 'Signer (Signs)' },
+                                              { value: 'approver', label: 'Approver (Approves)' },
+                                              { value: 'reviewer', label: 'Reviewer (Reviews)' },
+                                              { value: 'cc', label: 'CC (Receives copy)' }
+                                            ]}
+                                          />
+                                        </td>
+                                        <td className="px-3 py-2.5 align-middle text-center">
+                                          <button
+                                            type="button"
+                                            onClick={() => removeParticipant(step.stepNumber, p.id)}
+                                            disabled={isSubmitting}
+                                            className="rounded-lg p-2 text-text-secondary hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer inline-flex items-center justify-center cursor-pointer"
+                                            title="Remove Recipient"
+                                          >
+                                            <Trash2 className="h-4 w-4" />
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    ))
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
 
-                  {/* Grid Item 2: Launch Checklist */}
-                  <div className="glass-panel rounded-2xl p-6 hover:-translate-y-1 transition-all duration-200 hover:shadow-lg">
-                    <div className="flex items-center justify-between border-b border-border-color pb-3 mb-4">
-                      <h4 className="text-sm font-bold uppercase tracking-wider text-text-primary flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-accent" />
-                        Launch Checklist
-                      </h4>
-                      <span className="text-[10px] text-text-secondary font-mono uppercase">Preflight Check</span>
-                    </div>
-
-                    <div className="space-y-3">
-                      {[
-                        { 
-                          label: 'Document Ready', 
-                          isValid: isDocumentValid, 
-                          desc: 'Valid PDF payload is uploaded and parsed.' 
-                        },
-                        { 
-                          label: 'Participants Configured', 
-                          isValid: isWorkflowValid, 
-                          desc: 'All recipient names and email addresses are valid.' 
-                        },
-                        { 
-                          label: 'Workflow Configured', 
-                          isValid: isWorkflowValid && hasSignerRole, 
-                          desc: 'Sequential routing steps and signer roles are configured.' 
-                        },
-                        { 
-                          label: 'Request Settings Configured', 
-                          isValid: settingsValid, 
-                          desc: 'Delivery settings and notifications set to default.' 
-                        },
-                        { 
-                          label: 'Signature Zone Placed', 
-                          isValid: isSignaturePlaced, 
-                          desc: 'Signature placement coordinates selected on document.' 
-                        },
-                        { 
-                          label: 'Ready To Send', 
-                          isValid: isDocumentValid && isWorkflowValid && hasSignerRole && isSignaturePlaced && settingsValid, 
-                          desc: 'Workflow is verified and ready for dispatch.' 
-                        }
-                      ].map((item, idx) => (
-                        <div 
-                          key={idx} 
-                          className={`flex items-start gap-3 rounded-xl p-3 border transition-all duration-200 hover:-translate-y-0.5 ${
-                            item.isValid 
-                              ? 'bg-emerald-500/[0.02] border-emerald-500/10 text-emerald-400 hover:border-emerald-500/20' 
-                              : 'bg-red-500/[0.02] border-red-500/10 text-red-400 hover:border-red-500/20'
-                          }`}
-                        >
-                          <div className="mt-0.5">
-                            {item.isValid ? (
-                              <Check className="h-4 w-4 text-emerald-400 stroke-[2.5]" />
-                            ) : (
-                              <X className="h-4 w-4 text-red-400 stroke-[2.5]" />
+                            {/* Add Recipient to Step button inside the step card */}
+                            {step.participants.length > 0 && (
+                              <div className="mt-4 flex justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => addParticipantToStep(step.stepNumber)}
+                                  disabled={isSubmitting}
+                                  className="inline-flex items-center gap-1.5 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-primary hover:text-cyan-400 px-3 py-1.5 text-xs font-semibold transition-all duration-200 cursor-pointer"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                  Add Recipient to Step {step.stepNumber}
+                                </button>
+                              </div>
                             )}
                           </div>
-                          <div>
-                            <div className={`text-xs font-semibold ${item.isValid ? 'text-emerald-400' : 'text-text-secondary'}`}>
-                              {item.label}
+
+                          {/* Down Arrow separator between steps */}
+                          {stepIdx < workflowSteps.length - 1 && (
+                            <div className="flex flex-col items-center my-3 relative">
+                              <div className="h-8 w-[1px] bg-gradient-to-b from-cyan-500/50 to-transparent" />
+                              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-cyan-500/10 border border-cyan-500/30 text-accent shadow-[0_0_10px_rgba(34,211,238,0.15)] backdrop-blur-md">
+                                <ChevronDown className="h-4 w-4 animate-pulse" />
+                              </div>
+                              <div className="h-8 w-[1px] bg-gradient-to-t from-cyan-500/50 to-transparent" />
                             </div>
-                            <p className="text-[10px] text-text-secondary mt-0.5">{item.desc}</p>
-                          </div>
+                          )}
                         </div>
                       ))}
                     </div>
-                  </div>
-                </div>
 
-                {/* Back and Send buttons */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-6 border-t border-border-color">
-                  <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-                    <button
-                      type="button"
-                      onClick={() => setCurrentTab('settings')}
-                      disabled={isSubmitting}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-6 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer disabled:opacity-50"
-                    >
-                      Back
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isSavingDraft}
-                      onClick={handleSaveDraft}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isSavingDraft ? 'Saving…' : draftSaved ? '✓ Saved' : 'Save Draft'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={openTemplateModal}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
-                    >
-                      <SparkleIcon className="h-4 w-4 shrink-0 text-text-secondary" />
-                      Save as Template
-                    </button>
-                  </div>
+                    {/* Back and Continue Buttons */}
+                    <div className="flex justify-between pt-6 border-t border-border-color">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setCurrentTab('documents')}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-6 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
+                        >
+                          Back
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isSavingDraft}
+                          onClick={handleSaveDraft}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isSavingDraft ? 'Saving…' : draftSaved ? '✓ Saved' : 'Save Draft'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={openTemplateModal}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
+                        >
+                          <SparkleIcon className="h-4 w-4 shrink-0 text-text-secondary" />
+                          Save as Template
+                        </button>
+                      </div>
 
-                  <div className="flex flex-col items-end gap-2">
-                    <button
-                      type="submit"
-                      disabled={isSubmitting || !isDocumentValid || !isWorkflowValid || !hasSignerRole || !isSignaturePlaced || !settingsValid}
-                      className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed px-8 py-3.5 text-xs font-bold text-black transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.45)] uppercase tracking-wider cursor-pointer"
-                    >
-                      <span className="relative z-10 flex items-center gap-2">
-                        {isSubmitting ? 'Launching Workflow…' : 'Send Package'}
-                        {!isSubmitting && <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />}
-                      </span>
-                      <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent group-hover:animate-[shimmer_1.5s_infinite]" />
-                    </button>
-                    
-                    {!isSignaturePlaced && (
-                      <p className="text-[11px] text-amber-400 font-semibold text-right max-w-sm">
-                        Please scroll down to "Target Signature Zone" below and select a signature coordinate on the PDF document to enable sending.
+                      <div className="flex flex-col items-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // Validate all participant emails inline before advancing
+                            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+                            const errors = {}
+                            workflowSteps.forEach(step => {
+                              step.participants.forEach(p => {
+                                const email = p.email.trim()
+                                if (!email) {
+                                  errors[p.id] = 'Email address is required.'
+                                } else if (!emailRegex.test(email)) {
+                                  errors[p.id] = 'Enter a valid email address.'
+                                }
+                              })
+                            })
+                            if (Object.keys(errors).length > 0) {
+                              setParticipantErrors(errors)
+                              return
+                            }
+                            setParticipantErrors({})
+                            if (!hasSignerRole) return
+                            setCurrentTab('prepare')
+                          }}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-6 py-3.5 text-xs font-bold transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.45)] uppercase tracking-wider cursor-pointer"
+                        >
+                          Continue to Prepare
+                          <ArrowRight className="h-4 w-4 stroke-[2.5]" />
+                        </button>
+                        {!hasSignerRole && (
+                          <p className="text-[10px] text-amber-400 font-semibold mt-1">
+                            At least one participant must be assigned the "Signer" role.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 3 Panel: Prepare */}
+                {currentTab === 'prepare' && (
+                  <div className="space-y-6 pt-2">
+                    <div>
+                      <h3 className="text-base font-semibold tracking-wide text-text-primary flex items-center gap-2">
+                        <Crosshair className="h-5 w-5 text-accent" />
+                        Place Fields on Document
+                      </h3>
+                      <p className="text-xs text-text-secondary mt-1">
+                        Select a recipient, choose the field type, and click directly on the PDF pages below to position signature fields.
                       </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-          </form>
+                    </div>
 
-          <AnimatePresence>
-            {error && (
-              <motion.div
-                initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                animate={{ opacity: 1, height: 'auto', marginTop: 24 }}
-                exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="flex items-center gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200 backdrop-blur-md" role="alert">
-                  <X className="h-5 w-5 shrink-0 text-red-400" />
-                  <p>{error}</p>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          </>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      {/* Summary Card 1: Fields Count */}
+                      <div className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[140px] relative hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
+                        <div className="flex justify-between items-start">
+                          <span className="text-[10px] uppercase font-bold tracking-widest text-text-secondary">Summary</span>
+                          <FileText className="h-5 w-5 text-accent" />
+                        </div>
+                        <div className="mt-4 space-y-1">
+                          <h4 className="text-sm font-bold text-text-primary">Total Placed Fields</h4>
+                          <p className="text-[10px] text-text-secondary">Signature fields placed on document pages.</p>
+                          <div className="text-3xl font-light text-accent font-mono mt-2">
+                            {placedFields.length}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Summary Card 2: Instructions */}
+                      <div className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[140px] md:col-span-2 relative hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
+                        <div className="flex justify-between items-start">
+                          <span className="text-[10px] uppercase font-bold tracking-widest text-text-secondary">Instructions</span>
+                          <SparkleIcon className="h-5 w-5 text-violet-400" />
+                        </div>
+                        <div className="mt-4 space-y-1">
+                          <h4 className="text-sm font-bold text-text-primary">How to position signature zones</h4>
+                          <p className="text-xs text-text-secondary leading-relaxed">
+                            1. Select a recipient from the dropdown below or in the document editor.<br />
+                            2. Scroll down to the document editor below.<br />
+                            3. Click on any page where you want the signer to sign.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Placed Fields List / Summary */}
+                    <div className="glass-panel rounded-2xl p-6 space-y-4 hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
+                      <div>
+                        <h4 className="text-sm font-bold uppercase tracking-wider text-text-primary flex items-center gap-2">
+                          <CheckCircle2 className="h-4 w-4 text-accent" />
+                          Placed Fields Summary
+                        </h4>
+                        <p className="text-[10px] text-text-secondary mt-0.5">List of all active signature zones placed on the document.</p>
+                      </div>
+
+                      {placedFields.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-border-color bg-card-bg/40 p-8 text-center text-xs text-text-secondary">
+                          No fields placed yet. Scroll down to position your first signature zone on the PDF page.
+                        </div>
+                      ) : (
+                        <div className="max-h-60 overflow-y-auto custom-scrollbar divide-y divide-border-color">
+                          {placedFields.map((field) => (
+                            <div key={field.id} className="py-3 flex items-center justify-between text-xs hover:bg-cyan-500/[0.02] px-2 rounded-xl transition-all">
+                              <div className="flex items-center gap-4">
+                                <span className="flex h-5 w-5 items-center justify-center rounded bg-cyan-500/10 text-[10px] font-bold text-accent">
+                                  P{field.page}
+                                </span>
+                                <div>
+                                  <span className="font-semibold text-text-primary">{field.participant_name || 'Signer'}</span>
+                                  <span className="text-[10px] text-text-secondary font-mono ml-2">({field.participant_email})</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-4">
+                                <span className="text-[10px] font-mono text-text-secondary">
+                                  X: {field.x_ratio.toFixed(2)} Y: {field.y_ratio.toFixed(2)}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => removeField(field.id)}
+                                  className="rounded-lg p-1 text-text-secondary hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
+                                  title="Delete Field"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Back and Continue Buttons */}
+                    <div className="flex justify-between pt-6 border-t border-border-color">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setCurrentTab('recipients')}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-6 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
+                        >
+                          Back
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isSavingDraft}
+                          onClick={handleSaveDraft}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isSavingDraft ? 'Saving…' : draftSaved ? '✓ Saved' : 'Save Draft'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={openTemplateModal}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
+                        >
+                          <SparkleIcon className="h-4 w-4 shrink-0 text-text-secondary" />
+                          Save as Template
+                        </button>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <button
+                          type="button"
+                          disabled={!isSignaturePlaced}
+                          onClick={() => setCurrentTab('settings')}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-6 py-3.5 text-xs font-bold transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.45)] uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Continue to Settings
+                          <ArrowRight className="h-4 w-4 stroke-[2.5]" />
+                        </button>
+                        {!isSignaturePlaced && (
+                          <p className="text-[10px] text-amber-400 font-semibold mt-1">
+                            Please scroll down and place at least one signature zone.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 4 Panel: Request Settings */}
+                {currentTab === 'settings' && (
+                  <div className="space-y-6 pt-2">
+                    <div>
+                      <h3 className="text-base font-semibold tracking-wide text-text-primary flex items-center gap-2">
+                        <Settings className="h-5 w-5 text-accent" />
+                        Request Settings
+                      </h3>
+                      <p className="text-xs text-text-secondary mt-1">
+                        Configure request alerts, document distribution, and delivery settings before dispatching.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      {/* Switch 1: Reminders */}
+                      <div className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[140px] relative hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
+                        <div className="flex justify-between items-start">
+                          <span className="text-[10px] uppercase font-bold tracking-widest text-text-secondary">Alerts</span>
+                          <Bell className={`h-5 w-5 ${sendReminders ? 'text-accent' : 'text-text-secondary'}`} />
+                        </div>
+                        <div className="mt-4 space-y-3">
+                          <div>
+                            <h4 className="text-sm font-bold text-text-primary">Automatic Reminders</h4>
+                            <p className="text-[10px] text-text-secondary mt-0.5">Send status email alerts to pending signers.</p>
+                          </div>
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={sendReminders}
+                              onChange={(e) => setSendReminders(e.target.checked)}
+                              disabled={isSubmitting}
+                              className="sr-only peer"
+                            />
+                            <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
+                            <span className="text-xs text-text-secondary peer-checked:text-accent font-medium">
+                              {sendReminders ? 'Enabled' : 'Disabled'}
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Switch 2: Final Document Delivery */}
+                      <div className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[140px] relative hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
+                        <div className="flex justify-between items-start">
+                          <span className="text-[10px] uppercase font-bold tracking-widest text-text-secondary">Distribution</span>
+                          <Share2 className={`h-5 w-5 ${sendFinalEmail ? 'text-accent' : 'text-text-secondary'}`} />
+                        </div>
+                        <div className="mt-4 space-y-3">
+                          <div>
+                            <h4 className="text-sm font-bold text-text-primary">Final Delivery</h4>
+                            <p className="text-[10px] text-text-secondary mt-0.5">Deliver completed copy to all participants.</p>
+                          </div>
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={sendFinalEmail}
+                              onChange={(e) => setSendFinalEmail(e.target.checked)}
+                              disabled={isSubmitting}
+                              className="sr-only peer"
+                            />
+                            <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
+                            <span className="text-xs text-text-secondary peer-checked:text-accent font-medium">
+                              {sendFinalEmail ? 'Deliver' : 'Do Not Deliver'}
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Switch 3: Allow Printing */}
+                      <div className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[140px] relative hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
+                        <div className="flex justify-between items-start">
+                          <span className="text-[10px] uppercase font-bold tracking-widest text-text-secondary">Permissions</span>
+                          <Printer className={`h-5 w-5 ${allowPrinting ? 'text-accent' : 'text-text-secondary'}`} />
+                        </div>
+                        <div className="mt-4 space-y-3">
+                          <div>
+                            <h4 className="text-sm font-bold text-text-primary">Allow Printing</h4>
+                            <p className="text-[10px] text-text-secondary mt-0.5">Allow recipients to download or print copies.</p>
+                          </div>
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={allowPrinting}
+                              onChange={(e) => setAllowPrinting(e.target.checked)}
+                              disabled={isSubmitting}
+                              className="sr-only peer"
+                            />
+                            <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
+                            <span className="text-xs text-text-secondary peer-checked:text-accent font-medium">
+                              {allowPrinting ? 'Allowed' : 'Restricted'}
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Security & Authentication Section */}
+                    <div className="glass-panel rounded-2xl p-6 space-y-6 hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
+                      <div>
+                        <h4 className="text-base font-semibold text-text-primary flex items-center gap-2">
+                          <Shield className="h-5 w-5 text-accent" />
+                          Security & Authentication
+                        </h4>
+                        <p className="text-[10px] text-text-secondary mt-0.5">Enforce identity verification and security requirements for signers.</p>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Toggle: Terms Acceptance */}
+                        <div className="flex items-start justify-between p-4 rounded-xl border border-border-color bg-card-bg/30">
+                          <div className="space-y-1 pr-4">
+                            <label className="text-xs font-semibold text-text-primary">Terms Acceptance</label>
+                            <p className="text-[10px] text-text-secondary leading-relaxed">Require signers to accept the terms before signing.</p>
+                          </div>
+                          <label className="flex items-center gap-2 cursor-pointer select-none shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={securitySettings.terms_acceptance_required}
+                              onChange={(e) => handleSecuritySettingChange('terms_acceptance_required', e.target.checked)}
+                              disabled={isSubmitting}
+                              className="sr-only peer"
+                            />
+                            <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
+                          </label>
+                        </div>
+
+                        {/* Toggle: Email OTP */}
+                        <div className="flex items-start justify-between p-4 rounded-xl border border-border-color bg-card-bg/30">
+                          <div className="space-y-1 pr-4">
+                            <label className="text-xs font-semibold text-text-primary">Email OTP</label>
+                            <p className="text-[10px] text-text-secondary leading-relaxed">Require email verification before signing.</p>
+                          </div>
+                          <label className="flex items-center gap-2 cursor-pointer select-none shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={securitySettings.email_otp_required}
+                              onChange={(e) => handleSecuritySettingChange('email_otp_required', e.target.checked)}
+                              disabled={isSubmitting}
+                              className="sr-only peer"
+                            />
+                            <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
+                          </label>
+                        </div>
+
+                        {/* Toggle: SMS OTP */}
+                        <div className="flex items-start justify-between p-4 rounded-xl border border-border-color bg-card-bg/30 opacity-60">
+                          <div className="space-y-1 pr-4">
+                            <div className="flex items-center gap-2">
+                              <label className="text-xs font-semibold text-text-primary">SMS OTP</label>
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">Coming Soon</span>
+                            </div>
+                            <p className="text-[10px] text-text-secondary leading-relaxed">Require SMS verification before signing.</p>
+                          </div>
+                          <label className="flex items-center gap-2 cursor-not-allowed select-none shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={securitySettings.sms_otp_required}
+                              disabled={true}
+                              className="sr-only peer"
+                            />
+                            <div className="relative w-10 h-6 bg-text-secondary/10 rounded-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary/40 after:rounded-full after:h-5 after:w-5" />
+                          </label>
+                        </div>
+
+                        {/* Toggle: National ID Verification */}
+                        <div className="flex items-start justify-between p-4 rounded-xl border border-border-color bg-card-bg/30">
+                          <div className="space-y-1 pr-4">
+                            <label className="text-xs font-semibold text-text-primary">National ID Verification</label>
+                            <p className="text-[10px] text-text-secondary leading-relaxed">Require identity document verification.</p>
+                          </div>
+                          <label className="flex items-center gap-2 cursor-pointer select-none shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={securitySettings.national_id_required}
+                              onChange={(e) => handleSecuritySettingChange('national_id_required', e.target.checked)}
+                              disabled={isSubmitting}
+                              className="sr-only peer"
+                            />
+                            <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
+                          </label>
+                        </div>
+
+                        {/* Toggle: Face Verification */}
+                        <div className="flex items-start justify-between p-4 rounded-xl border border-border-color bg-card-bg/30">
+                          <div className="space-y-1 pr-4">
+                            <label className="text-xs font-semibold text-text-primary">Face Verification</label>
+                            <p className="text-[9px] text-amber-500 font-semibold mt-0.5">Requires National ID Verification</p>
+                            <p className="text-[10px] text-text-secondary leading-relaxed">Require biometric face verification before signing.</p>
+                          </div>
+                          <label className="flex items-center gap-2 cursor-pointer select-none shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={securitySettings.face_biometric_required}
+                              onChange={(e) => handleSecuritySettingChange('face_biometric_required', e.target.checked)}
+                              disabled={isSubmitting}
+                              className="sr-only peer"
+                            />
+                            <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
+                          </label>
+                        </div>
+
+                        {/* Toggle: Representative Match */}
+                        <div className="flex items-start justify-between p-4 rounded-xl border border-border-color bg-card-bg/30">
+                          <div className="space-y-1 pr-4">
+                            <label className="text-xs font-semibold text-text-primary">Representative Match</label>
+                            <p className="text-[9px] text-amber-500 font-semibold mt-0.5">Requires Face Verification and National ID Verification</p>
+                            <p className="text-[10px] text-text-secondary leading-relaxed">Require representative identity verification.</p>
+                          </div>
+                          <label className="flex items-center gap-2 cursor-pointer select-none shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={securitySettings.representative_match_required}
+                              onChange={(e) => handleSecuritySettingChange('representative_match_required', e.target.checked)}
+                              disabled={isSubmitting}
+                              className="sr-only peer"
+                            />
+                            <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 4. Additional Recipients Input Section */}
+                    <div className="glass-panel rounded-2xl p-6 space-y-4 hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
+                      <div>
+                        <h4 className="text-base font-semibold text-text-primary flex items-center gap-2">
+                          <Mail className="h-4 w-4 text-accent" />
+                          Additional Recipients
+                        </h4>
+                        <p className="text-[10px] text-text-secondary mt-0.5">Receive a carbon copy (CC) of the completed transaction record.</p>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <div className="flex-1 relative">
+                          <Mail className="absolute left-3 h-4 w-4 text-text-secondary/60 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="email"
+                            value={newRecipientEmail}
+                            onChange={(e) => {
+                              setNewRecipientEmail(e.target.value)
+                              setRecipientEmailError('')
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                addRecipientEmail()
+                              }
+                            }}
+                            placeholder="Add observer email address (e.g. admin@company.com)"
+                            disabled={isSubmitting}
+                            className={`${inputClass} pl-10`}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={addRecipientEmail}
+                          disabled={isSubmitting || !newRecipientEmail.trim()}
+                          className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-card-bg hover:bg-cyan-500 hover:text-black border border-border-color hover:border-cyan-400 px-5 py-3.5 text-xs font-semibold text-text-primary transition-all duration-300 cursor-pointer shrink-0"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Add Recipient
+                        </button>
+                      </div>
+
+                      {recipientEmailError && (
+                        <p className="text-xs text-red-400 font-semibold">{recipientEmailError}</p>
+                      )}
+
+                      {/* Email Tag chips */}
+                      {additionalRecipients.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pt-2">
+                          {additionalRecipients.map((email) => (
+                            <span
+                              key={email}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-300 font-mono animate-none"
+                            >
+                              {email}
+                              <button
+                                type="button"
+                                onClick={() => removeRecipientEmail(email)}
+                                disabled={isSubmitting}
+                                className="rounded p-0.5 hover:bg-cyan-500/20 text-cyan-400 hover:text-cyan-200 transition-colors cursor-pointer"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Back and Continue Buttons */}
+                    <div className="flex justify-between pt-6 border-t border-border-color">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setCurrentTab('prepare')}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-6 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
+                        >
+                          Back
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isSavingDraft}
+                          onClick={handleSaveDraft}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isSavingDraft ? 'Saving…' : draftSaved ? '✓ Saved' : 'Save Draft'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={openTemplateModal}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
+                        >
+                          <SparkleIcon className="h-4 w-4 shrink-0 text-text-secondary" />
+                          Save as Template
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setCurrentTab('review')}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-6 py-3.5 text-xs font-bold transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.45)] uppercase tracking-wider cursor-pointer"
+                      >
+                        Continue to Review
+                        <ArrowRight className="h-4 w-4 stroke-[2.5]" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 4 Panel: Review & Prepare */}
+                {currentTab === 'review' && (
+                  <div className="space-y-6 pt-2">
+                    <div>
+                      <h3 className="text-base font-semibold tracking-wide text-text-primary flex items-center gap-2">
+                        <Sparkles className="h-5 w-5 text-accent" />
+                        Review & Prepare
+                      </h3>
+                      <p className="text-xs text-text-secondary mt-1">
+                        Preflight checklist validation and configuration summary before dispatch.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Grid Item 1: Workflow Ready Summary */}
+                      <div className="glass-panel rounded-2xl p-6 flex flex-col justify-between hover:-translate-y-1 transition-all duration-200 hover:shadow-lg">
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between border-b border-border-color pb-3">
+                            <h4 className="text-sm font-bold uppercase tracking-wider text-text-primary flex items-center gap-2">
+                              <Sparkles className="h-4 w-4 text-violet-400" />
+                              Workflow Ready
+                            </h4>
+                            <span className="text-[10px] text-text-secondary font-mono uppercase">Routing Overview</span>
+                          </div>
+
+                          <div className="flex items-center justify-between bg-card-bg border border-border-color rounded-2xl p-4 shadow-sm hover:-translate-y-0.5 hover:shadow-md transition-all duration-200">
+                            <div className="space-y-0.5">
+                              <span className="text-[10px] text-text-secondary uppercase tracking-widest font-bold">Participants Enrolled</span>
+                              <h4 className="text-xs font-bold text-text-primary">Enrolled routing sequence</h4>
+                            </div>
+                            <span className="text-2xl font-light text-violet-400 font-mono">
+                              {workflowSteps.flatMap(s => s.participants).length}
+                            </span>
+                          </div>
+
+                          {/* Step-by-step visual routing timeline */}
+                          <div className="space-y-3 pt-2">
+                            {workflowSteps.map((step, stepIdx) => {
+                              const isFirst = step.stepNumber === 1;
+                              return (
+                                <div key={step.stepNumber} className="relative pl-6 border-l border-border-color space-y-1">
+                                  {/* Indicator dot */}
+                                  <div className={`absolute -left-[5.5px] top-1.5 h-2.5 w-2.5 rounded-full border border-bg-primary ${isFirst ? 'bg-violet-400 shadow-[0_0_8px_rgba(167,139,250,0.5)]' : 'bg-zinc-700'
+                                    }`} />
+
+                                  <div className="flex items-center justify-between text-xs">
+                                    <span className="font-semibold text-text-primary">Step {step.stepNumber}</span>
+                                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold uppercase ${isFirst ? 'bg-violet-500/10 text-violet-400 border border-violet-500/20' : 'bg-card-bg text-text-secondary border border-border-color'
+                                      }`}>
+                                      {isFirst ? 'Active on launch' : 'Pending'}
+                                    </span>
+                                  </div>
+                                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                    {step.participants.map(p => (
+                                      <span key={p.id} className={`inline-flex px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${p.role === 'signer' ? 'bg-cyan-500/10 text-accent border-cyan-500/20' :
+                                          p.role === 'approver' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                            p.role === 'reviewer' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' :
+                                              'bg-card-bg text-text-primary border-border-color'
+                                        }`}>
+                                        {p.name || 'Unnamed'} ({p.role})
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          <div className="flex justify-between items-center bg-violet-500/10 border border-violet-500/20 rounded-xl px-4 py-3 text-xs mt-4">
+                            <span className="text-text-secondary font-semibold">Launch Status</span>
+                            <span className="text-violet-400 font-bold uppercase tracking-wider animate-pulse">
+                              Ready To Launch
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Grid Item 2: Launch Checklist */}
+                      <div className="glass-panel rounded-2xl p-6 hover:-translate-y-1 transition-all duration-200 hover:shadow-lg">
+                        <div className="flex items-center justify-between border-b border-border-color pb-3 mb-4">
+                          <h4 className="text-sm font-bold uppercase tracking-wider text-text-primary flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-accent" />
+                            Launch Checklist
+                          </h4>
+                          <span className="text-[10px] text-text-secondary font-mono uppercase">Preflight Check</span>
+                        </div>
+
+                        <div className="space-y-3">
+                          {[
+                            {
+                              label: 'Document Ready',
+                              isValid: isDocumentValid,
+                              desc: 'Valid PDF payload is uploaded and parsed.'
+                            },
+                            {
+                              label: 'Participants Configured',
+                              isValid: isWorkflowValid,
+                              desc: 'All recipient names and email addresses are valid.'
+                            },
+                            {
+                              label: 'Workflow Configured',
+                              isValid: isWorkflowValid && hasSignerRole,
+                              desc: 'Sequential routing steps and signer roles are configured.'
+                            },
+                            {
+                              label: 'Request Settings Configured',
+                              isValid: settingsValid,
+                              desc: 'Delivery settings and notifications set to default.'
+                            },
+                            {
+                              label: 'Signature Zone Placed',
+                              isValid: isSignaturePlaced,
+                              desc: 'Signature placement coordinates selected on document.'
+                            },
+                            {
+                              label: 'Ready To Send',
+                              isValid: isDocumentValid && isWorkflowValid && hasSignerRole && isSignaturePlaced && settingsValid,
+                              desc: 'Workflow is verified and ready for dispatch.'
+                            }
+                          ].map((item, idx) => (
+                            <div
+                              key={idx}
+                              className={`flex items-start gap-3 rounded-xl p-3 border transition-all duration-200 hover:-translate-y-0.5 ${item.isValid
+                                  ? 'bg-emerald-500/[0.02] border-emerald-500/10 text-emerald-400 hover:border-emerald-500/20'
+                                  : 'bg-red-500/[0.02] border-red-500/10 text-red-400 hover:border-red-500/20'
+                                }`}
+                            >
+                              <div className="mt-0.5">
+                                {item.isValid ? (
+                                  <Check className="h-4 w-4 text-emerald-400 stroke-[2.5]" />
+                                ) : (
+                                  <X className="h-4 w-4 text-red-400 stroke-[2.5]" />
+                                )}
+                              </div>
+                              <div>
+                                <div className={`text-xs font-semibold ${item.isValid ? 'text-emerald-400' : 'text-text-secondary'}`}>
+                                  {item.label}
+                                </div>
+                                <p className="text-[10px] text-text-secondary mt-0.5">{item.desc}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Back and Send buttons */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-6 border-t border-border-color">
+                      <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                        <button
+                          type="button"
+                          onClick={() => setCurrentTab('settings')}
+                          disabled={isSubmitting}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-6 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer disabled:opacity-50"
+                        >
+                          Back
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isSavingDraft}
+                          onClick={handleSaveDraft}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isSavingDraft ? 'Saving…' : draftSaved ? '✓ Saved' : 'Save Draft'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={openTemplateModal}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
+                        >
+                          <SparkleIcon className="h-4 w-4 shrink-0 text-text-secondary" />
+                          Save as Template
+                        </button>
+                      </div>
+
+                      <div className="flex flex-col items-end gap-2">
+                        <button
+                          type="submit"
+                          disabled={isSubmitting || !isDocumentValid || !isWorkflowValid || !hasSignerRole || !isSignaturePlaced || !settingsValid}
+                          className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed px-8 py-3.5 text-xs font-bold text-black transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.45)] uppercase tracking-wider cursor-pointer"
+                        >
+                          <span className="relative z-10 flex items-center gap-2">
+                            {isSubmitting ? 'Launching Workflow…' : 'Send Package'}
+                            {!isSubmitting && <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />}
+                          </span>
+                          <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent group-hover:animate-[shimmer_1.5s_infinite]" />
+                        </button>
+
+                        {!isSignaturePlaced && (
+                          <p className="text-[11px] text-amber-400 font-semibold text-right max-w-sm">
+                            Please scroll down to "Target Signature Zone" below and select a signature coordinate on the PDF document to enable sending.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </form>
+
+              <AnimatePresence>
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                    animate={{ opacity: 1, height: 'auto', marginTop: 24 }}
+                    exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="flex items-center gap-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200 backdrop-blur-md" role="alert">
+                      <X className="h-5 w-5 shrink-0 text-red-400" />
+                      <p>{error}</p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </>
           )}
         </div>
       </motion.div>
@@ -2399,11 +2570,10 @@ export default function UploadPage() {
                         key={t.id}
                         type="button"
                         onClick={() => setSelectedFieldType(t.id)}
-                        className={`px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${
-                          selectedFieldType === t.id
+                        className={`px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${selectedFieldType === t.id
                             ? 'text-accent bg-cyan-500/10 border border-cyan-500/20'
                             : 'text-text-secondary hover:text-text-primary'
-                        }`}
+                          }`}
                       >
                         {t.label}
                       </button>

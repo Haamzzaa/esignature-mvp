@@ -1,5 +1,7 @@
 
 from pathlib import Path
+from corsheaders.defaults import default_headers
+CORS_ALLOW_HEADERS = list(default_headers)
 # pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
 load_dotenv()
@@ -51,7 +53,11 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'esign.middleware.BrowserSecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    # ── Observability: must come first so request_id is set before all downstream ──
+    'esign.middleware.RequestIDMiddleware',
+    'esign.middleware.RequestTimingMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -150,6 +156,10 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^http://127\.0\.0\.1:\d+$",
 ]
 
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "x-participant-token",
+    "x-request-id",
+]
 # CSRF Configuration
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
@@ -202,3 +212,109 @@ if 'test' in sys.argv:
     USE_CELERY = True
     CELERY_TASK_ALWAYS_EAGER = True
     CELERY_TASK_EAGER_PROPAGATES = True
+
+# Face Verification Configuration
+FACE_MATCH_THRESHOLD = 0.6
+
+# Identity Verification Configuration
+IDENTITY_MATCH_THRESHOLD = 0.85
+
+
+# ── Observability: Structured Logging ────────────────────────────────────────
+# Console-first: always enabled. File logging is optional and opt-in.
+# Enable file logging by setting ESIGN_LOG_FILE_ENABLED=True in the environment.
+# Log level is controlled by ESIGN_LOG_LEVEL (default: INFO).
+
+_LOG_LEVEL = os.environ.get("ESIGN_LOG_LEVEL", "INFO").upper()
+_LOG_FILE_ENABLED = os.environ.get("ESIGN_LOG_FILE_ENABLED", "False") == "True"
+_LOG_FILE_PATH = os.environ.get("ESIGN_LOG_FILE_PATH", str(BASE_DIR / "logs" / "esign.log"))
+
+_LOG_FORMAT = (
+    "%(asctime)s [%(levelname)s] [%(request_id)s] %(name)s %(message)s"
+)
+
+if _LOG_FILE_ENABLED:
+    import pathlib
+    pathlib.Path(_LOG_FILE_PATH).parent.mkdir(parents=True, exist_ok=True)
+
+_handlers = ["console"]
+if _LOG_FILE_ENABLED:
+    _handlers.append("file")
+
+# Build the handlers dict dynamically — only include file handler when enabled
+_logging_handlers = {
+    "console": {
+        "class": "logging.StreamHandler",
+        "formatter": "structured",
+        "filters": ["request_id"],
+    },
+}
+if _LOG_FILE_ENABLED:
+    _logging_handlers["file"] = {
+        "class": "logging.handlers.RotatingFileHandler",
+        "filename": _LOG_FILE_PATH,
+        "maxBytes": 10 * 1024 * 1024,  # 10 MB
+        "backupCount": 5,
+        "formatter": "structured",
+        "filters": ["request_id"],
+    }
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "filters": {
+        "request_id": {
+            "()": "esign.log_filters.RequestIDFilter",
+        },
+    },
+    "formatters": {
+        "structured": {
+            "format": _LOG_FORMAT,
+            "datefmt": "%Y-%m-%dT%H:%M:%S",
+        },
+    },
+    "handlers": _logging_handlers,
+    "loggers": {
+        "esign": {
+            "handlers": _handlers,
+            "level": _LOG_LEVEL,
+            "propagate": False,
+        },
+        "esign.middleware": {
+            "handlers": _handlers,
+            "level": _LOG_LEVEL,
+            "propagate": False,
+        },
+        "esign.health": {
+            "handlers": _handlers,
+            "level": _LOG_LEVEL,
+            "propagate": False,
+        },
+        "esign.events": {
+            "handlers": _handlers,
+            "level": _LOG_LEVEL,
+            "propagate": False,
+        },
+        "services": {
+            "handlers": _handlers,
+            "level": _LOG_LEVEL,
+            "propagate": False,
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "WARNING",
+    },
+}
+
+# ── Browser Security, HTTP headers & Cookie Hardening ──
+SECURE_HSTS_SECONDS = 31536000  # 1 year
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
+
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = False  # Intentionally readable by frontend JS for AJAX CSRF headers
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'

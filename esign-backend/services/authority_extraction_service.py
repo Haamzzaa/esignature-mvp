@@ -27,10 +27,11 @@ REATTACH_PREFIXES_AR = {
 }
 
 def safe_print(val):
+    """Debug helper — emits at DEBUG level. No-op unless ESIGN_LOG_LEVEL=DEBUG."""
     if isinstance(val, str):
-        print(val.encode('ascii', errors='backslashreplace').decode('ascii'))
+        logger.debug("%s", val.encode('ascii', errors='backslashreplace').decode('ascii'))
     else:
-        print(val)
+        logger.debug("%s", val)
 
 def normalize_text(text: str) -> str:
     """

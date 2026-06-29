@@ -3,6 +3,41 @@ import datetime
 from datetime import date
 from services.identity_candidates import CandidateName, CandidateIdentifier, CandidateDate
 
+# ---------------------------------------------------------------------------
+# Metadata label blocklist
+# Candidate values whose *normalized* form exactly matches any entry here
+# will never be selected as a person name.
+# Normalization: lowercase + collapse whitespace.
+# ---------------------------------------------------------------------------
+BLOCKED_NAME_CANDIDATES = {
+    "national id",
+    "national identity",
+    "identity card",
+    "id card",
+    "card",
+    "passport",
+    "permit",
+    "government",
+    "kingdom of saudi arabia",
+    "saudi arabia",
+    "saudi",
+    "ministry",
+    "authority",
+    "republic",
+    "india",
+    "iqama",
+    "residence permit",
+    "driving license",
+    "driving licence",
+    "id",
+}
+
+
+def _is_blocked_name(value: str) -> bool:
+    """Return True if *value* normalizes to a blocked metadata label."""
+    normalized = " ".join(value.lower().split())
+    return normalized in BLOCKED_NAME_CANDIDATES
+
 def generate_name_candidates(raw_text: str) -> list[CandidateName]:
     """
     Generate candidate names by:
@@ -86,6 +121,10 @@ def generate_name_candidates(raw_text: str) -> list[CandidateName]:
                             candidate_val = " ".join(window_words)
                             
                             if not candidate_val or len(candidate_val) < 2:
+                                continue
+
+                            # Skip metadata document labels
+                            if _is_blocked_name(candidate_val):
                                 continue
 
                             # Populate reasons

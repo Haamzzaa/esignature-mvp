@@ -2,12 +2,24 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import SignatureCanvas from 'react-signature-canvas'
 import { motion, AnimatePresence } from 'framer-motion'
-import { PenTool, Type, Upload, FileSignature, ShieldCheck, CheckCircle2, AlertCircle, RefreshCw, ChevronRight, Download, X, User, Clock } from 'lucide-react'
+import { PenTool, Type, Upload, FileSignature, ShieldCheck, CheckCircle2, AlertCircle, RefreshCw, ChevronRight, Download, X, User, Clock, Camera, Video } from 'lucide-react'
 import { Document, Page, pdfjs } from 'react-pdf'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
 
-import { apiClient, completeSigning, getSigningSession, API_URL } from '../services/api.js'
+import {
+  apiClient,
+  completeSigning,
+  getSigningSession,
+  API_URL,
+  API_BASE,
+  getAuthorizationStatus,
+  acceptTerms,
+  sendEmailOTP,
+  verifyEmailOTP,
+  submitFaceVerification,
+  submitIdentityVerification
+} from '../services/api.js'
 
 // ── Configure pdf.js worker ──────────────────────────────────────────────────
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -16,6 +28,24 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 ).toString()
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
+
+function maskEmail(email) {
+  if (!email) return '';
+  const parts = email.split('@');
+  if (parts.length !== 2) return email;
+  const [localPart, domain] = parts;
+  let maskedLocal;
+  if (localPart.length <= 1) {
+    maskedLocal = localPart + '***';
+  } else if (localPart.length === 2) {
+    maskedLocal = localPart[0] + '***' + localPart[1];
+  } else if (localPart.length === 3) {
+    maskedLocal = localPart[0] + '***' + localPart.slice(-2);
+  } else {
+    maskedLocal = localPart[0] + '*'.repeat(localPart.length - 2) + localPart.slice(-2);
+  }
+  return `${maskedLocal}@${domain}`;
+}
 
 function backendOriginFromBaseUrl(baseUrl) {
   try {
@@ -151,16 +181,49 @@ export default function SignPage() {
   const [uploadFile, setUploadFile] = useState(null)
   const [uploadPreview, setUploadPreview] = useState('')
 
+  // ── Authorization & Verification State ──────────────────────────────────────
+  const [authStatus, setAuthStatus] = useState(null)
+  const [isVerifying, setIsVerifying] = useState(false)
+  const [emailOtpSent, setEmailOtpSent] = useState(false)
+  const [emailOtpCode, setEmailOtpCode] = useState('')
+  const [selfieFile, setSelfieFile] = useState(null)
+  const [selfiePreview, setSelfiePreview] = useState('')
+  const [cameraActive, setCameraActive] = useState(false)
+  const [cameraError, setCameraError] = useState(false)
+  const [useUploadFallback, setUseUploadFallback] = useState(false)
+  const videoRef = useRef(null)
+  const streamRef = useRef(null)
+  const [idFile, setIdFile] = useState(null)
+  const [idPreview, setIdPreview] = useState('')
+  const [verifyingError, setVerifyingError] = useState('')
+  const [verificationRequiresManualReview, setVerificationRequiresManualReview] = useState(false)
+
+  // ── Verification Step Derivation ──────────────────────────────────────────
+  const missingRequirements = authStatus?.missing_requirements || []
+  let currentStep = null
+  if (authStatus && !authStatus.authorized) {
+    if (missingRequirements.includes('terms_acceptance') || missingRequirements.includes('terms')) {
+      currentStep = 'terms'
+    } else if (missingRequirements.includes('email_otp')) {
+      currentStep = 'email_otp'
+    } else if (missingRequirements.includes('national_id')) {
+      currentStep = 'national_id'
+    } else if (missingRequirements.includes('face_biometric')) {
+      currentStep = 'face_biometric'
+    }
+  }
+
   const documentUrl = useMemo(() => {
     const url = session?.document_url
     return toAbsoluteUrl(url, backendOrigin)
   }, [session, backendOrigin])
 
-  // ── Session loading (unchanged) ───────────────────────────────────────────
+  // ── Session loading ──────────────────────────────────────────────────────────
   async function loadSession() {
     setError('')
     setSuccessMessage('')
     setSignedDocumentUrl('')
+    setVerifyingError('')
 
     if (!token) {
       setSession(null)
@@ -175,6 +238,14 @@ export default function SignPage() {
       setSession(data)
       if (data?.status === 'completed') {
         setSignedDocumentUrl(toAbsoluteUrl(data?.document_url, backendOrigin))
+      } else if (data) {
+        // Fetch authorization status
+        const authData = await getAuthorizationStatus(data.participant_id, token)
+        setAuthStatus(authData)
+        const isManualReview = localStorage.getItem(`manual_review_${data.participant_id}`) === 'true'
+        if (isManualReview || authData.status === 'requires_manual_review') {
+          setVerificationRequiresManualReview(true)
+        }
       }
     } catch (err) {
       const message =
@@ -188,6 +259,309 @@ export default function SignPage() {
       setIsLoading(false)
     }
   }
+
+  async function refreshAuthStatus() {
+    if (!session?.participant_id) return
+    setVerifyingError('')
+    try {
+      const authData = await getAuthorizationStatus(session.participant_id, token)
+      setAuthStatus(authData)
+      const isManualReview = localStorage.getItem(`manual_review_${session.participant_id}`) === 'true'
+      if (isManualReview || authData.status === 'requires_manual_review') {
+        setVerificationRequiresManualReview(true)
+      }
+      return authData
+    } catch (err) {
+      setVerifyingError('Failed to refresh authorization status.')
+    }
+  }
+
+  // ── Verification actions ───────────────────────────────────────────────────
+  async function handleAcceptTerms() {
+    setVerifyingError('')
+    setIsVerifying(true)
+    try {
+      await acceptTerms(session.participant_id, token)
+      await refreshAuthStatus()
+    } catch (err) {
+      setVerifyingError(err?.response?.data?.detail || 'Failed to accept terms.')
+    } finally {
+      setIsVerifying(false)
+    }
+  }
+
+  async function handleSendEmailOTP() {
+    setVerifyingError('')
+    setIsVerifying(true)
+    try {
+      await sendEmailOTP(session.participant_id, token)
+      setEmailOtpSent(true)
+    } catch (err) {
+      setVerifyingError(err?.response?.data?.detail || 'Failed to send OTP code.')
+    } finally {
+      setIsVerifying(false)
+    }
+  }
+
+  async function handleVerifyEmailOTP() {
+    if (!emailOtpCode.trim()) {
+      setVerifyingError('Please enter the OTP code.')
+      return
+    }
+    setVerifyingError('')
+    setIsVerifying(true)
+    try {
+      const res = await verifyEmailOTP(session.participant_id, emailOtpCode, token)
+      if (res.verified) {
+        await refreshAuthStatus()
+      } else {
+        setVerifyingError(res.error || 'Invalid OTP code.')
+      }
+    } catch (err) {
+      setVerifyingError(err?.response?.data?.detail || 'Failed to verify OTP code.')
+    } finally {
+      setIsVerifying(false)
+    }
+  }
+
+  async function handleIdChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!['image/png', 'image/jpeg'].includes(file.type)) {
+      setVerifyingError('Only PNG and JPG files are accepted.')
+      return
+    }
+
+    setVerifyingError('')
+    setIdFile(file)
+
+    const reader = new FileReader()
+    reader.onload = (ev) => setIdPreview(ev.target.result)
+    reader.readAsDataURL(file)
+  }
+
+  async function handleRemoveId() {
+    setIdFile(null)
+    setIdPreview('')
+  }
+
+  async function handleVerifyId() {
+    if (!idFile) {
+      setVerifyingError('Please upload an ID photo.')
+      return
+    }
+    setVerifyingError('')
+    setIsVerifying(true)
+    try {
+      const res = await submitIdentityVerification(session.participant_id, idFile, token)
+      if (res.status === 'verified') {
+        await refreshAuthStatus()
+      } else if (res.status === 'requires_manual_review') {
+        localStorage.setItem(`manual_review_${session.participant_id}`, 'true')
+        setVerificationRequiresManualReview(true)
+        await refreshAuthStatus()
+      } else {
+        setVerifyingError(res.failure_reason || 'Identity verification failed. Please try again.')
+      }
+    } catch (err) {
+      setVerifyingError(err?.response?.data?.detail || 'Failed during identity verification.')
+    } finally {
+      setIsVerifying(false)
+    }
+  }
+
+  async function handleSelfieChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!['image/png', 'image/jpeg'].includes(file.type)) {
+      setVerifyingError('Only PNG and JPG files are accepted.')
+      return
+    }
+
+    setVerifyingError('')
+    setSelfieFile(file)
+
+    const reader = new FileReader()
+    reader.onload = (ev) => setSelfiePreview(ev.target.result)
+    reader.readAsDataURL(file)
+  }
+
+  async function handleRemoveSelfie() {
+    setSelfieFile(null)
+    setSelfiePreview('')
+    stopCamera()
+  }
+
+  async function handleVerifyFace() {
+    if (!selfieFile) {
+      setVerifyingError('Please upload a selfie photo.')
+      return
+    }
+    setVerifyingError('')
+    setIsVerifying(true)
+    try {
+      const res = await submitFaceVerification(session.participant_id, selfieFile, token)
+      if (res.matched) {
+        await refreshAuthStatus()
+      } else if (res.status === 'requires_manual_review') {
+        localStorage.setItem(`manual_review_${session.participant_id}`, 'true')
+        setVerificationRequiresManualReview(true)
+        await refreshAuthStatus()
+      } else {
+        setVerifyingError('Face verification failed. Please try again.')
+      }
+    } catch (err) {
+      setVerifyingError(err?.response?.data?.detail || 'Failed during face verification.')
+    } finally {
+      setIsVerifying(false)
+    }
+  }
+
+  // Camera Live Capture functions
+  async function startCamera() {
+    setVerifyingError('')
+    setCameraError(false)
+    setUseUploadFallback(false)
+    try {
+      if (streamRef.current) {
+        console.log("[Camera Debug] stopCamera() invocation: startCamera cleaning old stream")
+        streamRef.current.getTracks().forEach(track => {
+          console.log("[Camera Debug] Stopping track:", track)
+          track.stop()
+        })
+      }
+
+      const constraints = {
+        video: {
+          facingMode: 'user',
+          width: { ideal: 640 },
+          height: { ideal: 640 }
+        },
+        audio: false
+      }
+
+      console.log("[Camera Debug] Calling getUserMedia...")
+      const stream = await navigator.mediaDevices.getUserMedia(constraints)
+      console.log("[Camera Debug] getUserMedia success:", stream)
+      console.log("[Camera Debug] MediaStream:", stream)
+      const tracks = stream.getVideoTracks()
+      console.log("[Camera Debug] Video tracks:", tracks)
+
+      streamRef.current = stream
+      setCameraActive(true)
+
+      if (videoRef.current) {
+        console.log("[Camera Debug] videoRef.current is not null, assigning srcObject:", videoRef.current)
+        if (videoRef.current.srcObject !== stream) {
+          console.log("[Camera Debug] srcObject assignment:", stream)
+          videoRef.current.srcObject = stream
+          console.log("[Camera Debug] videoRef.current.srcObject assigned correctly:", videoRef.current.srcObject)
+        }
+        videoRef.current.play()
+          .then(() => {
+            console.log("[Camera Debug] play() success")
+            console.log("[Camera Debug] video.videoWidth:", videoRef.current.videoWidth)
+            console.log("[Camera Debug] video.videoHeight:", videoRef.current.videoHeight)
+          })
+          .catch((playErr) => {
+            console.error("[Camera Debug] caught exception playing video:", playErr)
+          })
+      } else {
+        console.log("[Camera Debug] videoRef.current is null (expected during initial mount/render transition)")
+      }
+    } catch (err) {
+      console.error('[Camera Debug] caught exception (getUserMedia):', err)
+      setCameraError(true)
+      setCameraActive(false)
+    }
+  }
+
+  function stopCamera() {
+    console.log("[Camera Debug] stopCamera() invocation")
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => {
+        console.log("[Camera Debug] Stopping track:", track)
+        track.stop()
+      })
+      streamRef.current = null
+    }
+    setCameraActive(false)
+  }
+
+  function capturePhoto() {
+    if (!videoRef.current) return
+
+    const video = videoRef.current
+    const videoWidth = video.videoWidth || 640
+    const videoHeight = video.videoHeight || 640
+    
+    // Calculate the size of the square crop (minimum of width and height)
+    const size = Math.min(videoWidth, videoHeight)
+    
+    // Calculate top-left coordinates of the crop area to center it
+    const sx = (videoWidth - size) / 2
+    const sy = (videoHeight - size) / 2
+
+    const canvas = document.createElement('canvas')
+    canvas.width = size
+    canvas.height = size
+
+    const ctx = canvas.getContext('2d')
+    if (ctx) {
+      // Mirror flip for selfie logic to save the mirrored webcam stream in unmirrored orientation
+      ctx.translate(canvas.width, 0)
+      ctx.scale(-1, 1)
+      ctx.drawImage(video, sx, sy, size, size, 0, 0, canvas.width, canvas.height)
+      
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const file = new File([blob], 'selfie.jpg', { type: 'image/jpeg' })
+          setSelfieFile(file)
+          const previewUrl = URL.createObjectURL(blob)
+          setSelfiePreview(previewUrl)
+          
+          console.log("[Camera Debug] video.videoWidth:", videoWidth)
+          console.log("[Camera Debug] video.videoHeight:", videoHeight)
+          console.log("[Camera Debug] canvas.width:", canvas.width)
+          console.log("[Camera Debug] canvas.height:", canvas.height)
+          console.log("[Camera Debug] captured Blob size:", blob.size)
+          console.log("[Camera Debug] uploaded File size:", file.size)
+          
+          console.log("[Camera Debug] stopCamera() invocation: capturePhoto success")
+          stopCamera()
+        }
+      }, 'image/jpeg', 0.95)
+    }
+  }
+
+  function handleRetake() {
+    console.log("[Camera Debug] stopCamera() invocation: handleRetake")
+    stopCamera()
+    setSelfieFile(null)
+    setSelfiePreview('')
+    void startCamera()
+  }
+
+  useEffect(() => {
+    return () => {
+      console.log("[Camera Debug] stopCamera() invocation: component unmount")
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => {
+          console.log("[Camera Debug] Stopping track:", track)
+          track.stop()
+        })
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (currentStep !== 'face_biometric') {
+      console.log("[Camera Debug] stopCamera() invocation: step changed from face_biometric (currentStep is " + currentStep + ")")
+      stopCamera()
+    }
+  }, [currentStep])
 
   useEffect(() => {
     setViewTracked(false)
@@ -274,7 +648,7 @@ export default function SignPage() {
             participant_status: 'completed',
           },
           signedDocumentUrl: signedUrl || toAbsoluteUrl(session?.signed_document_url || session?.document_url, backendOrigin),
-          downloadUrl: response?.download_url || toAbsoluteUrl(`/api/sign/${token}/download/`, backendOrigin),
+          downloadUrl: response?.download_url || toAbsoluteUrl(`${API_BASE}/sign/${token}/download/`, backendOrigin),
           isSuccessDirect: true,
         },
       })
@@ -375,6 +749,8 @@ export default function SignPage() {
   const isCompleted = isEnvelopeCompleted || (session?.participant_role && isParticipantCompleted)
   const isActive = !!session && !isCompleted
   const isPending = session?.participant_status === 'pending'
+
+
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -596,6 +972,394 @@ export default function SignPage() {
                   >
                     <Download className="h-4 w-4" /> Access Sealed Payload
                   </a>
+                )}
+              </div>
+            ) : verificationRequiresManualReview ? (
+              <div className="glass-panel rounded-3xl p-8 text-center relative overflow-hidden group">
+                <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 to-transparent opacity-50" />
+                <div className="relative mb-6 flex justify-center">
+                  <div className="absolute inset-0 rounded-full bg-amber-500/10 blur-xl animate-pulse w-20 h-20 mx-auto" />
+                  <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-amber-500/5 border border-amber-500/20 text-amber-500">
+                    <AlertCircle className="h-10 w-10 animate-bounce" />
+                  </div>
+                </div>
+                <h3 className="text-xl font-light text-amber-500 mb-2">
+                  Manual Review Required
+                </h3>
+                <p className="text-sm text-text-secondary leading-relaxed mb-4">
+                  Your identity verification requires administrative review. Please contact support or wait for approval.
+                </p>
+                {verifyingError && (
+                  <div className="mt-4 p-3 rounded-xl border border-red-500/20 bg-red-500/5 text-xs text-red-400">
+                    {verifyingError}
+                  </div>
+                )}
+              </div>
+            ) : currentStep === 'terms' ? (
+              <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8 space-y-6">
+                <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-30 pointer-events-none" />
+                <h3 className="text-lg font-light text-text-primary mb-2 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+                  Terms Acceptance
+                </h3>
+                <p className="text-xs text-text-secondary leading-relaxed">
+                  Before signing the document, you must agree to our Electronic Signature Terms & Conditions.
+                </p>
+                
+                <div className="p-4 rounded-2xl border border-border-color bg-bg-primary/5 text-xs text-text-secondary max-h-48 overflow-y-auto space-y-2 custom-scrollbar">
+                  <p className="font-semibold text-text-primary">Electronic Record and Disclosure</p>
+                  <p>By accepting these terms, you agree to conduct this transaction electronically and consent to the legally binding nature of your digital signature.</p>
+                  <p>All activities under this session are cryptographically logged for verification and audit trail purposes.</p>
+                </div>
+
+                {verifyingError && (
+                  <div className="p-3 rounded-xl border border-red-500/20 bg-red-500/5 text-xs text-red-400">
+                    {verifyingError}
+                  </div>
+                )}
+
+                <button
+                  onClick={handleAcceptTerms}
+                  disabled={isVerifying}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50"
+                >
+                  {isVerifying ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Accept Terms & Conditions'}
+                </button>
+              </div>
+            ) : currentStep === 'email_otp' ? (
+              <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8 space-y-6">
+                <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-30 pointer-events-none" />
+                <h3 className="text-lg font-light text-text-primary mb-2 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+                  Email Authentication
+                </h3>
+
+                {!emailOtpSent ? (
+                  <>
+                    <p className="text-xs text-text-secondary leading-relaxed">
+                      To secure your signing session, we must verify your email address. A one-time verification code (OTP) will be sent to:
+                    </p>
+                    <div className="p-4 rounded-2xl border border-border-color bg-bg-primary/5 text-center">
+                      <span className="text-sm font-semibold text-text-primary font-mono">{maskEmail(session.signer_email)}</span>
+                    </div>
+
+                    {verifyingError && (
+                      <div className="p-3 rounded-xl border border-red-500/20 bg-red-500/5 text-xs text-red-400">
+                        {verifyingError}
+                      </div>
+                    )}
+
+                    <button
+                      onClick={handleSendEmailOTP}
+                      disabled={isVerifying}
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50"
+                    >
+                      {isVerifying ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Send Verification Code'}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs text-text-secondary leading-relaxed">
+                      Please enter the verification code sent to <strong className="text-text-primary">{maskEmail(session.signer_email)}</strong>.
+                    </p>
+
+                    <div>
+                      <input
+                        type="text"
+                        value={emailOtpCode}
+                        onChange={(e) => setEmailOtpCode(e.target.value)}
+                        placeholder="Enter 6-digit code"
+                        maxLength={10}
+                        disabled={isVerifying}
+                        className={inputClass}
+                      />
+                    </div>
+
+                    {verifyingError && (
+                      <div className="p-3 rounded-xl border border-red-500/20 bg-red-500/5 text-xs text-red-400">
+                        {verifyingError}
+                      </div>
+                    )}
+
+                    <div className="space-y-3">
+                      <button
+                        onClick={handleVerifyEmailOTP}
+                        disabled={isVerifying}
+                        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50"
+                      >
+                        {isVerifying ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Verify Code'}
+                      </button>
+
+                      <button
+                        onClick={handleSendEmailOTP}
+                        disabled={isVerifying}
+                        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3.5 text-xs font-semibold uppercase tracking-wider transition-all duration-300 disabled:opacity-50"
+                      >
+                        Resend Code
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : currentStep === 'national_id' ? (
+              <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8 space-y-6">
+                <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-30 pointer-events-none" />
+                <h3 className="text-lg font-light text-text-primary mb-2 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+                  National ID Verification
+                </h3>
+
+                {!idPreview ? (
+                  <>
+                    <p className="text-xs text-text-secondary leading-relaxed">
+                      Upload a clear photo of your National ID or Iqama document. The OCR system will extract details and register your reference face.
+                    </p>
+                    <label className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border-color bg-card-bg p-8 cursor-pointer transition-all hover:border-cyan-500/30 hover:bg-cyan-500/5">
+                      <Upload className="h-8 w-8 text-accent/60 animate-bounce" />
+                      <div className="text-center">
+                        <p className="text-sm text-text-primary font-medium">Select ID Image</p>
+                        <p className="text-xs text-text-secondary mt-1">PNG or JPG formats supported</p>
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg"
+                        onChange={handleIdChange}
+                        disabled={isVerifying}
+                        className="hidden"
+                      />
+                    </label>
+                  </>
+                ) : (
+                  <>
+                    <div className="relative rounded-2xl border border-border-color bg-bg-primary/5 p-4 flex justify-center">
+                      <img src={idPreview} alt="ID preview" className="rounded-xl max-h-48 object-cover shadow-md border border-cyan-500/20" />
+                      <button
+                        onClick={handleRemoveId}
+                        className="absolute top-2 right-2 p-1.5 rounded-full bg-red-500/20 text-red-400 hover:bg-red-500/40 transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {verifyingError && (
+                  <div className="p-3 rounded-xl border border-red-500/20 bg-red-500/5 text-xs text-red-400">
+                    {verifyingError}
+                  </div>
+                )}
+
+                {idPreview && (
+                  <div className="space-y-3">
+                    <button
+                      onClick={handleVerifyId}
+                      disabled={isVerifying}
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50"
+                    >
+                      {isVerifying ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                          Processing ID...
+                        </>
+                      ) : 'Upload and Verify ID'}
+                    </button>
+
+                    <button
+                      onClick={handleRemoveId}
+                      disabled={isVerifying}
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3.5 text-xs font-semibold uppercase tracking-wider transition-all duration-300 disabled:opacity-50"
+                    >
+                      Choose Different Photo
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : currentStep === 'face_biometric' ? (
+              <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8 space-y-6">
+                <style>{`
+                  @keyframes scan {
+                    0%, 100% { top: 10%; }
+                    50% { top: 90%; }
+                  }
+                  .animate-scan {
+                    animation: scan 3.5s ease-in-out infinite;
+                  }
+                `}</style>
+                <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-30 pointer-events-none" />
+                
+                <div className="flex items-center justify-between border-b border-border-color pb-3">
+                  <h3 className="text-lg font-light text-text-primary flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+                    Face Biometric Verification
+                  </h3>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-cyan-500/20 bg-cyan-500/5 px-2.5 py-0.5 text-[10px] font-bold uppercase text-cyan-400 tracking-wider">
+                    {selfiePreview ? "Photo Captured" : cameraActive ? "Camera Active" : "Camera Ready"}
+                  </span>
+                </div>
+
+                {selfiePreview ? (
+                  <>
+                    <div className="relative rounded-2xl border border-border-color bg-bg-primary/5 p-4 flex justify-center">
+                      <img src={selfiePreview} alt="Selfie preview" className="rounded-xl max-h-48 object-cover aspect-square shadow-md border border-cyan-500/20" />
+                    </div>
+
+                    <p className="text-[10px] text-text-secondary text-center leading-normal">
+                      Ensure your face is well-lit and not covered by hats, glasses, or masks.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    {useUploadFallback || cameraError ? (
+                      <div className="space-y-4">
+                        {cameraError && (
+                          <div className="p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 text-xs text-amber-400 text-center">
+                            Unable to access your camera.
+                          </div>
+                        )}
+                        <p className="text-xs text-text-secondary leading-relaxed">
+                          Upload a clear selfie. The matching engine will compare your facial features with the reference identity photo.
+                        </p>
+                        <label className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border-color bg-card-bg p-8 cursor-pointer transition-all hover:border-cyan-500/30 hover:bg-cyan-500/5">
+                          <Upload className="h-8 w-8 text-accent/60 animate-bounce" />
+                          <div className="text-center">
+                            <p className="text-sm text-text-primary font-medium">Select Selfie Image</p>
+                            <p className="text-xs text-text-secondary mt-1">PNG or JPG formats supported</p>
+                          </div>
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg"
+                            onChange={handleSelfieChange}
+                            disabled={isVerifying}
+                            className="hidden"
+                          />
+                        </label>
+                        {!cameraError && (
+                          <button
+                            onClick={startCamera}
+                            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3 text-xs font-semibold uppercase tracking-wider transition-all duration-300"
+                          >
+                            <Camera className="h-4 w-4" /> Use Live Camera
+                          </button>
+                        )}
+                      </div>
+                    ) : cameraActive ? (
+                      <div className="space-y-4">
+                        <div className="relative w-full aspect-square max-w-[280px] mx-auto overflow-hidden rounded-2xl border border-border-color bg-black/40 shadow-inner">
+                          <video
+                            ref={(el) => {
+                              videoRef.current = el
+                              console.log("[Camera Debug] videoRef.current (callback):", el)
+                              if (el && streamRef.current) {
+                                if (el.srcObject !== streamRef.current) {
+                                  console.log("[Camera Debug] srcObject assignment:", streamRef.current)
+                                  el.srcObject = streamRef.current
+                                  console.log("[Camera Debug] videoRef.current.srcObject assigned correctly:", el.srcObject)
+                                }
+                                el.play()
+                                  .then(() => {
+                                    console.log("[Camera Debug] play() success")
+                                    console.log("[Camera Debug] video.videoWidth:", el.videoWidth)
+                                    console.log("[Camera Debug] video.videoHeight:", el.videoHeight)
+                                  })
+                                  .catch((e) => {
+                                    console.error("[Camera Debug] caught exception playing video:", e)
+                                  })
+                              }
+                            }}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                              display: 'block'
+                            }}
+                            className="scale-x-[-1]"
+                            autoPlay
+                            playsInline
+                            muted
+                          />
+                          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                            <div className="w-2/3 h-2/3 rounded-[50%] border-2 border-dashed border-cyan-500/40 relative">
+                              <div className="absolute left-0 right-0 h-0.5 bg-cyan-400/50 shadow-[0_0_8px_#22d3ee] animate-scan" />
+                            </div>
+                          </div>
+                        </div>
+                        <p className="text-xs text-text-secondary text-center leading-normal animate-pulse">
+                          Position your face inside the guide.
+                        </p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={capturePhoto}
+                            className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-3.5 text-xs font-bold uppercase tracking-wider transition-all duration-300"
+                          >
+                            <Camera className="h-4 w-4" /> Capture Photo
+                          </button>
+                          <button
+                            onClick={() => { stopCamera(); setUseUploadFallback(true); }}
+                            className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3.5 text-xs font-semibold uppercase tracking-wider transition-all duration-300"
+                          >
+                            Upload Photo
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 space-y-4">
+                        <div className="w-16 h-16 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mx-auto text-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.1)]">
+                          <Video className="h-8 w-8" />
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-text-primary">Camera Access Required</p>
+                          <p className="text-xs text-text-secondary px-4">We will use your camera to take a live selfie for verification.</p>
+                        </div>
+                        <div className="space-y-3 pt-2">
+                          <button
+                            onClick={startCamera}
+                            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-xs font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)]"
+                          >
+                            Start Camera
+                          </button>
+                          <button
+                            onClick={() => setUseUploadFallback(true)}
+                            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3 text-xs font-semibold uppercase tracking-wider transition-all duration-300"
+                          >
+                            Upload Existing Photo
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {verifyingError && (
+                  <div className="p-3 rounded-xl border border-red-500/20 bg-red-500/5 text-xs text-red-400">
+                    {verifyingError}
+                  </div>
+                )}
+
+                {!cameraActive && (
+                  <div className="space-y-3 pt-2 border-t border-border-color/30">
+                    <button
+                      onClick={handleVerifyFace}
+                      disabled={isVerifying || !selfiePreview}
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400 disabled:shadow-none"
+                    >
+                      {isVerifying ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                          Analyzing Features...
+                        </>
+                      ) : 'Verify Face'}
+                    </button>
+
+                    {selfiePreview && (
+                      <button
+                        onClick={useUploadFallback ? handleRemoveSelfie : handleRetake}
+                        disabled={isVerifying}
+                        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3.5 text-xs font-semibold uppercase tracking-wider transition-all duration-300 disabled:opacity-50"
+                      >
+                        {useUploadFallback ? 'Choose Different Photo' : 'Retake'}
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             ) : session?.participant_role === 'cc' ? (
@@ -833,3 +1597,4 @@ export default function SignPage() {
     </div>
   )
 }
+

@@ -1,3 +1,4 @@
+from esign.config import esign_config
 import logging
 from django.db import transaction
 from django.utils import timezone
@@ -49,7 +50,7 @@ def create_envelope(request_data, owner):
 
 def send_envelope(envelope_id, owner, request):
     envelope = get_object_or_404(Envelope, id=envelope_id, owner=owner)
-    expires_at = timezone.now() + timedelta(hours=24)
+    expires_at = timezone.now() + timedelta(hours=esign_config.signing_link_expiry)
 
     with transaction.atomic():
         participants = envelope.participants.all()
@@ -96,13 +97,17 @@ def send_envelope(envelope_id, owner, request):
         )
 
         base_api_url = request.build_absolute_uri('/')[:-1] if request else None
-        from services.email_dispatch import dispatch_package_sent_notification
+        from esign.events.dispatcher import esign_dispatcher
+        from esign.events.definitions import EnvelopeSent
+        
+        event = EnvelopeSent(envelope_id=envelope.id, expires_at=expires_at.isoformat())
+        event.payload["base_api_url"] = base_api_url
+        
         transaction.on_commit(
-            lambda: dispatch_package_sent_notification(envelope.id, base_api_url)
+            lambda: esign_dispatcher.publish(event)
         )
 
-    from django.conf import settings
-    signing_url = f"{settings.FRONTEND_URL}/sign/{signing_token.token}"
+    signing_url = f"{esign_config.frontend_url}/sign/{signing_token.token}"
 
     return {
         "message": "Envelope sent to signer.",

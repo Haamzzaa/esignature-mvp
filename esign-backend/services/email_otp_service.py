@@ -1,19 +1,21 @@
-import random
+import secrets
 import string
+import hashlib
 from django.utils import timezone
 from datetime import timedelta
 from django.core.mail import send_mail
 from django.db import transaction
 
 OTP_LENGTH = 6
-OTP_EXPIRY_MINUTES = 10
+from esign.config import esign_config
+OTP_EXPIRY_MINUTES = esign_config.otp_expiry
 
 
 def generate_email_otp():
     """
-    Generates a random 6-digit numeric OTP string.
+    Generates a cryptographically secure random 6-digit numeric OTP string.
     """
-    return "".join(random.choices(string.digits, k=OTP_LENGTH))
+    return "".join(secrets.choice(string.digits) for _ in range(OTP_LENGTH))
 
 
 def send_email_otp(participant):
@@ -34,7 +36,8 @@ def send_email_otp(participant):
         state, _ = ParticipantAuthorizationState.objects.get_or_create(
             participant=participant
         )
-        state.email_otp_code = otp
+        otp_hash = hashlib.sha256(otp.encode('utf-8')).hexdigest()
+        state.email_otp_code = otp_hash
         state.email_otp_sent_at = now
         state.email_otp_expires_at = expires_at
         # Reset any prior verification when a new OTP is issued
@@ -67,7 +70,8 @@ def send_email_otp(participant):
 
 def verify_email_otp(participant, otp):
     """
-    Verifies the supplied OTP against the stored code for the participant.
+    Verifies the supplied OTP against the stored code for the participant,
+    protecting against concurrent race conditions using atomic select_for_update.
 
     Returns a dict:
         {"verified": True}                           — on success
@@ -77,22 +81,27 @@ def verify_email_otp(participant, otp):
     """
     from esign.models import ParticipantAuthorizationState
 
-    try:
-        state = ParticipantAuthorizationState.objects.get(participant=participant)
-    except ParticipantAuthorizationState.DoesNotExist:
-        return {"verified": False, "error": "No OTP sent"}
-
-    if not state.email_otp_code:
-        return {"verified": False, "error": "No OTP sent"}
-
-    if timezone.now() > state.email_otp_expires_at:
-        return {"verified": False, "error": "OTP expired"}
-
-    if otp != state.email_otp_code:
-        return {"verified": False, "error": "Invalid OTP"}
-
-    # Success — mark verified and clear the code
     with transaction.atomic():
+        try:
+            # Query and acquire row-lock to prevent race conditions
+            state = ParticipantAuthorizationState.objects.select_for_update().get(participant=participant)
+        except ParticipantAuthorizationState.DoesNotExist:
+            return {"verified": False, "error": "No OTP sent"}
+
+        if not state.email_otp_code:
+            return {"verified": False, "error": "No OTP sent"}
+
+        if timezone.now() > state.email_otp_expires_at:
+            # Invalidate expired code immediately
+            state.email_otp_code = ""
+            state.save(update_fields=["email_otp_code", "updated_at"])
+            return {"verified": False, "error": "OTP expired"}
+
+        input_hash = hashlib.sha256(str(otp).encode('utf-8')).hexdigest()
+        if input_hash != state.email_otp_code:
+            return {"verified": False, "error": "Invalid OTP"}
+
+        # Success — mark verified and immediately invalidate the code to prevent replay
         state.email_verified = True
         state.email_verified_at = timezone.now()
         state.email_otp_code = ""

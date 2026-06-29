@@ -4,8 +4,7 @@ import datetime
 import unicodedata
 from django.db import transaction
 from django.utils import timezone
-from esign.models import NationalIdentity, VerificationEvent
-from esign.constants import EVENT_ID_OCR_COMPLETED, EVENT_ID_OCR_FAILED
+
 from services.azure_ocr_service import extract_text_with_azure
 from PIL import Image, ImageOps, ImageEnhance
 from io import BytesIO
@@ -665,13 +664,10 @@ def parse_identity_document(raw_text):
 
     scored_name_candidates = score_name_candidates(name_candidates, raw_text)
 
-    print("\nNAME CANDIDATES")
+    # BENCHMARK DEBUG ONLY — convert to debug log
     for candidate in scored_name_candidates:
-        cand_str = f"{candidate.value} -> {candidate.score} | {candidate.reasons}"
-        try:
-            print(cand_str)
-        except UnicodeEncodeError:
-            print(cand_str.encode('ascii', 'backslashreplace').decode('ascii'))
+        cand_str = candidate.value + ' -> ' + str(candidate.score) + ' | ' + str(candidate.reasons)
+        logger.debug("[OCRDebug] Name candidate: %s", cand_str.encode('ascii', 'backslashreplace').decode('ascii'))
 
     scored_identifier_candidates = score_identifier_candidates(identifier_candidates, raw_text)
     scored_date_candidates = score_date_candidates(date_candidates, raw_text)
@@ -685,17 +681,14 @@ def parse_identity_document(raw_text):
     sel_id_val = selected_identifier.value if selected_identifier else None
     masked_sel_id = "*" * max(0, len(sel_id_val) - 4) + sel_id_val[-4:] if sel_id_val else "None"
 
-    def print_safe(label, val):
-        val_str = str(val)
-        try:
-            print(f"\n{label}:\n{val_str}")
-        except UnicodeEncodeError:
-            print(f"\n{label}:\n{val_str.encode('ascii', 'backslashreplace').decode('ascii')}")
+    def _log_safe(label, val):
+        val_str = str(val).encode('ascii', 'backslashreplace').decode('ascii')
+        logger.debug("[OCRDebug] %s: %s", label, val_str)
 
-    print_safe("SELECTED NAME", selected_name.value if selected_name else "None")
-    print_safe("SELECTED IDENTIFIER", masked_sel_id)
-    print_safe("SELECTED BIRTH DATE", selected_birth_date.value if selected_birth_date else "None")
-    print_safe("SELECTED EXPIRY DATE", selected_expiry_date.value if selected_expiry_date else "None")
+    _log_safe("SELECTED NAME", selected_name.value if selected_name else "None")
+    _log_safe("SELECTED IDENTIFIER", masked_sel_id)
+    _log_safe("SELECTED BIRTH DATE", selected_birth_date.value if selected_birth_date else "None")
+    _log_safe("SELECTED EXPIRY DATE", selected_expiry_date.value if selected_expiry_date else "None")
 
     from services.identity_confidence_service import (
         calculate_name_confidence,
@@ -730,19 +723,19 @@ def parse_identity_document(raw_text):
     )
 
     # Log confidence scores and reasons safely
-    print_safe("NAME CONFIDENCE", name_conf.confidence if selected_name else 0.0)
-    print_safe("REASONS", "\n".join(name_conf.reasons) if selected_name else "no_name_selected")
+    _log_safe("NAME CONFIDENCE", name_conf.confidence if selected_name else 0.0)
+    _log_safe("REASONS", "\n".join(name_conf.reasons) if selected_name else "no_name_selected")
     
-    print_safe("IDENTIFIER CONFIDENCE", ident_conf.confidence if selected_identifier else 0.0)
-    print_safe("REASONS", "\n".join(ident_conf.reasons) if selected_identifier else "no_identifier_selected")
+    _log_safe("IDENTIFIER CONFIDENCE", ident_conf.confidence if selected_identifier else 0.0)
+    _log_safe("REASONS", "\n".join(ident_conf.reasons) if selected_identifier else "no_identifier_selected")
     
-    print_safe("BIRTH DATE CONFIDENCE", dob_conf.confidence if selected_birth_date else 0.0)
-    print_safe("REASONS", "\n".join(dob_conf.reasons) if selected_birth_date else "no_birth_date_selected")
+    _log_safe("BIRTH DATE CONFIDENCE", dob_conf.confidence if selected_birth_date else 0.0)
+    _log_safe("REASONS", "\n".join(dob_conf.reasons) if selected_birth_date else "no_birth_date_selected")
     
-    print_safe("EXPIRY DATE CONFIDENCE", exp_conf.confidence if exp_conf else "None")
-    print_safe("REASONS", "\n".join(exp_conf.reasons) if exp_conf else "None")
+    _log_safe("EXPIRY DATE CONFIDENCE", exp_conf.confidence if exp_conf else "None")
+    _log_safe("REASONS", "\n".join(exp_conf.reasons) if exp_conf else "None")
     
-    print_safe("OVERALL CONFIDENCE", overall_conf)
+    _log_safe("OVERALL CONFIDENCE", overall_conf)
 
     # Mask identifier values to prevent logging raw PII
     masked_scored_identifiers = []
@@ -791,52 +784,4 @@ def parse_identity_document(raw_text):
         }
     }
 
-def save_identity_data(verification, ocr_result, parsed_fields, extraction_status, failure_reason=None):
-    """
-    Creates or updates the NationalIdentity model under transaction safety.
-    Logs verification audit events.
-    """
-    with transaction.atomic():
-        # Get or create the model
-        national_identity, created = NationalIdentity.objects.get_or_create(
-            verification=verification,
-            defaults={
-                "extraction_status": "pending",
-            }
-        )
-        
-        # Populate values
-        national_identity.extraction_status = extraction_status
-        national_identity.failure_reason = failure_reason
-        national_identity.extracted_at = timezone.now()
-        
-        if extraction_status == "success":
-            national_identity.full_name = parsed_fields.get("full_name", "")
-            national_identity.national_id_number = parsed_fields.get("national_id_number", "")
-            national_identity.date_of_birth = parsed_fields.get("date_of_birth")
-            national_identity.expiry_date = parsed_fields.get("expiry_date")
-            national_identity.document_type = parsed_fields.get("document_type", "saudi_id")
-            
-        if ocr_result:
-            national_identity.raw_text = ocr_result.get("raw_text", "")
-            national_identity.ocr_confidence = ocr_result.get("ocr_confidence")
-            national_identity.ocr_provider = ocr_result.get("ocr_provider", "azure")
-            
-        national_identity.save()
-        
-        # Log append-only event
-        event_type = EVENT_ID_OCR_COMPLETED if extraction_status == "success" else EVENT_ID_OCR_FAILED
-        metadata = {
-            "ocr_provider": ocr_result.get("ocr_provider") if ocr_result else "azure",
-            "extraction_status": extraction_status,
-        }
-        if failure_reason:
-            metadata["failure_reason"] = failure_reason
-            
-        VerificationEvent.objects.create(
-            signer_verification=verification,
-            event_type=event_type,
-            metadata=metadata
-        )
-        
-        return national_identity
+

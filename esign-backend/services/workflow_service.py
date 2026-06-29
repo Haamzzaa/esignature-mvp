@@ -97,12 +97,16 @@ def check_and_advance_step(envelope, current_step, request=None):
             # Keep/reset envelope status to sent so the next participants can perform actions
             envelope.transition_to("sent")
 
-            # Send next step email notifications post-commit using the dispatch helper.
-            # A failure here must NOT unwind the workflow advance already committed.
-            from services.email_dispatch import dispatch_next_step_notification
+            from esign.events.dispatcher import esign_dispatcher
+            from esign.events.definitions import ParticipantCompleted
             base_api_url = request.build_absolute_uri('/')[:-1] if request else None
+            
+            event = ParticipantCompleted(participant_id=0, envelope_id=envelope.id, role="signer")
+            event.payload["step_number"] = next_step
+            event.payload["base_api_url"] = base_api_url
+            
             transaction.on_commit(
-                lambda: dispatch_next_step_notification(envelope.id, next_step, base_api_url)
+                lambda: esign_dispatcher.publish(event)
             )
         else:
             # Final workflow step completed! Mark envelope as completed
@@ -135,31 +139,13 @@ def check_and_advance_step(envelope, current_step, request=None):
                 user_agent=user_agent,
             )
 
-            # Schedule post-commit side effects.
-            # Both generate_certificate() and send_completion_email() run AFTER the
-            # atomic block commits. A failure in either cannot roll back the completed
-            # envelope status or any of the audit logs saved above.
-            def _post_commit_side_effects():
-                from services.certificate_service import generate_certificate
-                from services.email_dispatch import dispatch_completion_email
-                cert_id = None
-                try:
-                    logger.info(
-                        "Generating completion certificate for envelope %s", envelope.id
-                    )
-                    cert_obj = generate_certificate(envelope)
-                    cert_id = cert_obj.certificate_id
-                except Exception:
-                    logger.exception(
-                        "Failed to generate certificate for envelope %s", envelope.id
-                    )
-                
-                base_api_url = request.build_absolute_uri('/')[:-1] if request else None
-                try:
-                    dispatch_completion_email(envelope.id, cert_id, base_api_url)
-                except Exception:
-                    logger.exception(
-                        "Failed to dispatch completion email for envelope %s", envelope.id
-                    )
-
-            transaction.on_commit(_post_commit_side_effects)
+            from esign.events.dispatcher import esign_dispatcher
+            from esign.events.definitions import EnvelopeCompleted
+            base_api_url = request.build_absolute_uri('/')[:-1] if request else None
+            
+            event = EnvelopeCompleted(envelope_id=envelope.id)
+            event.payload["base_api_url"] = base_api_url
+            
+            transaction.on_commit(
+                lambda: esign_dispatcher.publish(event)
+            )

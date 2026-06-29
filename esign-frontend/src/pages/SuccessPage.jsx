@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useLocation, Link } from 'react-router-dom'
-import { getSigningSession, apiClient, API_URL } from '../services/api'
+import { getSigningSession, apiClient, API_URL, API_BASE } from '../services/api'
 import { motion, AnimatePresence } from 'framer-motion'
 import { CheckCircle2, FileSignature, ExternalLink, RefreshCw, Download, ShieldCheck, AlertCircle, Eye, X } from 'lucide-react'
 
@@ -96,8 +96,8 @@ export default function SuccessPage() {
   const [session, setSession] = useState(stateSession || null)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
 
-  const computedDownloadUrl = downloadUrl || (token ? toAbsoluteUrl(`/api/sign/${token}/download/`, backendOrigin) : '')
-  const computedPreviewUrl = signedDocumentUrl || (token ? toAbsoluteUrl(`/api/sign/${token}/signed/`, backendOrigin) : '')
+  const computedDownloadUrl = downloadUrl || (token ? toAbsoluteUrl(`${API_BASE}/sign/${token}/download/`, backendOrigin) : '')
+  const computedPreviewUrl = signedDocumentUrl || (token ? toAbsoluteUrl(`${API_BASE}/sign/${token}/signed/`, backendOrigin) : '')
 
   useEffect(() => {
     if (isSuccessDirect && stateSession) {

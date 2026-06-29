@@ -20,8 +20,8 @@ def get_authorization_status(participant):
 
     national_id_req = envelope.national_id_required
     national_id_sat = False
-    if hasattr(participant, "verification") and participant.verification:
-        national_id_sat = (participant.verification.status == "verified")
+    if hasattr(participant, "signer_identity_verification") and participant.signer_identity_verification:
+        national_id_sat = (participant.signer_identity_verification.status == "verified")
 
     face_biometric_req = envelope.face_biometric_required
     face_biometric_sat = False

@@ -1,4 +1,5 @@
 from rest_framework.exceptions import ValidationError
+from esign.config import esign_config
 import os
 import fitz
 
@@ -44,9 +45,9 @@ def validate_pdf_size(file):
     if file.size == 0:
         raise ValidationError("Invalid PDF upload. Please upload a valid PDF document.")
         
-    max_size = 10 * 1024 * 1024 # 10 MB
+    max_size = esign_config.max_pdf_size
     if file.size > max_size:
-        raise ValidationError("File too large. Maximum allowed size is 10 MB.")
+        raise ValidationError(f"File too large. Maximum allowed size is {esign_config.max_pdf_size // (1024 * 1024)} MB.")
 
 def validate_pdf_upload(file):
     """

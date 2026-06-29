@@ -228,7 +228,7 @@ class ParticipantAuthorizationState(models.Model):
         related_name="authorization_state"
     )
     # Email OTP
-    email_otp_code = models.CharField(max_length=6, blank=True, default="")
+    email_otp_code = models.CharField(max_length=64, blank=True, default="")
     email_otp_sent_at = models.DateTimeField(null=True, blank=True)
     email_otp_expires_at = models.DateTimeField(null=True, blank=True)
     email_verified = models.BooleanField(default=False)
@@ -333,6 +333,8 @@ class ContractAnalysisAudit(models.Model):
         return f"Audit log for Envelope {self.envelope.id}"
 
 
+# DEPRECATED: This model is part of the legacy verification pipeline.
+# It will be removed in Step 2.
 class SignerVerification(models.Model):
     participant = models.OneToOneField(Participant, on_delete=models.CASCADE, related_name="verification")
     status = models.CharField(
@@ -396,6 +398,8 @@ class SignerVerification(models.Model):
         return f"Verification ({self.status}) for Participant {self.participant.id}"
 
 
+# DEPRECATED: This model is part of the legacy verification pipeline.
+# It will be removed in Step 2.
 class VerificationEvent(models.Model):
     signer_verification = models.ForeignKey(SignerVerification, on_delete=models.CASCADE, related_name="events")
     event_type = models.CharField(
@@ -417,6 +421,8 @@ class VerificationEvent(models.Model):
         return f"Event {self.event_type} at {self.timestamp}"
 
 
+# DEPRECATED: This model is part of the legacy verification pipeline.
+# It will be removed in Step 2.
 class NationalIdentity(models.Model):
     EXTRACTION_STATUS_CHOICES = [
         ("pending", "Pending"),
@@ -503,4 +509,131 @@ class NationalIdentity(models.Model):
 
     def __str__(self):
         return f"NationalIdentity ({self.document_type}) for Verification {self.verification.id}"
+
+
+class VerificationSession(models.Model):
+    participant = models.OneToOneField(
+        Participant,
+        on_delete=models.CASCADE,
+        related_name="verification_session"
+    )
+    status = models.CharField(
+        max_length=30,
+        default="pending"
+    )
+    failure_reason = models.CharField(
+        max_length=255,
+        blank=True
+    )
+    started_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True
+    )
+
+    def __str__(self):
+        return f"VerificationSession ({self.status}) for Participant {self.participant.id}"
+
+
+class BiometricVerification(models.Model):
+    participant = models.OneToOneField(
+        Participant,
+        on_delete=models.CASCADE,
+        related_name="biometric_verification"
+    )
+    verification_session = models.OneToOneField(
+        VerificationSession,
+        on_delete=models.CASCADE,
+        related_name="biometric_verification"
+    )
+    status = models.CharField(
+        max_length=30,
+        default="pending"
+    )
+    similarity_score = models.FloatField(null=True, blank=True)
+    liveness_score = models.FloatField(null=True, blank=True)
+    provider = models.CharField(max_length=255, blank=True)
+    failure_reason = models.TextField(blank=True)
+    started_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"BiometricVerification ({self.status}) for Participant {self.participant.id}"
+
+
+class SignerIdentityVerification(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('processing', 'Processing'),
+        ('verified', 'Verified'),
+        ('failed', 'Failed'),
+        ('requires_manual_review', 'Requires Manual Review'),
+    ]
+
+    participant = models.OneToOneField(
+        Participant,
+        on_delete=models.CASCADE,
+        related_name="signer_identity_verification"
+    )
+    status = models.CharField(
+        max_length=50,
+        choices=STATUS_CHOICES,
+        default='pending'
+    )
+    document_image = models.FileField(
+        upload_to="identity/documents/",
+        blank=True,
+        null=True
+    )
+    reference_face_image = models.FileField(
+        upload_to="identity/faces/",
+        blank=True,
+        null=True
+    )
+    full_name = models.CharField(
+        max_length=255,
+        blank=True
+    )
+    national_id_number = models.CharField(
+        max_length=50,
+        blank=True
+    )
+    date_of_birth = models.DateField(
+        null=True,
+        blank=True
+    )
+    document_type = models.CharField(
+        max_length=50,
+        blank=True
+    )
+    identity_match_score = models.FloatField(
+        null=True,
+        blank=True
+    )
+    identity_matched = models.BooleanField(
+        null=True,
+        blank=True
+    )
+    failure_reason = models.TextField(
+        blank=True,
+        null=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Identity Verification ({self.status}) for Participant {self.participant.id}"
+
+
+class WebhookSubscription(models.Model):
+    url = models.URLField()
+    is_active = models.BooleanField(default=True)
+    events = models.JSONField(default=list, help_text="List of events subscribed, e.g. ['envelope.completed'], or ['*'] for all events")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Webhook to {self.url} (Active: {self.is_active})"
+
+
 

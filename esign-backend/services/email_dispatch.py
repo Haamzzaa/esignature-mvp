@@ -1,11 +1,11 @@
 import logging
-from django.conf import settings
+from esign.config import esign_config
 from esign.models import Envelope
 
 logger = logging.getLogger(__name__)
 
 def dispatch_package_sent_notification(envelope_id, base_api_url=None):
-    if getattr(settings, "USE_CELERY", False):
+    if esign_config.use_celery:
         from services.tasks import send_package_sent_notifications_task
         send_package_sent_notifications_task.delay(envelope_id, base_api_url)
     else:
@@ -17,7 +17,7 @@ def dispatch_package_sent_notification(envelope_id, base_api_url=None):
             logger.error(f"Envelope {envelope_id} not found for package sent notification.")
 
 def dispatch_next_step_notification(envelope_id, step_number, base_api_url=None):
-    if getattr(settings, "USE_CELERY", False):
+    if esign_config.use_celery:
         from services.tasks import send_next_step_notifications_task
         send_next_step_notifications_task.delay(envelope_id, step_number, base_api_url)
     else:
@@ -29,7 +29,7 @@ def dispatch_next_step_notification(envelope_id, step_number, base_api_url=None)
             logger.error(f"Envelope {envelope_id} not found for next step notification.")
 
 def dispatch_completion_email(envelope_id, certificate_id=None, base_api_url=None):
-    if getattr(settings, "USE_CELERY", False):
+    if esign_config.use_celery:
         from services.tasks import send_completion_email_task
         send_completion_email_task.delay(envelope_id, certificate_id, base_api_url)
     else:

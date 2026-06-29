@@ -32,6 +32,10 @@ def resolve_token(token_str, allow_used=False):
                 return None, "Your step has already been completed."
             if pt.expires_at < timezone.now():
                 return None, "This signing link has expired."
+        else:
+            # Even if used is allowed (read-only views), reject expired tokens unless envelope is completed
+            if pt.expires_at < timezone.now() and pt.participant.envelope.status != "completed":
+                return None, "This signing link has expired."
         return pt, None
 
     # 2. Look up legacy SigningToken
@@ -43,6 +47,10 @@ def resolve_token(token_str, allow_used=False):
             if st.is_used:
                 return None, "Your step has already been completed."
             if st.expires_at < timezone.now():
+                return None, "This signing link has expired."
+        else:
+            # Even if used is allowed (read-only views), reject expired tokens unless envelope is completed
+            if st.expires_at < timezone.now() and st.signer.envelope.status != "completed":
                 return None, "This signing link has expired."
         return st, None
 
