@@ -27,7 +27,7 @@ def create_envelope(request_data, owner):
         if not fields and (sig_page is None or sig_x is None or sig_y is None):
             return None, "Signature placement is required."
 
-    serializer = EnvelopeCreateSerializer(data=request_data)
+    serializer = EnvelopeCreateSerializer(data=request_data, context={'owner': owner})
     if serializer.is_valid():
         envelope = serializer.save(owner=owner)
         return {
@@ -48,18 +48,57 @@ def create_envelope(request_data, owner):
     return None, serializer.errors
 
 
+def validate_envelope_for_send(envelope):
+    errors = []
+    
+    # 1. Required package metadata
+    if not envelope.title or not envelope.title.strip():
+        errors.append("Package title is required.")
+    if not envelope.document:
+        errors.append("Document is required.")
+        
+    # 2. Participants & Workflow configuration
+    participants = envelope.participants.all()
+    if not participants.exists():
+        errors.append("At least one participant is required.")
+    else:
+        has_signer = participants.filter(role='signer').exists()
+        if not has_signer:
+            errors.append("At least one participant must have the 'Signer' role.")
+            
+        for p in participants:
+            if p.role not in ['signer', 'approver', 'reviewer', 'cc']:
+                errors.append(f"Participant {p.email} has an invalid role: {p.role}.")
+            if p.step_number < 1:
+                errors.append(f"Participant {p.email} has an invalid step number: {p.step_number}.")
+                
+        # 3. Every signer has at least one required signature field
+        fields = envelope.fields.all()
+        signers = participants.filter(role='signer')
+        for signer in signers:
+            has_sig_field = fields.filter(participant=signer, field_type='signature', required=True).exists()
+            if not has_sig_field:
+                is_first_signer = (signer == signers.order_by('step_number', 'order', 'id').first())
+                has_legacy_sig = (not fields.exists() and is_first_signer and 
+                                  envelope.signature_x_ratio is not None and 
+                                  envelope.signature_y_ratio is not None)
+                if not has_legacy_sig:
+                    errors.append(f"Signer {signer.name} ({signer.email}) must have at least one required signature field placed.")
+                    
+    return len(errors) == 0, errors
+
+
 def send_envelope(envelope_id, owner, request):
     envelope = get_object_or_404(Envelope, id=envelope_id, owner=owner)
+    
+    is_valid, errors = validate_envelope_for_send(envelope)
+    if not is_valid:
+        return None, errors
+
     expires_at = timezone.now() + timedelta(hours=esign_config.signing_link_expiry)
 
     with transaction.atomic():
         participants = envelope.participants.all()
-        if not participants.exists():
-            return None, "At least one participant is required."
-
-        has_signer = participants.filter(role='signer').exists()
-        if not has_signer:
-            return None, "At least one participant must have the 'Signer' role."
 
         # Activate the first workflow step
         step_numbers = sorted(set(participants.values_list('step_number', flat=True)))
@@ -107,11 +146,8 @@ def send_envelope(envelope_id, owner, request):
             lambda: esign_dispatcher.publish(event)
         )
 
-    signing_url = f"{esign_config.frontend_url}/sign/{signing_token.token}"
-
     return {
         "message": "Envelope sent to signer.",
-        "signing_url": signing_url,
         "expires_at": expires_at.isoformat(),
         "email_warning": None,
     }, None
@@ -165,6 +201,9 @@ def patch_envelope(envelope_id, request_data, owner):
         if 'document_id' in request_data:
             try:
                 new_doc = Document.objects.get(id=request_data['document_id'])
+                if new_doc.owner and new_doc.owner != owner:
+                    from rest_framework.exceptions import PermissionDenied
+                    raise PermissionDenied("You do not have permission to use this document.")
                 envelope.document = new_doc
             except Document.DoesNotExist:
                 return None, {'document_id': ['Document not found.']}

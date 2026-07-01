@@ -69,7 +69,7 @@ class DocumentUploadView(APIView):
 
         serializer = DocumentUploadSerializer(data=request.data)
         if serializer.is_valid():
-            document = serializer.save()
+            document = serializer.save(owner=request.user)
             return Response(
                 {
                     "document_id": document.id,
@@ -99,8 +99,92 @@ class SendEnvelopeView(APIView):
         from services.envelope_service import send_envelope
         result, error = send_envelope(envelope_id, request.user, request)
         if error:
+            if isinstance(error, list):
+                return Response({"errors": error}, status=status.HTTP_400_BAD_REQUEST)
             return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
         return Response(result, status=status.HTTP_200_OK)
+
+
+class EnvelopeReviewView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, envelope_id, *args, **kwargs):
+        import os
+        from django.utils import timezone
+        from datetime import timedelta
+        from esign.config import esign_config
+        
+        envelope = get_object_or_404(Envelope, id=envelope_id, owner=request.user)
+        
+        # 1. Document preview
+        doc_data = {
+            "id": envelope.document.id if envelope.document else None,
+            "filename": os.path.basename(envelope.document.file.name) if (envelope.document and envelope.document.file) else "document.pdf",
+            "url": request.build_absolute_uri(envelope.document.file.url) if (envelope.document and envelope.document.file) else ""
+        }
+        
+        # 2. Expiration Date & Workflow type
+        expires_at = timezone.now() + timedelta(hours=esign_config.signing_link_expiry)
+        
+        participants = envelope.participants.all().order_by('step_number', 'order', 'id')
+        unique_steps = set(participants.values_list('step_number', flat=True))
+        workflow_type = "Sequential" if len(unique_steps) > 1 else "Parallel"
+        
+        # 3. Build participant list with roles, signing order, verification methods, and fields summary
+        participants_list = []
+        for p in participants:
+            verification_methods = []
+            if p.role == 'signer':
+                if envelope.email_otp_required:
+                    verification_methods.append("Email OTP")
+                if envelope.sms_otp_required:
+                    verification_methods.append("SMS OTP")
+                if envelope.national_id_required:
+                    verification_methods.append("National ID Verification")
+                if envelope.face_biometric_required:
+                    verification_methods.append("Face Biometric Match")
+                if envelope.representative_match_required:
+                    verification_methods.append("Representative Match")
+                if envelope.terms_acceptance_required:
+                    verification_methods.append("Terms Acceptance")
+            
+            placed_fields_count = envelope.fields.filter(participant=p).count()
+            
+            participants_list.append({
+                "id": p.id,
+                "name": p.name,
+                "email": p.email,
+                "role": p.role,
+                "order": p.order,
+                "step_number": p.step_number,
+                "verification_methods": verification_methods,
+                "placed_fields_count": placed_fields_count,
+            })
+            
+        # 4. Expiration date & reminder settings
+        reminder_settings = {
+            "send_reminders": envelope.send_reminders,
+            "send_final_email": envelope.send_final_email,
+            "allow_printing": envelope.allow_printing,
+        }
+        
+        # 5. Run send validation
+        from services.envelope_service import validate_envelope_for_send
+        is_valid, validation_errors = validate_envelope_for_send(envelope)
+        
+        return Response({
+            "envelope_id": envelope.id,
+            "title": envelope.title or (os.path.basename(envelope.document.file.name) if (envelope.document and envelope.document.file) else f"Package #{envelope.id}"),
+            "description": envelope.description or "",
+            "sender": envelope.owner.email or envelope.owner.username if envelope.owner else "",
+            "document": doc_data,
+            "participants": participants_list,
+            "workflow_type": workflow_type,
+            "expiration_date": expires_at.isoformat(),
+            "reminder_settings": reminder_settings,
+            "is_valid": is_valid,
+            "validation_errors": validation_errors,
+        }, status=status.HTTP_200_OK)
 
 
 class EnvelopePatchView(APIView):
@@ -138,7 +222,12 @@ class SigningDocumentView(APIView):
         if not document.file:
             raise Http404("Document file not found.")
             
-        authorized, auth_err, _ = check_media_authorization(request, document.file.name, token_str=str(token))
+        authorized, auth_err, _ = check_media_authorization(
+            request,
+            document.file.name,
+            token_str=str(token),
+            expected_envelope=envelope
+        )
         if not authorized:
             return Response({"detail": auth_err or "Access Denied."}, status=status.HTTP_403_FORBIDDEN)
             
@@ -1058,7 +1147,7 @@ class ContractAnalyzeView(APIView):
             return Response(response_data, status=status.HTTP_200_OK)
         except Exception as e:
             logger.error(f"Failed to analyze contract: {str(e)}", exc_info=True)
-            return Response({"detail": f"Failed to analyze contract: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"detail": "An internal error occurred while processing the document."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class ConfirmCandidatesView(APIView):
@@ -1315,8 +1404,9 @@ class SendEmailOTPView(APIView):
         try:
             send_email_otp(participant)
         except Exception as exc:
+            logger.error(f"Failed to send OTP: {exc}", exc_info=True)
             return Response(
-                {"detail": f"Failed to send OTP: {exc}"},
+                {"detail": "Unable to send the verification email. Please try again later."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 

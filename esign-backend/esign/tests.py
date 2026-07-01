@@ -224,6 +224,129 @@ class ParticipantManagementTestCase(TestCase):
         for env in Envelope.objects.all():
             self.assertTrue(env.participants.exists(), f"Envelope {env.id} lacks participants.")
 
+    def test_automatic_title_generation_missing_title(self):
+        """Verify that the envelope title is automatically derived from the document filename if title is not in request_data."""
+        data = {
+            "document_id": self.document.id,
+            "signer": {"name": "Test Signer", "email": "test@email.com"},
+            "signature_page": 1,
+            "signature_x_ratio": 0.5,
+            "signature_y_ratio": 0.5,
+        }
+        serializer = EnvelopeCreateSerializer(data=data)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        envelope = serializer.save()
+        self.assertEqual(envelope.title, "mock")
+
+    def test_automatic_title_generation_blank_title(self):
+        """Verify that the envelope title is automatically derived from the document filename if title is blank."""
+        data = {
+            "document_id": self.document.id,
+            "title": "   ",
+            "signer": {"name": "Test Signer", "email": "test@email.com"},
+            "signature_page": 1,
+            "signature_x_ratio": 0.5,
+            "signature_y_ratio": 0.5,
+        }
+        serializer = EnvelopeCreateSerializer(data=data)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        envelope = serializer.save()
+        self.assertEqual(envelope.title, "mock")
+
+    def test_automatic_title_generation_preserves_supplied_title(self):
+        """Verify that the envelope title is preserved if the frontend/user supplies a valid title."""
+        data = {
+            "document_id": self.document.id,
+            "title": "Preserve Me",
+            "signer": {"name": "Test Signer", "email": "test@email.com"},
+            "signature_page": 1,
+            "signature_x_ratio": 0.5,
+            "signature_y_ratio": 0.5,
+        }
+        serializer = EnvelopeCreateSerializer(data=data)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        envelope = serializer.save()
+        self.assertEqual(envelope.title, "Preserve Me")
+
+    def test_automatic_title_generation_strips_extensions(self):
+        """Verify extension stripping behavior for complex document filenames."""
+        doc = Document.objects.create(
+            file="documents/Employment Agreement.v2.pdf",
+            file_hash="mockhash456"
+        )
+        data = {
+            "document_id": doc.id,
+            "signer": {"name": "Test Signer", "email": "test@email.com"},
+            "signature_page": 1,
+            "signature_x_ratio": 0.5,
+            "signature_y_ratio": 0.5,
+        }
+        serializer = EnvelopeCreateSerializer(data=data)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        envelope = serializer.save()
+        self.assertEqual(envelope.title, "Employment Agreement.v2")
+
+    def test_automatic_title_generation_improved_cleaning(self):
+        """Verify that leading numeric prefix, trailing random suffix, and underscores are cleaned while preserving Arabic."""
+        doc = Document.objects.create(
+            file="documents/2_عقد_عميل_Uh7TO.pdf",
+            file_hash="mockhash_arabic"
+        )
+        data = {
+            "document_id": doc.id,
+            "signer": {"name": "Test Signer", "email": "test@email.com"},
+            "signature_page": 1,
+            "signature_x_ratio": 0.5,
+            "signature_y_ratio": 0.5,
+        }
+        serializer = EnvelopeCreateSerializer(data=data)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        envelope = serializer.save()
+        self.assertEqual(envelope.title, "عقد عميل")
+
+    def test_automatic_title_generation_numeric_and_random_suffixes(self):
+        """Verify that different random suffixes and numeric prefixes are properly cleaned."""
+        test_cases = [
+            ("documents/123_Vendor_NDA_v2_fnKRbbe.pdf", "Vendor NDA v2"),
+            ("documents/Updated_Gym_Split_sH4Ahs3.pdf", "Updated Gym Split"),
+            ("documents/auth_test_04GAUvf.pdf", "auth test"),
+            ("documents/Digital_Services_Agreement_updated_13kHBKG.pdf", "Digital Services Agreement updated"),
+        ]
+        for file_name, expected_title in test_cases:
+            doc = Document.objects.create(
+                file=file_name,
+                file_hash=f"hash_{file_name}"
+            )
+            data = {
+                "document_id": doc.id,
+                "signer": {"name": "Test Signer", "email": "test@email.com"},
+                "signature_page": 1,
+                "signature_x_ratio": 0.5,
+                "signature_y_ratio": 0.5,
+            }
+            serializer = EnvelopeCreateSerializer(data=data)
+            self.assertTrue(serializer.is_valid(), serializer.errors)
+            envelope = serializer.save()
+            self.assertEqual(envelope.title, expected_title)
+
+    def test_automatic_title_generation_empty_after_cleaning_fallback(self):
+        """Verify fallback to original stem if cleaning results in empty string."""
+        doc = Document.objects.create(
+            file="documents/2_Uh7TO.pdf",
+            file_hash="mockhash_empty"
+        )
+        data = {
+            "document_id": doc.id,
+            "signer": {"name": "Test Signer", "email": "test@email.com"},
+            "signature_page": 1,
+            "signature_x_ratio": 0.5,
+            "signature_y_ratio": 0.5,
+        }
+        serializer = EnvelopeCreateSerializer(data=data)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        envelope = serializer.save()
+        self.assertEqual(envelope.title, "2_Uh7TO")
+
 class SequentialWorkflowTestCase(TestCase):
     def setUp(self):
         import fitz
@@ -1497,6 +1620,7 @@ class EmailNotificationsTestCase(TransactionTestCase):
         self.document.file.save("email_test.pdf", ContentFile(pdf_bytes))
 
         data = {
+            "title": "Email Test Envelope",
             "document_id": self.document.id,
             "participants": [
                 {"name": "Alice Approver", "email": "alice@example.com", "role": "approver", "step_number": 1},
@@ -1652,6 +1776,7 @@ class CertificateOfCompletionTestCase(TransactionTestCase):
         self.document.file.save("cert_test.pdf", ContentFile(pdf_bytes))
 
         data = {
+            "title": "Certificate Test Envelope",
             "document_id": self.document.id,
             "participants": [
                 {"name": "Alice Signer", "email": "alice@example.com", "role": "signer", "step_number": 1}
@@ -1998,6 +2123,7 @@ def _smtp_make_envelope(owner, participants_def):
     document = Document.objects.create(file_hash=f"smtptest_{owner.username}")
     document.file.save(f"smtptest_{owner.username}.pdf", ContentFile(_smtp_make_pdf()))
     data = {
+        "title": f"SMTP Test Envelope - {owner.username}",
         "document_id": document.id,
         "participants": participants_def,
         "signature_page": 1,

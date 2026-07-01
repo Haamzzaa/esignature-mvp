@@ -7,7 +7,7 @@ from esign.request_context import get_request_id
 
 logger = logging.getLogger(__name__)
 
-def lookup_envelope_and_participant_for_path(path):
+def lookup_envelope_and_participant_for_path(path, expected_envelope=None):
     """
     Looks up the related Envelope, Participant, and file category for a normalized path.
     """
@@ -19,7 +19,7 @@ def lookup_envelope_and_participant_for_path(path):
         if not doc:
             doc = Document.objects.filter(file__contains=path).first()
         if doc:
-            envelope = doc.envelope_set.first()
+            envelope = expected_envelope if expected_envelope is not None else doc.envelope_set.first()
             return envelope, None, "original_document"
 
     # 2. Signed Document
@@ -28,7 +28,8 @@ def lookup_envelope_and_participant_for_path(path):
         if not signed_doc:
             signed_doc = SignedDocument.objects.filter(file__contains=path).first()
         if signed_doc:
-            return signed_doc.envelope, None, "signed_document"
+            envelope = expected_envelope if expected_envelope is not None else signed_doc.envelope
+            return envelope, None, "signed_document"
 
     # 3. Certificate
     elif path.startswith("certificates/"):
@@ -36,7 +37,8 @@ def lookup_envelope_and_participant_for_path(path):
         if not cert:
             cert = CompletionCertificate.objects.filter(file__contains=path).first()
         if cert:
-            return cert.envelope, None, "certificate"
+            envelope = expected_envelope if expected_envelope is not None else cert.envelope
+            return envelope, None, "certificate"
 
     # 4. Identity document/face images (modern)
     elif path.startswith("identity/documents/"):
@@ -44,20 +46,22 @@ def lookup_envelope_and_participant_for_path(path):
         if not ver:
             ver = SignerIdentityVerification.objects.filter(document_image__contains=path).first()
         if ver:
-            return ver.participant.envelope, ver.participant, "national_id"
+            envelope = expected_envelope if expected_envelope is not None else ver.participant.envelope
+            return envelope, ver.participant, "national_id"
 
     elif path.startswith("identity/faces/"):
         ver = SignerIdentityVerification.objects.filter(reference_face_image=path).first()
         if not ver:
             ver = SignerIdentityVerification.objects.filter(reference_face_image__contains=path).first()
         if ver:
-            return ver.participant.envelope, ver.participant, "reference_face"
+            envelope = expected_envelope if expected_envelope is not None else ver.participant.envelope
+            return envelope, ver.participant, "reference_face"
 
 
 
     return None, None, None
 
-def check_media_authorization(request, path, token_str=None):
+def check_media_authorization(request, path, token_str=None, expected_envelope=None):
     """
     Wrapper that implements request-lifetime caching of authorization checks.
     """
@@ -65,7 +69,8 @@ def check_media_authorization(request, path, token_str=None):
         if not hasattr(request, '_media_auth_cache'):
             request._media_auth_cache = {}
             request._media_cache_hits = 0
-        cache_key = f"{path}:{token_str}"
+        expected_envelope_id = expected_envelope.id if expected_envelope else None
+        cache_key = f"{path}:{token_str}:{expected_envelope_id}"
         if cache_key in request._media_auth_cache:
             request._media_cache_hits += 1
             import hashlib
@@ -76,14 +81,14 @@ def check_media_authorization(request, path, token_str=None):
             )
             return request._media_auth_cache[cache_key]
 
-    result = _check_media_authorization_uncached(request, path, token_str)
+    result = _check_media_authorization_uncached(request, path, token_str, expected_envelope=expected_envelope)
     
     if request:
         request._media_auth_cache[cache_key] = result
         
     return result
 
-def _check_media_authorization_uncached(request, path, token_str=None):
+def _check_media_authorization_uncached(request, path, token_str=None, expected_envelope=None):
     """
     Checks if request or token_str is authorized to access the file at path (uncached).
     Returns (is_authorized, error_message, envelope).
@@ -91,7 +96,7 @@ def _check_media_authorization_uncached(request, path, token_str=None):
     request_id = get_request_id() or "unknown-request-id"
     path = path.replace("\\", "/").lstrip("/")
 
-    envelope, target_participant, category = lookup_envelope_and_participant_for_path(path)
+    envelope, target_participant, category = lookup_envelope_and_participant_for_path(path, expected_envelope=expected_envelope)
 
     if not envelope:
         logger.warning(

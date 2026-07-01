@@ -67,11 +67,6 @@ The E-Signature Team
     
     try:
         logger.info(f"Sending role email to {participant.email} for role {role}")
-        logger.info(f"EMAIL_HOST={settings.EMAIL_HOST}")
-        logger.info(f"EMAIL_PORT={settings.EMAIL_PORT}")
-        logger.info(f"EMAIL_HOST_USER={settings.EMAIL_HOST_USER}")
-        logger.info(f"EMAIL_USE_TLS={settings.EMAIL_USE_TLS}")
-        logger.info(f"DEFAULT_FROM_EMAIL={settings.DEFAULT_FROM_EMAIL}")
 
         send_mail(
             subject=subject,

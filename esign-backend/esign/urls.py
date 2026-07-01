@@ -30,6 +30,7 @@ from .views import (
     VerifyEmailOTPView,
     FaceVerificationView,
     SignerIdentityVerificationView,
+    EnvelopeReviewView,
 )
 
 urlpatterns = [
@@ -37,6 +38,7 @@ urlpatterns = [
     path('envelopes/', EnvelopeCreateView.as_view()),
     path('envelopes/<int:pk>/', EnvelopePatchView.as_view()),
     path('envelopes/<int:envelope_id>/send/', SendEnvelopeView.as_view()),
+    path('envelopes/<int:envelope_id>/review/', EnvelopeReviewView.as_view(), name='envelope-review'),
     path('sign/<uuid:token>/', SigningView.as_view()),
     path('sign/<uuid:token>/document/', SigningDocumentView.as_view(), name='signing-document'),
     path('sign/<uuid:token>/signed/', SigningSignedDocumentView.as_view(), name='signing-signed'),

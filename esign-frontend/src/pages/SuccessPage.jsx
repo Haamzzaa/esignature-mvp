@@ -350,12 +350,14 @@ export default function SuccessPage() {
                 <Download className="h-4 w-4" /> Download Signed Document
               </a>
 
-              <Link
-                to="/"
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/5 bg-zinc-950 text-zinc-400 hover:text-white px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300"
-              >
-                Return to Workspace
-              </Link>
+              {!token && (
+                <Link
+                  to="/"
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/5 bg-zinc-950 text-zinc-400 hover:text-white px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300"
+                >
+                  Return to Workspace
+                </Link>
+              )}
             </div>
           </motion.div>
         ) : (
