@@ -3790,202 +3790,7 @@ class OCRRecoveryTestCase(TestCase):
 
 from unittest.mock import patch, MagicMock
 
-class AzureOCRServiceTestCase(TestCase):
-    @patch.dict('os.environ', {
-        'OCR_PROVIDER': 'azure',
-        'AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT': '',
-        'AZURE_DOCUMENT_INTELLIGENCE_KEY': ''
-    })
-    @patch('services.ocr_service.extract_text_with_paddle')
-    def test_missing_credentials_fallback(self, mock_paddle):
-        from services.ocr_service import extract_text_from_pdf
-        mock_paddle.return_value = {"ocr_provider": "paddle", "raw_text": "paddle_fallback"}
-        res = extract_text_from_pdf(b"mockpdf")
-        mock_paddle.assert_called_once()
-        self.assertEqual(res["ocr_provider"], "paddle")
-
-    @patch.dict('os.environ', {
-        'OCR_PROVIDER': 'azure',
-        'AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT': 'https://dummy.azure.com',
-        'AZURE_DOCUMENT_INTELLIGENCE_KEY': 'dummykey'
-    })
-    @patch('services.azure_ocr_service.requests.post')
-    @patch('services.ocr_service.extract_text_with_paddle')
-    def test_http_429_fallback(self, mock_paddle, mock_post):
-        from services.ocr_service import extract_text_from_pdf
-        # Mock 429 response
-        mock_resp = MagicMock()
-        mock_resp.status_code = 429
-        mock_resp.text = "Too Many Requests"
-        mock_post.return_value = mock_resp
-        
-        mock_paddle.return_value = {"ocr_provider": "paddle", "raw_text": "paddle_fallback"}
-        res = extract_text_from_pdf(b"mockpdf")
-        mock_paddle.assert_called_once()
-        self.assertEqual(res["ocr_provider"], "paddle")
-
-    @patch.dict('os.environ', {
-        'OCR_PROVIDER': 'azure',
-        'AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT': 'https://dummy.azure.com',
-        'AZURE_DOCUMENT_INTELLIGENCE_KEY': 'dummykey'
-    })
-    @patch('services.azure_ocr_service.requests.post')
-    @patch('services.azure_ocr_service.requests.get')
-    @patch('services.ocr_service.extract_text_with_paddle')
-    def test_failed_job_fallback(self, mock_paddle, mock_get, mock_post):
-        from services.ocr_service import extract_text_from_pdf
-        # POST response (202 Accepted with Operation-Location)
-        mock_post_resp = MagicMock()
-        mock_post_resp.status_code = 202
-        mock_post_resp.headers = {"Operation-Location": "https://dummy.azure.com/ops/1"}
-        mock_post.return_value = mock_post_resp
-        
-        # GET response (failed status)
-        mock_get_resp = MagicMock()
-        mock_get_resp.status_code = 200
-        mock_get_resp.json.return_value = {"status": "failed", "error": {"message": "Job failed"}}
-        mock_get.return_value = mock_get_resp
-        
-        mock_paddle.return_value = {"ocr_provider": "paddle", "raw_text": "paddle_fallback"}
-        res = extract_text_from_pdf(b"mockpdf")
-        mock_paddle.assert_called_once()
-        self.assertEqual(res["ocr_provider"], "paddle")
-
-    @patch.dict('os.environ', {
-        'OCR_PROVIDER': 'azure',
-        'AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT': 'https://dummy.azure.com',
-        'AZURE_DOCUMENT_INTELLIGENCE_KEY': 'dummykey'
-    })
-    @patch('services.azure_ocr_service.requests.post')
-    @patch('services.ocr_service.extract_text_with_paddle')
-    def test_malformed_response_fallback(self, mock_paddle, mock_post):
-        from services.ocr_service import extract_text_from_pdf
-        # POST response (202 Accepted but missing headers)
-        mock_post_resp = MagicMock()
-        mock_post_resp.status_code = 202
-        mock_post_resp.headers = {}  # missing Operation-Location
-        mock_post.return_value = mock_post_resp
-        
-        mock_paddle.return_value = {"ocr_provider": "paddle", "raw_text": "paddle_fallback"}
-        res = extract_text_from_pdf(b"mockpdf")
-        mock_paddle.assert_called_once()
-        self.assertEqual(res["ocr_provider"], "paddle")
-
-    @patch.dict('os.environ', {
-        'OCR_PROVIDER': 'azure',
-        'AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT': 'https://dummy.azure.com',
-        'AZURE_DOCUMENT_INTELLIGENCE_KEY': 'dummykey'
-    })
-    @patch('services.azure_ocr_service.requests.post')
-    @patch('services.azure_ocr_service.requests.get')
-    def test_successful_azure_extraction(self, mock_get, mock_post):
-        from services.ocr_service import extract_text_from_pdf
-        # POST response (202 Accepted)
-        mock_post_resp = MagicMock()
-        mock_post_resp.status_code = 202
-        mock_post_resp.headers = {"Operation-Location": "https://dummy.azure.com/ops/1"}
-        mock_post.return_value = mock_post_resp
-        
-        # GET response (succeeded)
-        mock_get_resp = MagicMock()
-        mock_get_resp.status_code = 200
-        mock_get_resp.json.return_value = {
-            "status": "succeeded",
-            "analyzeResult": {
-                "content": "This is English text ويمثلها ياسر عثمان بصفته المدير العام",
-                "pages": [
-                    {
-                        "pageNumber": 1,
-                        "words": [
-                            {"content": "This", "confidence": 0.99, "polygon": [0,0,1,0,1,1,0,1]},
-                            {"content": "is", "confidence": 0.95, "polygon": [1,0,2,0,2,1,1,1]}
-                        ],
-                        "lines": [
-                            {"content": "This is English text ويمثلها ياسر عثمان بصفته المدير العام", "polygon": [0,0,10,0,10,2,0,2]}
-                        ]
-                    }
-                ]
-            }
-        }
-        mock_get.return_value = mock_get_resp
-        
-        res = extract_text_from_pdf(b"mockpdf")
-        self.assertEqual(res["ocr_provider"], "azure")
-        self.assertIn("English text", res["raw_text"])
-        self.assertIn("ياسر عثمان", res["arabic_text"])
-        self.assertEqual(res["ocr_confidence"], 0.97)  # (0.99 + 0.95) / 2
-
-    @patch.dict('os.environ', {'OCR_PROVIDER': 'paddle'})
-    @patch('services.ocr_service.extract_text_with_paddle')
-    def test_routing_paddle(self, mock_paddle):
-        from services.ocr_service import extract_text_from_pdf
-        mock_paddle.return_value = {"ocr_provider": "paddle", "raw_text": "paddle_only"}
-        res = extract_text_from_pdf(b"mockpdf")
-        mock_paddle.assert_called_once()
-        self.assertEqual(res["ocr_provider"], "paddle")
-
-    @patch.dict('os.environ', {
-        'OCR_PROVIDER': 'azure',
-        'AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT': 'https://dummy.azure.com',
-        'AZURE_DOCUMENT_INTELLIGENCE_KEY': 'dummykey'
-    })
-    @patch('services.azure_ocr_service.requests.post')
-    @patch('services.azure_ocr_service.requests.get')
-    def test_routing_azure(self, mock_get, mock_post):
-        from services.ocr_service import extract_text_from_pdf
-        
-        # Mock POST & GET for success
-        mock_post_resp = MagicMock()
-        mock_post_resp.status_code = 202
-        mock_post_resp.headers = {"Operation-Location": "https://dummy.azure.com/ops/1"}
-        mock_post.return_value = mock_post_resp
-        
-        mock_get_resp = MagicMock()
-        mock_get_resp.status_code = 200
-        mock_get_resp.json.return_value = {
-            "status": "succeeded",
-            "analyzeResult": {"content": "azure text", "pages": []}
-        }
-        mock_get.return_value = mock_get_resp
-        
-        res = extract_text_from_pdf(b"mockpdf")
-        self.assertEqual(res["ocr_provider"], "azure")
-
-
 class OCRProviderVisibilityTestCase(TestCase):
-    @patch.dict('os.environ', {
-        'OCR_PROVIDER': 'azure',
-        'AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT': 'https://dummy.azure.com',
-        'AZURE_DOCUMENT_INTELLIGENCE_KEY': 'dummykey'
-    })
-    @patch('services.azure_ocr_service.requests.post')
-    @patch('services.azure_ocr_service.requests.get')
-    def test_visibility_successful_azure(self, mock_get, mock_post):
-        from services.ocr_service import extract_text_from_pdf
-        
-        # Mock POST & GET for success
-        mock_post_resp = MagicMock()
-        mock_post_resp.status_code = 202
-        mock_post_resp.headers = {"Operation-Location": "https://dummy.azure.com/ops/1"}
-        mock_post.return_value = mock_post_resp
-        
-        mock_get_resp = MagicMock()
-        mock_get_resp.status_code = 200
-        mock_get_resp.json.return_value = {
-            "status": "succeeded",
-            "analyzeResult": {
-                "content": "azure text", 
-                "pages": [{"pageNumber": 1, "words": [{"content": "azure", "confidence": 0.98}]}]
-            }
-        }
-        mock_get.return_value = mock_get_resp
-        
-        res = extract_text_from_pdf(b"mockpdf")
-        self.assertEqual(res["ocr_provider"], "azure")
-        self.assertEqual(res["fallback_used"], False)
-        self.assertEqual(res["ocr_confidence"], 0.98)
-        self.assertTrue("ocr_ms" in res)
-
     @patch.dict('os.environ', {'OCR_PROVIDER': 'paddle'})
     @patch('services.ocr_service.extract_text_with_paddle')
     def test_visibility_direct_paddle(self, mock_paddle):
@@ -4001,31 +3806,6 @@ class OCRProviderVisibilityTestCase(TestCase):
         self.assertEqual(res["ocr_provider"], "paddle")
         self.assertEqual(res["fallback_used"], False)
         self.assertIsNone(res["ocr_confidence"])
-
-    @patch.dict('os.environ', {
-        'OCR_PROVIDER': 'azure',
-        'AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT': 'https://dummy.azure.com',
-        'AZURE_DOCUMENT_INTELLIGENCE_KEY': 'dummykey'
-    })
-    @patch('services.azure_ocr_service.requests.post')
-    @patch('services.ocr_service.extract_text_with_paddle')
-    def test_visibility_azure_failure_fallback(self, mock_paddle, mock_post):
-        import requests
-        from services.ocr_service import extract_text_from_pdf
-        # Mock Azure POST request failure
-        mock_post.side_effect = requests.exceptions.RequestException("connection error")
-        
-        mock_paddle.return_value = {
-            "ocr_provider": "paddle",
-            "fallback_used": True,
-            "ocr_confidence": None,
-            "ocr_ms": 150
-        }
-        
-        res = extract_text_from_pdf(b"mockpdf")
-        mock_paddle.assert_called_once_with(b"mockpdf", fallback_used=True)
-        self.assertEqual(res["ocr_provider"], "paddle")
-        self.assertEqual(res["fallback_used"], True)
 
     @patch.dict('os.environ', {'OCR_PROVIDER': 'paddle'})
     def test_api_response_observability_fields(self):
@@ -5980,7 +5760,7 @@ class ConfigurationRegistryTestCase(TestCase):
 class ProviderRegistryTestCase(TestCase):
     def test_provider_registry_resolution(self):
         from esign.providers.registry import ESignatureProviderRegistry
-        from esign.providers.ocr import CombinedOCRProvider, AzureOCRProvider
+        from esign.providers.ocr import CombinedOCRProvider
         from esign.providers.face import InsightFaceMatchingProvider
         from django.core.exceptions import ImproperlyConfigured
         from django.test import override_settings
@@ -5990,10 +5770,11 @@ class ProviderRegistryTestCase(TestCase):
         self.assertIsInstance(registry.ocr_provider, CombinedOCRProvider)
         self.assertIsInstance(registry.face_provider, InsightFaceMatchingProvider)
 
-        # Test Azure OCR selection
+        # Test Azure OCR selection is no longer supported and raises error
         with override_settings(ESIGN_OCR_PROVIDER="azure"):
             registry_azure = ESignatureProviderRegistry()
-            self.assertIsInstance(registry_azure.ocr_provider, AzureOCRProvider)
+            with self.assertRaises(ImproperlyConfigured):
+                _ = registry_azure.ocr_provider
 
         # Test invalid provider raising error
         with override_settings(ESIGN_OCR_PROVIDER="invalid_ocr"):

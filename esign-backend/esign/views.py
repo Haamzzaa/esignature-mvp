@@ -301,7 +301,7 @@ class SigningView(APIView):
         if error_msg:
             if error_msg == "ALREADY_PROCESSED":
                 return Response(result, status=status.HTTP_400_BAD_REQUEST)
-            if error_msg == "AUTHORIZATION_REQUIRED":
+            if error_msg in ("AUTHORIZATION_REQUIRED", "IDENTITY_OCR_FAILED", "BIOMETRIC_FAILED", "AUTHORIZATION_FAILED", "MANUAL_REVIEW_REQUIRED"):
                 return Response(result, status=status.HTTP_403_FORBIDDEN)
             return handle_token_error(error_msg)
         

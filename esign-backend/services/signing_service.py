@@ -175,10 +175,65 @@ def process_action(token_str, request_data, request):
                 f"Authorization denied for participant {participant.id} on action '{action}'. "
                 f"Missing requirements: {auth_status['missing_requirements']}"
             )
-            return {
-                "detail": "Authorization requirements not satisfied.",
-                "missing_requirements": auth_status["missing_requirements"]
-            }, "AUTHORIZATION_REQUIRED"
+            status_val = auth_status.get("status")
+            reason_val = auth_status.get("reason")
+            
+            if status_val == "MANUAL_REVIEW_REQUIRED" or reason_val == "No representative found in contract.":
+                AuditLog.objects.create(
+                    envelope=envelope,
+                    event="Manual review required",
+                    ip_address=ip_address,
+                    user_agent=user_agent
+                )
+                return {
+                    "detail": "An administrator must review the authorization.",
+                    "status": "MANUAL_REVIEW_REQUIRED",
+                    "reason": reason_val or "No representative found in contract."
+                }, "MANUAL_REVIEW_REQUIRED"
+            elif reason_val == "Identity verification incomplete.":
+                AuditLog.objects.create(
+                    envelope=envelope,
+                    event="Authorization failed",
+                    ip_address=ip_address,
+                    user_agent=user_agent
+                )
+                return {
+                    "detail": "Identity verification incomplete.",
+                    "status": "NOT_AUTHORIZED",
+                    "reason": "Identity verification incomplete."
+                }, "IDENTITY_OCR_FAILED"
+            elif reason_val == "Face biometric verification failed.":
+                AuditLog.objects.create(
+                    envelope=envelope,
+                    event="Authorization failed",
+                    ip_address=ip_address,
+                    user_agent=user_agent
+                )
+                return {
+                    "detail": "Face biometric verification failed.",
+                    "status": "NOT_AUTHORIZED",
+                    "reason": "Face biometric verification failed."
+                }, "BIOMETRIC_FAILED"
+            else:
+                AuditLog.objects.create(
+                    envelope=envelope,
+                    event="Authorization failed",
+                    ip_address=ip_address,
+                    user_agent=user_agent
+                )
+                return {
+                    "detail": "Authorization failed.",
+                    "status": "NOT_AUTHORIZED",
+                    "reason": reason_val or "Authorization requirements not satisfied."
+                }, "AUTHORIZATION_FAILED"
+        else:
+            # Succeeded
+            AuditLog.objects.create(
+                envelope=envelope,
+                event="Authorization passed",
+                ip_address=ip_address,
+                user_agent=user_agent
+            )
 
     # ── Non-Signer Role Actions handling ───────────────────────────────────────────
     if role != "signer":

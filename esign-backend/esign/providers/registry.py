@@ -71,9 +71,6 @@ class ESignatureProviderRegistry:
                 if provider_name in ('paddle', 'combined'):
                     from esign.providers.ocr import CombinedOCRProvider
                     return CombinedOCRProvider()
-                elif provider_name == 'azure':
-                    from esign.providers.ocr import AzureOCRProvider
-                    return AzureOCRProvider()
                 else:
                     raise ImproperlyConfigured(f"Unsupported OCR provider: {provider_name}")
 

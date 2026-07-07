@@ -414,6 +414,14 @@ class SignerIdentityVerification(models.Model):
         max_length=255,
         blank=True
     )
+    full_name_en = models.CharField(
+        max_length=255,
+        blank=True
+    )
+    full_name_ar = models.CharField(
+        max_length=255,
+        blank=True
+    )
     national_id_number = models.CharField(
         max_length=50,
         blank=True
@@ -424,6 +432,23 @@ class SignerIdentityVerification(models.Model):
     )
     document_type = models.CharField(
         max_length=50,
+        blank=True
+    )
+    ocr_provider = models.CharField(
+        max_length=50,
+        blank=True,
+        default="gemini"
+    )
+    raw_ocr_json = models.JSONField(
+        blank=True,
+        null=True
+    )
+    expiry_date = models.DateField(
+        blank=True,
+        null=True
+    )
+    country = models.CharField(
+        max_length=100,
         blank=True
     )
     identity_match_score = models.FloatField(
@@ -454,6 +479,27 @@ class WebhookSubscription(models.Model):
 
     def __str__(self):
         return f"Webhook to {self.url} (Active: {self.is_active})"
+
+
+class OcrCache(models.Model):
+    file_hash = models.CharField(max_length=64, unique=True, db_index=True)
+    raw_ocr_json = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"OCR Cache ({self.file_hash[:8]})"
+
+
+class ContractAnalysis(models.Model):
+    document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="analyses")
+    file_hash = models.CharField(max_length=64, db_index=True)
+    provider = models.CharField(max_length=50, default="gemini")
+    representatives = models.JSONField(blank=True, null=True)
+    raw_response = models.JSONField(blank=True, null=True)
+    analyzed_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Analysis for Document {self.document_id} ({self.provider})"
 
 
 

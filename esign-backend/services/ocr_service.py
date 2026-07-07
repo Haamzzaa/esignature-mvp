@@ -561,31 +561,6 @@ def extract_text_with_paddle(pdf_bytes: bytes, fallback_used: bool = False) -> d
 
 def extract_text_from_pdf(pdf_bytes: bytes) -> dict:
     """
-    OCR router that routes PDF processing to either Microsoft Azure Document Intelligence
-    or the local PaddleOCR engine based on the OCR_PROVIDER environment variable.
+    OCR router that routes PDF processing to the local PaddleOCR engine.
     """
-    provider = os.getenv("OCR_PROVIDER", "azure").strip()
-    
-    # BENCHMARK DEBUG ONLY
-    # SAFE TO REMOVE AFTER OCR EVALUATION
-    logger.info(f"OCR Provider Requested: {provider}")
-    
-    if provider == "azure":
-        try:
-            from services.azure_ocr_service import extract_text_with_azure
-            res = extract_text_with_azure(pdf_bytes)
-            
-            # BENCHMARK DEBUG ONLY
-            # SAFE TO REMOVE AFTER OCR EVALUATION
-            logger.info("Azure OCR completed successfully.")
-            logger.info(f"Azure OCR confidence: {res.get('ocr_confidence')}")
-            
-            return res
-        except Exception as e:
-            # BENCHMARK DEBUG ONLY
-            # SAFE TO REMOVE AFTER OCR EVALUATION
-            logger.info("Azure OCR failed. Falling back to PaddleOCR.")
-            logger.warning(f"Azure OCR failed with error: {e}. Falling back to PaddleOCR.")
-            return extract_text_with_paddle(pdf_bytes, fallback_used=True)
-            
     return extract_text_with_paddle(pdf_bytes, fallback_used=False)

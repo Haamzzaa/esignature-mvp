@@ -37,6 +37,12 @@ def mark_biometric_matched(participant, similarity_score=None, liveness_score=No
         biometric.provider = provider
         biometric.completed_at = timezone.now()
         biometric.save(update_fields=["status", "similarity_score", "liveness_score", "provider", "completed_at"])
+
+        from esign.models import AuditLog
+        AuditLog.objects.create(
+            envelope=participant.envelope,
+            event="Face verified"
+        )
     return biometric
 
 def mark_biometric_failed(participant, reason="", similarity_score=None):

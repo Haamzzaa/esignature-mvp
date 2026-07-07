@@ -5,7 +5,6 @@ import unicodedata
 from django.db import transaction
 from django.utils import timezone
 
-from services.azure_ocr_service import extract_text_with_azure
 from PIL import Image, ImageOps, ImageEnhance
 from io import BytesIO
 
@@ -136,61 +135,6 @@ def preprocess_identity_image(image_bytes: bytes) -> dict:
             "processed_bytes": image_bytes,
             "metadata": metadata
         }
-
-def extract_identity_data(front_image, back_image=None):
-    """
-    Runs Azure OCR on the uploaded image file(s).
-    Returns a dictionary with raw_text, ocr_confidence, and ocr_provider.
-    """
-    if not front_image:
-        raise ValueError("Front image is required for OCR extraction.")
-    
-    # Read front image bytes
-    front_image.seek(0)
-    front_bytes = front_image.read()
-    front_image.seek(0)
-    
-    # Preprocess front ID image
-    front_preprocess_res = preprocess_identity_image(front_bytes)
-    front_bytes_processed = front_preprocess_res["processed_bytes"]
-    
-    logger.info(f"Running Azure OCR on front image: {front_image.name}")
-    front_res = extract_text_with_azure(front_bytes_processed)
-    
-    raw_text = front_res.get("raw_text", "")
-    ocr_confidence = front_res.get("ocr_confidence")
-    ocr_provider = front_res.get("ocr_provider", "azure")
-    
-    # Process back image if provided
-    if back_image:
-        back_image.seek(0)
-        back_bytes = back_image.read()
-        back_image.seek(0)
-        
-        # Preprocess back ID image
-        back_preprocess_res = preprocess_identity_image(back_bytes)
-        back_bytes_processed = back_preprocess_res["processed_bytes"]
-        
-        logger.info(f"Running Azure OCR on back image: {back_image.name}")
-        try:
-            back_res = extract_text_with_azure(back_bytes_processed)
-            back_text = back_res.get("raw_text", "")
-            if back_text:
-                raw_text = f"{raw_text}\n{back_text}"
-            
-            back_conf = back_res.get("ocr_confidence")
-            if ocr_confidence is not None and back_conf is not None:
-                ocr_confidence = (ocr_confidence + back_conf) / 2.0
-            elif back_conf is not None:
-                ocr_confidence = back_conf
-        except Exception as e:
-            logger.warning(f"Failed to extract back image OCR: {e}. Continuing with front image only.")
-
-    return {
-        "raw_text": raw_text,
-        "ocr_confidence": ocr_confidence,
-        "ocr_provider": ocr_provider,
-    }
 
 def normalize_identity_fields(text):
     """
