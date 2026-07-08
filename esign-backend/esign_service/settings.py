@@ -318,3 +318,11 @@ SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = False  # Intentionally readable by frontend JS for AJAX CSRF headers
 SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SAMESITE = 'Lax'
+
+# ── Provider Configuration ───────────────────────────────────────────────
+IDENTITY_OCR_PROVIDER = "gemini"
+CONTRACT_OCR_PROVIDER = "gemini"
+FACE_PROVIDER = "insightface"
+LIVENESS_PROVIDER = "internal"
+NOTIFICATION_PROVIDER = "brevo"
+

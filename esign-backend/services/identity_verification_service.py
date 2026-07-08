@@ -9,15 +9,9 @@ from services.reference_face_service import extract_reference_face
 logger = logging.getLogger(__name__)
 
 def perform_identity_verification(participant, document_image_bytes):
-    """
-    Performs identity verification for a participant:
-    1. Store document image.
-    2. Execute existing OCR pipeline.
-    3. Extract the face image from the ID card using reference_face_service.
-    4. Populate details.
-    5. Set status="verified" or "requires_manual_review" on exceptions.
-    """
     from esign.timing import timed_operation
+    import time
+    t_total_start = time.perf_counter()
 
     logger.info("[IdentityVerification] Starting: participant_id=%s", participant.id)
 
@@ -101,9 +95,57 @@ def perform_identity_verification(participant, document_image_bytes):
             verification.status = "requires_manual_review"
             verification.failure_reason = "identity_name_mismatch"
         else:
-            # Extract the face from the ID card using reference_face_service
-            with timed_operation("reference_face_extraction", logger, participant_id=participant.id):
-                reference_face_bytes = extract_reference_face(document_image_bytes)
+            import cv2
+            import numpy as np
+            from services.enterprise_biometric_service import get_face_analysis_app, align_and_crop, generate_embedding
+            
+            # 1. Load ID image
+            t_load_start = time.perf_counter()
+            nparr = np.frombuffer(document_image_bytes, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            t_load_ms = int((time.perf_counter() - t_load_start) * 1000)
+            logger.info("[Timing] Load ID image completed in %dms", t_load_ms)
+
+            # 2. Face model initialization
+            t_init_start = time.perf_counter()
+            app = get_face_analysis_app()
+            t_init_ms = int((time.perf_counter() - t_init_start) * 1000)
+            logger.info("[Timing] Face model initialization completed in %dms", t_init_ms)
+
+            # 3. Face detection
+            t_det_start = time.perf_counter()
+            faces = app.get(img)
+            t_det_ms = int((time.perf_counter() - t_det_start) * 1000)
+            logger.info("[Timing] Face detection completed in %dms", t_det_ms)
+
+            if not faces:
+                raise ValueError("no_face_detected")
+            face = faces[0]
+
+            # 4. Face alignment
+            t_align_start = time.perf_counter()
+            aligned_face = align_and_crop(img, face)
+            t_align_ms = int((time.perf_counter() - t_align_start) * 1000)
+            logger.info("[Timing] Face alignment completed in %dms", t_align_ms)
+
+            # 5. Face embedding generation
+            t_emb_start = time.perf_counter()
+            emb = generate_embedding(face)
+            t_emb_ms = int((time.perf_counter() - t_emb_start) * 1000)
+            logger.info("[Timing] Face embedding generation completed in %dms", t_emb_ms)
+
+            # Crop the reference face using the standard logic
+            bbox = face.bbox
+            h_img, w_img, _ = img.shape
+            x1 = max(0, int(bbox[0] - 0.25 * (bbox[2] - bbox[0])))
+            y1 = max(0, int(bbox[1] - 0.25 * (bbox[3] - bbox[1])))
+            x2 = min(w_img, int(bbox[2] + 0.25 * (bbox[2] - bbox[0])))
+            y2 = min(h_img, int(bbox[3] + 0.25 * (bbox[3] - bbox[1])))
+            cropped_face = img[y1:y2, x1:x2]
+            success, face_barr = cv2.imencode('.jpg', cropped_face)
+            if not success:
+                raise ValueError("Failed to encode cropped face to JPEG format.")
+            reference_face_bytes = face_barr.tobytes()
 
             # Save reference face image
             verification.reference_face_image.save(
@@ -126,5 +168,14 @@ def perform_identity_verification(participant, document_image_bytes):
         verification.status = "requires_manual_review"
         verification.failure_reason = str(e)
 
+    # 6. Database save
+    t_db_start = time.perf_counter()
     verification.save()
+    t_db_ms = int((time.perf_counter() - t_db_start) * 1000)
+    logger.info("[Timing] Database save completed in %dms", t_db_ms)
+
+    # Total verification time
+    t_total_ms = int((time.perf_counter() - t_total_start) * 1000)
+    logger.info("[Timing] Total verification time completed in %dms", t_total_ms)
+
     return verification

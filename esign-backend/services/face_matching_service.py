@@ -6,14 +6,7 @@ from insightface.app import FaceAnalysis
 
 logger = logging.getLogger(__name__)
 
-_app = None
-
-def get_face_analysis_app():
-    global _app
-    if _app is None:
-        _app = FaceAnalysis(name='buffalo_l', providers=['CPUExecutionProvider'])
-        _app.prepare(ctx_id=-1, det_size=(640, 640))
-    return _app
+from services.enterprise_biometric_service import get_face_analysis_app
 
 def extract_face_embedding(image_bytes):
     """

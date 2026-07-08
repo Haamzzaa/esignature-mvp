@@ -21,6 +21,8 @@ def get_authorization_status(participant):
 
     verification = SignerIdentityVerification.objects.filter(participant=participant).first()
     contract_analysis = ContractAnalysis.objects.filter(document=envelope.document).first()
+    if not contract_analysis and envelope.document:
+        contract_analysis = ContractAnalysis.objects.filter(file_hash=envelope.document.file_hash).first()
     auth_res = authorize_signer(participant, verification, contract_analysis)
 
     national_id_req = envelope.national_id_required
@@ -57,6 +59,27 @@ def get_authorization_status(participant):
 
     authorized = (len(missing_requirements) == 0)
 
+    # Secure verification summaries for UI consumption without exposing embeddings, API keys or internal raw data.
+    identity_summary = None
+    if verification:
+        identity_summary = {
+            "full_name_en": verification.full_name_en,
+            "full_name_ar": verification.full_name_ar,
+            "national_id": verification.national_id_number,
+            "country": verification.country,
+            "document_type": verification.document_type,
+            "expiry_date": verification.expiry_date.isoformat() if verification.expiry_date else None,
+            "status": verification.status
+        }
+
+    biometric_summary = None
+    if biometric:
+        biometric_summary = {
+            "status": biometric.status,
+            "similarity_score": biometric.similarity_score,
+            "provider": biometric.provider
+        }
+
     return {
         "authorized": authorized,
         "requirements": requirements,
@@ -64,7 +87,9 @@ def get_authorization_status(participant):
         "status": auth_res.get("status", "NOT_AUTHORIZED") if participant.role == "signer" else ("AUTHORIZED" if authorized else "NOT_AUTHORIZED"),
         "reason": auth_res.get("reason") if participant.role == "signer" else None,
         "matched_language": auth_res.get("matched_language") if participant.role == "signer" else None,
-        "matched_representative": auth_res.get("matched_representative") if participant.role == "signer" else None
+        "matched_representative": auth_res.get("matched_representative") if participant.role == "signer" else None,
+        "identity_summary": identity_summary,
+        "biometric_summary": biometric_summary
     }
 
 def evaluate_signer_requirements(participant):

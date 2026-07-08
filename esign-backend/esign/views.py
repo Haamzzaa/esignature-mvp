@@ -70,6 +70,11 @@ class DocumentUploadView(APIView):
         serializer = DocumentUploadSerializer(data=request.data)
         if serializer.is_valid():
             document = serializer.save(owner=request.user)
+            try:
+                from services.gemini_contract_ocr import extract_contract_authorization
+                extract_contract_authorization(document.file.path, document=document)
+            except Exception as e:
+                logger.warning(f"Auto contract OCR failed on upload: {e}")
             return Response(
                 {
                     "document_id": document.id,
@@ -859,15 +864,11 @@ class ContractAnalyzeView(APIView):
         if is_limited:
             return make_rate_limited_response(retry_after)
 
-        import time
-        import fitz
         import logging
-        from services.ocr_service import extract_text_from_image
-        from esign.providers.registry import esign_provider_registry
-        from services.authority_extraction_service import analyze_contract_authority
+        from rest_framework.exceptions import ValidationError
+        from services.recipient_discovery_service import perform_contract_analysis
 
         logger = logging.getLogger(__name__)
-        start_time = time.perf_counter()
 
         file_obj = request.data.get('file')
         if not file_obj:
@@ -880,271 +881,36 @@ class ContractAnalyzeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        MAX_FILE_SIZE_BYTES = esign_config.max_upload_size
-        if file_obj.size > MAX_FILE_SIZE_BYTES:
-            return Response(
-                {"detail": f"File size exceeds the {esign_config.max_upload_size // (1024 * 1024)}MB limit."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        # ── Get or resolve envelope_id ────────────────────────────────────
+        envelope_id = request.data.get('envelope_id') or request.query_params.get('envelope_id')
+        envelope = None
+        if envelope_id:
+            try:
+                envelope = Envelope.objects.get(id=envelope_id)
+            except Envelope.DoesNotExist:
+                logger.warning(f"Contract analysis failed: Envelope {envelope_id} not found.")
+                return Response({"detail": f"Envelope with ID {envelope_id} not found."}, status=status.HTTP_404_NOT_FOUND)
+            
+            # Check envelope ownership
+            if not request.user or not request.user.is_authenticated or envelope.owner != request.user:
+                logger.warning(f"Unauthorized contract analysis attempt on envelope {envelope_id} by user {request.user}")
+                return Response({"detail": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN)
 
         try:
             file_bytes = file_obj.read()
-            
-            # Determine logic based on file type
-            if filename.endswith('.pdf'):
-                # 2. PDF Page count validation (Resource protection: Max 20 pages)
-                try:
-                    doc = fitz.open(stream=file_bytes, filetype="pdf")
-                    page_count = len(doc)
-                    doc.close()
-                except Exception as e:
-                    return Response(
-                        {"detail": f"Failed to parse PDF pages: {str(e)}"},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
-                if page_count > 20:
-                    return Response(
-                        {"detail": f"PDF exceeds the maximum limit of 20 pages (found {page_count})."},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
-                ocr_result = esign_provider_registry.ocr_provider.extract_text(file_bytes)
-                raw_text = ocr_result["raw_text"]
-                english_text = ocr_result.get("english_text", raw_text)
-                arabic_text = ocr_result.get("arabic_text", raw_text)
-                ocr_confidence = ocr_result["ocr_confidence"]
-                source = ocr_result["extraction_source"]
-                page_count = ocr_result.get("page_count", page_count)
-                digital_extraction_ms = ocr_result.get("digital_extraction_ms", 0.0)
-                ocr_ms = ocr_result.get("ocr_ms", 0.0)
-                dominant_strategy = ocr_result.get("dominant_strategy", source)
-                page_strategies = ocr_result.get("page_strategies", {1: source})
-                page_quality_scores = ocr_result.get("page_quality_scores", {1: 1.0})
-                dominant_arabic_region = ocr_result.get("dominant_arabic_region", "right")
-                page_regions = ocr_result.get("page_regions", {1: "right"})
-            else:
-                # Image processing
-                logger.info("Processing image upload using OCR")
-                t_ocr_start = time.perf_counter()
-                raw_text, ocr_confidence = extract_text_from_image(file_bytes)
-                ocr_ms = (time.perf_counter() - t_ocr_start) * 1000
-                digital_extraction_ms = 0.0
-                english_text = raw_text
-                arabic_text = raw_text
-                source = "paddleocr"
-                page_count = 1
-                dominant_strategy = "full_page_ocr"
-                page_strategies = {1: "full_page_ocr"}
-                page_quality_scores = {1: 0.0}
-                dominant_arabic_region = "right"
-                page_regions = {1: "right"}
-                ocr_result = {
-                    "ocr_provider": "paddle",
-                    "ocr_confidence": ocr_confidence,
-                    "fallback_used": False,
-                    "ocr_ms": ocr_ms
-                }
-
-            # Extract Authority Information
-            logger.debug("[ContractAnalyzeView] Raw OCR text (ASCII-safe): %s",
-                         raw_text.encode('ascii', errors='backslashreplace').decode('ascii'))
-            
-            t_auth_start = time.perf_counter()
-            analysis = analyze_contract_authority(raw_text, english_text=english_text, arabic_text=arabic_text)
-            authority_extraction_ms = (time.perf_counter() - t_auth_start) * 1000
-
-            end_time = time.perf_counter()
-            total_processing_ms = (end_time - start_time) * 1000
-
-            extraction_result = ocr_result
-
-            # ── Get or resolve envelope_id ────────────────────────────────────
-            envelope_id = request.data.get('envelope_id') or request.query_params.get('envelope_id')
-            envelope = None
-            if envelope_id:
-                try:
-                    envelope = Envelope.objects.get(id=envelope_id)
-                except Envelope.DoesNotExist:
-                    logger.warning(f"Contract analysis failed: Envelope {envelope_id} not found.")
-                    return Response({"detail": f"Envelope with ID {envelope_id} not found."}, status=status.HTTP_404_NOT_FOUND)
-                
-                # Check envelope ownership
-                if not request.user or not request.user.is_authenticated or envelope.owner != request.user:
-                    logger.warning(f"Unauthorized contract analysis attempt on envelope {envelope_id} by user {request.user}")
-                    return Response({"detail": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN)
-
-            # ── Generate candidates ──────────────────────────────────────────
-            candidates_data = []
-            if envelope:
-                from services.recipient_discovery_service import generate_candidates
-                candidates = generate_candidates(envelope, analysis)
-                for cand in candidates:
-                    candidates_data.append({
-                        "id": cand.id,
-                        "name_en": cand.name_en,
-                        "name_ar": cand.name_ar,
-                        "title_en": cand.title_en,
-                        "title_ar": cand.title_ar,
-                        "status": cand.status,
-                        "converted_at": cand.converted_at.isoformat() if cand.converted_at else None,
-                        "ignored_at": cand.ignored_at.isoformat() if cand.ignored_at else None,
-                        "authority_clause": cand.authority_clause
-                    })
-                
-                # Create compliance audit log record
-                from esign.models import ContractAnalysisAudit
-                ContractAnalysisAudit.objects.update_or_create(
-                    envelope=envelope,
-                    defaults={
-                        "representative_name": f"{analysis.get('representative_name_en', '')} / {analysis.get('representative_name_ar', '')}".strip(" /"),
-                        "representative_title": f"{analysis.get('title_en', '')} / {analysis.get('title_ar', '')}".strip(" /"),
-                        "authority_clause": f"{analysis.get('authority_clause_en', '')} / {analysis.get('authority_clause_ar', '')}".strip(" /"),
-                        "authority_detected": bool(analysis.get("representative_name_en") or analysis.get("representative_name_ar")),
-                        "ocr_provider": extraction_result.get("ocr_provider", ""),
-                        "ocr_confidence": extraction_result.get("ocr_confidence"),
-                    }
-                )
-            else:
-                # In-memory candidate generation (e.g. for ContractAnalysisPage demo)
-                name_en = analysis.get("representative_name_en", "").strip()
-                name_ar = analysis.get("representative_name_ar", "").strip()
-                title_en = analysis.get("title_en", "").strip()
-                title_ar = analysis.get("title_ar", "").strip()
-                clause_en = analysis.get("authority_clause_en", "").strip()
-                clause_ar = analysis.get("authority_clause_ar", "").strip()
-
-                from services.recipient_discovery_service import TITLE_MAP_EN_TO_AR
-                is_same = False
-                if name_en and name_ar:
-                    mapped_ar_title = TITLE_MAP_EN_TO_AR.get(title_en)
-                    if mapped_ar_title == title_ar or (title_en.lower() == "ceo" and title_ar == "الرئيس التنفيذي"):
-                        is_same = True
-                    else:
-                        is_same = True
-
-                if is_same:
-                    candidates_data.append({
-                        "id": "temp-1",
-                        "name_en": name_en,
-                        "name_ar": name_ar,
-                        "title_en": title_en,
-                        "title_ar": title_ar,
-                        "status": "pending",
-                        "converted_at": None,
-                        "ignored_at": None,
-                        "authority_clause": clause_en or clause_ar
-                    })
-                else:
-                    if name_en:
-                        candidates_data.append({
-                            "id": "temp-1",
-                            "name_en": name_en,
-                            "name_ar": "",
-                            "title_en": title_en,
-                            "title_ar": "",
-                            "status": "pending",
-                            "converted_at": None,
-                            "ignored_at": None,
-                            "authority_clause": clause_en
-                        })
-                    if name_ar:
-                        candidates_data.append({
-                            "id": "temp-2",
-                            "name_en": "",
-                            "name_ar": name_ar,
-                            "title_en": "",
-                            "title_ar": title_ar,
-                            "status": "pending",
-                            "converted_at": None,
-                            "ignored_at": None,
-                            "authority_clause": clause_ar
-                        })
-
-            representatives_found = len(candidates_data) > 0
-            response_data = {
-                "representative_name_en": analysis.get("representative_name_en", ""),
-                "representative_name_ar": analysis.get("representative_name_ar", ""),
-                "title_en": analysis.get("title_en", ""),
-                "title_ar": analysis.get("title_ar", ""),
-                "authority_clause_en": analysis.get("authority_clause_en", ""),
-                "authority_clause_ar": analysis.get("authority_clause_ar", ""),
-                "representatives_found": representatives_found,
-                "authority_detected": representatives_found,
-                "count": len(candidates_data),
-                "candidates": candidates_data
-            }
-
-            # BENCHMARK DEBUG ONLY
-            # TEMPORARY INSTRUMENTATION
-            # SAFE TO REMOVE AFTER OCR TUNING
-            ENABLE_EXTRACTION_DEBUG = os.getenv("ENABLE_EXTRACTION_DEBUG", "false").lower() == "true"
-            if ENABLE_EXTRACTION_DEBUG:
-                try:
-                    debug_dir = os.getenv("EXTRACTION_DEBUG_DIR", "./analysis/debug_responses/")
-                    os.makedirs(debug_dir, exist_ok=True)
-                    
-                    # Extract representative contexts (±150 chars)
-                    def get_context(text, keyword_or_name):
-                        if not text or not keyword_or_name:
-                            return ""
-                        idx = text.lower().find(str(keyword_or_name).lower())
-                        if idx == -1:
-                            return ""
-                        start = max(0, idx - 150)
-                        end = min(len(text), idx + len(str(keyword_or_name)) + 150)
-                        return text[start:end]
-                    
-                    target_name_en = analysis["representative_name_en"]
-                    kw_en = target_name_en if target_name_en else "represented"
-                    context_en = get_context(english_text, kw_en)
-                    
-                    target_name_ar = analysis["representative_name_ar"]
-                    kw_ar = target_name_ar if target_name_ar else "ويمثلها"
-                    context_ar = get_context(arabic_text, kw_ar)
-                    
-                    debug_filename = os.path.splitext(os.path.basename(file_obj.name))[0] + "_debug.json"
-                    debug_filepath = os.path.join(debug_dir, debug_filename)
-                    
-                    debug_payload = {
-                        "raw_text": raw_text,
-                        "english_text": english_text,
-                        "arabic_text": arabic_text,
-                        "representative_name_en": analysis["representative_name_en"],
-                        "representative_name_ar": analysis["representative_name_ar"],
-                        "title_en": analysis["title_en"],
-                        "title_ar": analysis["title_ar"],
-                        "authority_phrase_en": analysis["authority_clause_en"],
-                        "authority_phrase_ar": analysis["authority_clause_ar"],
-                        "confidence_score": analysis["confidence_score"],
-                        "name_similarity_score": analysis.get("name_similarity_score", 0.0),
-                        "title_match_score_en": analysis.get("title_match_score_en", 0.0),
-                        "title_match_score_ar": analysis.get("title_match_score_ar", 0.0),
-                        "title_match_method_en": analysis.get("title_match_method_en", "none"),
-                        "title_match_method_ar": analysis.get("title_match_method_ar", "none"),
-                        "page_count": page_count,
-                        "page_regions": page_regions if 'page_regions' in locals() else {},
-                        "page_quality_scores": page_quality_scores if 'page_quality_scores' in locals() else {},
-                        "page_strategies": page_strategies if 'page_strategies' in locals() else {},
-                        "ocr_confidence": ocr_confidence,
-                        "processing_time_ms": total_processing_ms,
-                        "representative_context_en": context_en,
-                        "representative_context_ar": context_ar,
-                        "requested_provider": os.getenv("OCR_PROVIDER", "paddle").strip(),
-                        "ocr_provider": extraction_result.get("ocr_provider"),
-                        "fallback_used": extraction_result.get("fallback_used"),
-                        "ocr_ms": extraction_result.get("ocr_ms"),
-                        "api_response": response_data
-                    }
-                    
-                    import json
-                    with open(debug_filepath, "w", encoding="utf-8") as df:
-                        json.dump(debug_payload, df, ensure_ascii=False, indent=2)
-                        
-                except Exception as ex:
-                    logger.error(f"[Benchmark Debug] Failed to save debug JSON: {ex}")
-
+            response_data = perform_contract_analysis(filename, file_obj.size, file_bytes, envelope=envelope)
             return Response(response_data, status=status.HTTP_200_OK)
+        except ValidationError as e:
+            detail = e.detail
+            if isinstance(detail, list):
+                msg = detail[0]
+            elif isinstance(detail, dict):
+                msg = next(iter(detail.values()))
+                if isinstance(msg, list):
+                    msg = msg[0]
+            else:
+                msg = str(detail)
+            return Response({"detail": msg}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             logger.error(f"Failed to analyze contract: {str(e)}", exc_info=True)
             return Response({"detail": "An internal error occurred while processing the document."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -1601,6 +1367,7 @@ def stream_protected_file(path, as_attachment=False, filename=None):
     try:
         response['Content-Length'] = default_storage.size(path)
     except Exception:
+        # Content-Length is optional; if storage size lookup fails, skip setting it
         pass
 
     return response

@@ -61,6 +61,7 @@ def preprocess_identity_image(image_bytes: bytes) -> dict:
                 if exif and 274 in exif and exif[274] > 1:
                     has_orientation = True
             except Exception:
+                # EXIF reading is optional and can fail for some formats; safe to ignore
                 pass
 
             # 2. Convert to RGB

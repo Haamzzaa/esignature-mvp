@@ -1,0 +1,144 @@
+{
+    "score": 0.5730257630348206,
+    "threshold": 0.6,
+    "decision": "MANUAL_REVIEW",
+    "reason": "Biometric anomaly. Score 0.5730 is close but below threshold 0.60.",
+    "stages": {
+        "image_validation": {
+            "passed": true,
+            "detail": {
+                "id_image": {
+                    "exists": true,
+                    "valid_format": true,
+                    "width": 1024,
+                    "height": 1024,
+                    "resolution_passed": true,
+                    "blur_score": 132.63173324329182,
+                    "blur_passed": true,
+                    "brightness_score": 141.5977602005005,
+                    "brightness_passed": true,
+                    "contrast_score": 68.52961032991276,
+                    "contrast_passed": true,
+                    "passed": true,
+                    "error_message": ""
+                },
+                "live_image": {
+                    "exists": true,
+                    "valid_format": true,
+                    "width": 1024,
+                    "height": 1024,
+                    "resolution_passed": true,
+                    "blur_score": 890.2111450155487,
+                    "blur_passed": true,
+                    "brightness_score": 113.04517269134521,
+                    "brightness_passed": true,
+                    "contrast_score": 68.13811310233625,
+                    "contrast_passed": true,
+                    "passed": true,
+                    "error_message": ""
+                }
+            }
+        },
+        "face_detection": {
+            "passed": true,
+            "detail": {
+                "id_image": {
+                    "faces_count": 1,
+                    "bbox": [
+                        332,
+                        206,
+                        690,
+                        735
+                    ],
+                    "confidence": 0.892522931098938,
+                    "passed": true,
+                    "error_message": ""
+                },
+                "live_image": {
+                    "faces_count": 1,
+                    "bbox": [
+                        353,
+                        197,
+                        680,
+                        702
+                    ],
+                    "confidence": 0.8976795673370361,
+                    "passed": true,
+                    "error_message": ""
+                }
+            }
+        },
+        "face_quality": {
+            "passed": true,
+            "detail": {
+                "id_image": {
+                    "yaw": 0.5373443516578206,
+                    "pitch": 0.0,
+                    "roll": -0.49693262577056885,
+                    "crop_blur": 423.8768041952534,
+                    "quality_score": 0.8865524530410767,
+                    "pose_passed": true,
+                    "sharpness_passed": true,
+                    "landmarks_inside": true,
+                    "passed": true,
+                    "error_message": ""
+                },
+                "live_image": {
+                    "yaw": 0.3538147998187765,
+                    "pitch": 0.0,
+                    "roll": -1.1102476119995117,
+                    "crop_blur": 1274.6379003220907,
+                    "quality_score": 0.8937482833862305,
+                    "pose_passed": true,
+                    "sharpness_passed": true,
+                    "landmarks_inside": true,
+                    "passed": true,
+                    "error_message": ""
+                }
+            }
+        },
+        "landmarks": {
+            "passed": true,
+            "detail": {
+                "id_image": {
+                    "passed": true,
+                    "error_message": ""
+                },
+                "live_image": {
+                    "passed": true,
+                    "error_message": ""
+                }
+            }
+        },
+        "alignment": {
+            "passed": true,
+            "detail": {
+                "id_aligned_shape": [
+                    112,
+                    112,
+                    3
+                ],
+                "live_aligned_shape": [
+                    112,
+                    112,
+                    3
+                ]
+            }
+        },
+        "embedding": {
+            "passed": true,
+            "detail": {}
+        },
+        "similarity": {
+            "passed": true,
+            "detail": {
+                "cosine_similarity": 0.5730257630348206,
+                "threshold": 0.6
+            }
+        },
+        "decision_engine": {
+            "passed": true,
+            "detail": {}
+        }
+    }
+}

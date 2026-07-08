@@ -34,7 +34,7 @@ def send_participant_email(participant, envelope, base_api_url=None):
         }
     )
     token_val = token_obj.token
-    logger.debug("Preparing notification email for participant %s (role: %s)", participant.email, participant.role)
+    logger.debug("Preparing notification email for participant %s (role: %s)", participant.id, participant.role)
 
     frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173")
     secure_link = f"{frontend_url}/sign/{token_val}"
@@ -66,7 +66,7 @@ The E-Signature Team
 """
     
     try:
-        logger.info(f"Sending role email to {participant.email} for role {role}")
+        logger.info(f"Sending role email to participant {participant.id} for role {role}")
 
         send_mail(
             subject=subject,
@@ -78,7 +78,7 @@ The E-Signature Team
     except Exception:
         logger.exception(
             "Failed to send email to participant %s (role: %s)",
-            participant.email,
+            participant.id,
             participant.role,
         )
 

@@ -98,7 +98,7 @@ def extract_identity_data(image_path):
         with open(image_path, "rb") as f:
             image_bytes = f.read()
         encoded_image = base64.b64encode(image_bytes).decode('utf-8')
-    except Exception as e:
+    except OSError as e:
         return {
             "error": "backend_error",
             "message": f"Failed to read image bytes for API request: {str(e)}"
@@ -173,7 +173,7 @@ def extract_identity_data(image_path):
                 "message": f"Gemini API request failed with status code {response.status_code}."
             }
         logger.info("[Gemini OCR] Request completed")
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         return {
             "error": "backend_error",
             "message": f"Failed to connect to Gemini API: {str(e)}"
@@ -213,7 +213,7 @@ def extract_identity_data(image_path):
             except Exception as cache_err:
                 logger.warning(f"Failed to save OCR cache: {cache_err}")
         return ocr_data
-    except Exception as e:
+    except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
         return {
             "error": "backend_error",
             "message": f"Failed to parse or process Gemini response: {str(e)}"

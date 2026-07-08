@@ -93,7 +93,7 @@ function WorkflowPendingScreen({ session }) {
     >
       {/* Glow */}
       <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-transparent opacity-50 pointer-events-none" />
-      
+
       {/* Icon */}
       <div className="relative mb-6 flex justify-center">
         <div className="absolute inset-0 rounded-full bg-amber-500/10 blur-xl animate-pulse w-20 h-20 mx-auto" />
@@ -197,6 +197,7 @@ export default function SignPage() {
   const [idPreview, setIdPreview] = useState('')
   const [verifyingError, setVerifyingError] = useState('')
   const [verificationRequiresManualReview, setVerificationRequiresManualReview] = useState(false)
+  const [userAcknowledgedIdentity, setUserAcknowledgedIdentity] = useState(false)
 
   // ── Verification Step Derivation ──────────────────────────────────────────
   const missingRequirements = authStatus?.missing_requirements || []
@@ -206,8 +207,10 @@ export default function SignPage() {
       currentStep = 'terms'
     } else if (missingRequirements.includes('email_otp')) {
       currentStep = 'email_otp'
-    } else if (missingRequirements.includes('national_id')) {
+    } else if (authStatus.requirements?.national_id?.required && !authStatus.requirements?.national_id?.satisfied) {
       currentStep = 'national_id'
+    } else if (authStatus.requirements?.national_id?.required && authStatus.requirements?.national_id?.satisfied && !userAcknowledgedIdentity) {
+      currentStep = 'identity_summary_preview'
     } else if (missingRequirements.includes('face_biometric')) {
       currentStep = 'face_biometric'
     }
@@ -224,6 +227,7 @@ export default function SignPage() {
     setSuccessMessage('')
     setSignedDocumentUrl('')
     setVerifyingError('')
+    setUserAcknowledgedIdentity(false)
 
     if (!token) {
       setSession(null)
@@ -496,10 +500,10 @@ export default function SignPage() {
     const video = videoRef.current
     const videoWidth = video.videoWidth || 640
     const videoHeight = video.videoHeight || 640
-    
+
     // Calculate the size of the square crop (minimum of width and height)
     const size = Math.min(videoWidth, videoHeight)
-    
+
     // Calculate top-left coordinates of the crop area to center it
     const sx = (videoWidth - size) / 2
     const sy = (videoHeight - size) / 2
@@ -514,21 +518,21 @@ export default function SignPage() {
       ctx.translate(canvas.width, 0)
       ctx.scale(-1, 1)
       ctx.drawImage(video, sx, sy, size, size, 0, 0, canvas.width, canvas.height)
-      
+
       canvas.toBlob((blob) => {
         if (blob) {
           const file = new File([blob], 'selfie.jpg', { type: 'image/jpeg' })
           setSelfieFile(file)
           const previewUrl = URL.createObjectURL(blob)
           setSelfiePreview(previewUrl)
-          
+
           console.log("[Camera Debug] video.videoWidth:", videoWidth)
           console.log("[Camera Debug] video.videoHeight:", videoHeight)
           console.log("[Camera Debug] canvas.width:", canvas.width)
           console.log("[Camera Debug] canvas.height:", canvas.height)
           console.log("[Camera Debug] captured Blob size:", blob.size)
           console.log("[Camera Debug] uploaded File size:", file.size)
-          
+
           console.log("[Camera Debug] stopCamera() invocation: capturePhoto success")
           stopCamera()
         }
@@ -573,7 +577,7 @@ export default function SignPage() {
   useEffect(() => {
     if (token && session && !viewTracked && session?.status !== 'completed') {
       setViewTracked(true)
-      completeSigning(token, { action: 'view' }).catch(() => {})
+      completeSigning(token, { action: 'view' }).catch(() => { })
     }
   }, [token, session, viewTracked])
 
@@ -636,7 +640,7 @@ export default function SignPage() {
       const response = await completeSigning(token, payload)
       console.log(response)
       const signedUrl = response?.signed_document_url
-      
+
       // Navigate with full state so SuccessPage doesn't call API on the used token
       navigate('/success', {
         state: {
@@ -755,9 +759,9 @@ export default function SignPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:py-20 relative z-10">
-      
+
       {/* Header */}
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="mb-10 text-center max-w-2xl mx-auto"
@@ -802,77 +806,77 @@ export default function SignPage() {
           <WorkflowPendingScreen session={session} />
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-8">
-          
-          {/* Left Column: Document */}
-          <motion.div 
-            initial={{ opacity: 0, x: -30 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="space-y-6"
-          >
-            {/* Session Metadata */}
-            <div className="glass-panel rounded-3xl p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <div className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-2xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/30">
-                  <span className="text-xl font-light text-accent">
-                    {session.signer_name?.charAt(0).toUpperCase() || 'U'}
+
+            {/* Left Column: Document */}
+            <motion.div
+              initial={{ opacity: 0, x: -30 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="space-y-6"
+            >
+              {/* Session Metadata */}
+              <div className="glass-panel rounded-3xl p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-2xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/30">
+                    <span className="text-xl font-light text-accent">
+                      {session.signer_name?.charAt(0).toUpperCase() || 'U'}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-text-primary">{session.signer_name || 'Unknown User'}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-xs text-text-secondary">{session.signer_email || 'No email provided'}</span>
+                      {session.participant_role && (
+                        <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-card-bg text-text-primary border border-border-color">
+                          {session.participant_role}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-col items-start sm:items-end">
+                  <span className="text-[10px] uppercase tracking-widest text-text-secondary">Status</span>
+                  <span className={`text-sm font-medium uppercase tracking-wider ${isCompleted ? 'text-emerald-500' : 'text-accent'}`}>
+                    {session.status || 'Active'}
                   </span>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-text-primary">{session.signer_name || 'Unknown User'}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-xs text-text-secondary">{session.signer_email || 'No email provided'}</span>
-                    {session.participant_role && (
-                      <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-card-bg text-text-primary border border-border-color">
-                        {session.participant_role}
-                      </span>
-                    )}
-                  </div>
-                </div>
               </div>
-              <div className="flex flex-col items-start sm:items-end">
-                <span className="text-[10px] uppercase tracking-widest text-text-secondary">Status</span>
-                <span className={`text-sm font-medium uppercase tracking-wider ${isCompleted ? 'text-emerald-500' : 'text-accent'}`}>
-                  {session.status || 'Active'}
-                </span>
-              </div>
-            </div>
 
-            {/* Document Preview */}
-            {documentUrl ? (
-              <div className="glass-panel rounded-3xl overflow-hidden relative group">
-                <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/5 to-transparent opacity-50 pointer-events-none" />
-                <div className="flex items-center justify-between border-b border-border-color bg-bg-primary/5 px-6 py-4">
-                  <div className="flex items-center gap-2 text-text-primary">
-                    <FileSignature className="h-5 w-5 text-accent" />
-                    <h2 className="text-sm font-semibold tracking-wide">Document Viewport</h2>
+              {/* Document Preview */}
+              {documentUrl ? (
+                <div className="glass-panel rounded-3xl overflow-hidden relative group">
+                  <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/5 to-transparent opacity-50 pointer-events-none" />
+                  <div className="flex items-center justify-between border-b border-border-color bg-bg-primary/5 px-6 py-4">
+                    <div className="flex items-center gap-2 text-text-primary">
+                      <FileSignature className="h-5 w-5 text-accent" />
+                      <h2 className="text-sm font-semibold tracking-wide">Document Viewport</h2>
+                    </div>
+                    <a
+                      href={documentUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-2 text-xs font-medium text-accent hover:text-accent/80 transition-colors bg-cyan-500/10 px-3 py-1.5 rounded-lg hover:bg-cyan-500/20"
+                    >
+                      External View <ChevronRight className="h-3 w-3" />
+                    </a>
                   </div>
-                  <a
-                    href={documentUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-2 text-xs font-medium text-accent hover:text-accent/80 transition-colors bg-cyan-500/10 px-3 py-1.5 rounded-lg hover:bg-cyan-500/20"
-                  >
-                    External View <ChevronRight className="h-3 w-3" />
-                  </a>
-                </div>
-                <div className="relative overflow-auto bg-bg-primary py-8 custom-scrollbar shadow-inner max-h-[700px] p-2 sm:p-4">
-                  <Document
-                    file={documentUrl}
-                    onLoadSuccess={({ numPages: n }) => setNumPages(n)}
-                    loading={
-                      <div className="flex h-64 flex-col items-center justify-center gap-4 text-accent">
-                        <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-                        <span className="text-sm font-medium animate-pulse tracking-widest uppercase">Rendering Data…</span>
-                      </div>
-                    }
-                    error={
-                      <div className="flex h-64 items-center justify-center text-sm text-red-400">
-                        Failed to decode document.
-                      </div>
-                    }
-                  >
-                    {numPages
-                      ? Array.from({ length: numPages }, (_, i) => {
+                  <div className="relative overflow-auto bg-bg-primary py-8 custom-scrollbar shadow-inner max-h-[700px] p-2 sm:p-4">
+                    <Document
+                      file={documentUrl}
+                      onLoadSuccess={({ numPages: n }) => setNumPages(n)}
+                      loading={
+                        <div className="flex h-64 flex-col items-center justify-center gap-4 text-accent">
+                          <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                          <span className="text-sm font-medium animate-pulse tracking-widest uppercase">Rendering Data…</span>
+                        </div>
+                      }
+                      error={
+                        <div className="flex h-64 items-center justify-center text-sm text-red-400">
+                          Failed to decode document.
+                        </div>
+                      }
+                    >
+                      {numPages
+                        ? Array.from({ length: numPages }, (_, i) => {
                           const pageNumber = i + 1
 
                           return (
@@ -907,7 +911,7 @@ export default function SignPage() {
                                     }}
                                     className="-translate-x-1/2 -translate-y-1/2 pointer-events-auto"
                                   >
-                                    <div 
+                                    <div
                                       onClick={() => {
                                         const panel = document.querySelector('input[type="text"]') || document.querySelector('.SignatureCanvas') || document.querySelector('input[type="file"]')
                                         panel?.focus()
@@ -930,253 +934,401 @@ export default function SignPage() {
                             </div>
                           )
                         })
-                      : null}
-                  </Document>
-                </div>
-              </div>
-            ) : (
-              <div className="glass-panel rounded-3xl p-8 text-center text-text-secondary">
-                No document payload available for this session.
-              </div>
-            )}
-          </motion.div>
-
-          {/* Right Column: Signature Actions */}
-          <motion.div 
-            initial={{ opacity: 0, x: 30 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="space-y-6"
-          >
-            {isCompleted ? (
-              <div className="glass-panel rounded-3xl p-8 text-center relative overflow-hidden group">
-                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-50" />
-                <CheckCircle2 className="h-16 w-16 text-emerald-400 mx-auto mb-4" />
-                <h3 className="text-xl font-light text-emerald-500 mb-2">
-                  {session?.participant_role === 'cc' ? 'Document Viewed' : 
-                   session?.participant_role === 'reviewer' ? 'Review Completed' :
-                   session?.participant_role === 'approver' ? 'Approval Completed' :
-                   'Signature Verified'}
-                </h3>
-                <p className="text-sm text-text-secondary mb-6">
-                  {session?.participant_role === 'cc' ? 'You have successfully viewed this document.' :
-                   session?.participant_role === 'reviewer' ? 'Your review action has been registered and advanced.' :
-                   session?.participant_role === 'approver' ? 'Your approval action has been registered and advanced.' :
-                   'This document has been cryptographically sealed.'}
-                </p>
-                {signedDocumentUrl && (
-                  <a
-                    href={signedDocumentUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center justify-center gap-2 w-full rounded-2xl bg-emerald-500/20 border border-emerald-500/30 px-4 py-3 text-sm font-semibold text-emerald-500 transition-all hover:bg-emerald-500/30"
-                  >
-                    <Download className="h-4 w-4" /> Access Sealed Payload
-                  </a>
-                )}
-              </div>
-            ) : verificationRequiresManualReview ? (
-              <div className="glass-panel rounded-3xl p-8 text-center relative overflow-hidden group">
-                <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 to-transparent opacity-50" />
-                <div className="relative mb-6 flex justify-center">
-                  <div className="absolute inset-0 rounded-full bg-amber-500/10 blur-xl animate-pulse w-20 h-20 mx-auto" />
-                  <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-amber-500/5 border border-amber-500/20 text-amber-500">
-                    <AlertCircle className="h-10 w-10 animate-bounce" />
+                        : null}
+                    </Document>
                   </div>
                 </div>
-                <h3 className="text-xl font-light text-amber-500 mb-2">
-                  Manual Review Required
-                </h3>
-                <p className="text-sm text-text-secondary leading-relaxed mb-4">
-                  Your identity verification requires administrative review. Please contact support or wait for approval.
-                </p>
-                {verifyingError && (
-                  <div className="mt-4 p-3 rounded-xl border border-red-500/20 bg-red-500/5 text-xs text-red-400">
-                    {verifyingError}
-                  </div>
-                )}
-              </div>
-            ) : currentStep === 'terms' ? (
-              <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8 space-y-6">
-                <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-30 pointer-events-none" />
-                <h3 className="text-lg font-light text-text-primary mb-2 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-                  Terms Acceptance
-                </h3>
-                <p className="text-xs text-text-secondary leading-relaxed">
-                  Before signing the document, you must agree to our Electronic Signature Terms & Conditions.
-                </p>
-                
-                <div className="p-4 rounded-2xl border border-border-color bg-bg-primary/5 text-xs text-text-secondary max-h-48 overflow-y-auto space-y-2 custom-scrollbar">
-                  <p className="font-semibold text-text-primary">Electronic Record and Disclosure</p>
-                  <p>By accepting these terms, you agree to conduct this transaction electronically and consent to the legally binding nature of your digital signature.</p>
-                  <p>All activities under this session are cryptographically logged for verification and audit trail purposes.</p>
+              ) : (
+                <div className="glass-panel rounded-3xl p-8 text-center text-text-secondary">
+                  No document payload available for this session.
                 </div>
+              )}
+            </motion.div>
 
-                {verifyingError && (
-                  <div className="p-3 rounded-xl border border-red-500/20 bg-red-500/5 text-xs text-red-400">
-                    {verifyingError}
+            {/* Right Column: Signature Actions */}
+            <motion.div
+              initial={{ opacity: 0, x: 30 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="space-y-6"
+            >
+              {/* Authentication Status Widget */}
+              {authStatus && (
+                <div className="glass-panel rounded-3xl p-6 space-y-4">
+                  <div className="flex items-center gap-2 border-b border-border-color pb-3 text-text-primary">
+                    <ShieldCheck className="h-5 w-5 text-accent animate-pulse" />
+                    <h3 className="text-xs font-semibold uppercase tracking-wider">
+                      Authentication Status
+                    </h3>
                   </div>
-                )}
 
-                <button
-                  onClick={handleAcceptTerms}
-                  disabled={isVerifying}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50"
-                >
-                  {isVerifying ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Accept Terms & Conditions'}
-                </button>
-              </div>
-            ) : currentStep === 'email_otp' ? (
-              <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8 space-y-6">
-                <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-30 pointer-events-none" />
-                <h3 className="text-lg font-light text-text-primary mb-2 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-                  Email Authentication
-                </h3>
-
-                {!emailOtpSent ? (
-                  <>
-                    <p className="text-xs text-text-secondary leading-relaxed">
-                      To secure your signing session, we must verify your email address. A one-time verification code (OTP) will be sent to:
-                    </p>
-                    <div className="p-4 rounded-2xl border border-border-color bg-bg-primary/5 text-center">
-                      <span className="text-sm font-semibold text-text-primary font-mono">{maskEmail(session.signer_email)}</span>
+                  <div className="space-y-2.5">
+                    {/* Terms Accepted Stage */}
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-text-secondary">Terms Accepted</span>
+                      {(!authStatus.requirements?.terms_acceptance?.required || authStatus.requirements?.terms_acceptance?.satisfied) ? (
+                        <span className="inline-flex items-center gap-1 font-medium text-emerald-400">
+                          ✓ Accepted
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 font-medium text-text-secondary/60">
+                          Pending
+                        </span>
+                      )}
                     </div>
 
-                    {verifyingError && (
-                      <div className="p-3 rounded-xl border border-red-500/20 bg-red-500/5 text-xs text-red-400">
-                        {verifyingError}
+                    {/* Identity Verified Stage */}
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-text-secondary">Identity Verified</span>
+                      {(!authStatus.requirements?.national_id?.required || authStatus.requirements?.national_id?.satisfied) ? (
+                        <span className="inline-flex items-center gap-1 font-medium text-emerald-400">
+                          ✓ Verified
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 font-medium text-text-secondary/60">
+                          Pending
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Face Verified Stage */}
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-text-secondary">Face Verified</span>
+                      {(!authStatus.requirements?.face_biometric?.required || authStatus.requirements?.face_biometric?.satisfied) ? (
+                        <span className="inline-flex items-center gap-1 font-medium text-emerald-400">
+                          ✓ Verified
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 font-medium text-text-secondary/60">
+                          Pending
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Representative Verified Stage */}
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-text-secondary">Representative Verified</span>
+                      {(!authStatus.requirements?.representative_match?.required || authStatus.requirements?.representative_match?.satisfied) ? (
+                        <span className="inline-flex items-center gap-1 font-medium text-emerald-400">
+                          ✓ Verified
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 font-medium text-text-secondary/60">
+                          Pending
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Final Status Banner */}
+                  <div className={`mt-4 p-4 rounded-2xl border text-center ${
+                    authStatus.authorized 
+                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                      : 'bg-red-500/10 border-red-500/20 text-red-400'
+                  }`}>
+                    <div className="text-xs font-bold uppercase tracking-wider">
+                      Final Status: {authStatus.authorized ? 'AUTHORIZED' : 'NOT AUTHORIZED'}
+                    </div>
+                    {(!authStatus.authorized && authStatus.reason) && (
+                      <div className="text-[10px] mt-1 text-red-300 font-medium">
+                        {authStatus.reason}
                       </div>
                     )}
+                  </div>
+                </div>
+              )}
 
-                    <button
-                      onClick={handleSendEmailOTP}
-                      disabled={isVerifying}
-                      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50"
+              {isCompleted ? (
+                <div className="glass-panel rounded-3xl p-8 text-center relative overflow-hidden group">
+                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-50" />
+                  <CheckCircle2 className="h-16 w-16 text-emerald-400 mx-auto mb-4" />
+                  <h3 className="text-xl font-light text-emerald-500 mb-2">
+                    {session?.participant_role === 'cc' ? 'Document Viewed' :
+                      session?.participant_role === 'reviewer' ? 'Review Completed' :
+                        session?.participant_role === 'approver' ? 'Approval Completed' :
+                          'Signature Verified'}
+                  </h3>
+                  <p className="text-sm text-text-secondary mb-6">
+                    {session?.participant_role === 'cc' ? 'You have successfully viewed this document.' :
+                      session?.participant_role === 'reviewer' ? 'Your review action has been registered and advanced.' :
+                        session?.participant_role === 'approver' ? 'Your approval action has been registered and advanced.' :
+                          'This document has been cryptographically sealed.'}
+                  </p>
+                  {signedDocumentUrl && (
+                    <a
+                      href={signedDocumentUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center justify-center gap-2 w-full rounded-2xl bg-emerald-500/20 border border-emerald-500/30 px-4 py-3 text-sm font-semibold text-emerald-500 transition-all hover:bg-emerald-500/30"
                     >
-                      {isVerifying ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Send Verification Code'}
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-xs text-text-secondary leading-relaxed">
-                      Please enter the verification code sent to <strong className="text-text-primary">{maskEmail(session.signer_email)}</strong>.
-                    </p>
-
-                    <div>
-                      <input
-                        type="text"
-                        value={emailOtpCode}
-                        onChange={(e) => setEmailOtpCode(e.target.value)}
-                        placeholder="Enter 6-digit code"
-                        maxLength={10}
-                        disabled={isVerifying}
-                        className={inputClass}
-                      />
+                      <Download className="h-4 w-4" /> Access Sealed Payload
+                    </a>
+                  )}
+                </div>
+              ) : verificationRequiresManualReview ? (
+                <div className="glass-panel rounded-3xl p-8 text-center relative overflow-hidden group">
+                  <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 to-transparent opacity-50" />
+                  <div className="relative mb-6 flex justify-center">
+                    <div className="absolute inset-0 rounded-full bg-amber-500/10 blur-xl animate-pulse w-20 h-20 mx-auto" />
+                    <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-amber-500/5 border border-amber-500/20 text-amber-500">
+                      <AlertCircle className="h-10 w-10 animate-bounce" />
                     </div>
+                  </div>
+                  <h3 className="text-xl font-light text-amber-500 mb-2">
+                    Manual Review Required
+                  </h3>
+                  <p className="text-sm text-text-secondary leading-relaxed mb-4">
+                    Your identity verification requires administrative review. Please contact support or wait for approval.
+                  </p>
+                  {verifyingError && (
+                    <div className="mt-4 p-3 rounded-xl border border-red-500/20 bg-red-500/5 text-xs text-red-400">
+                      {verifyingError}
+                    </div>
+                  )}
+                </div>
+              ) : currentStep === 'terms' ? (
+                <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8 space-y-6">
+                  <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-30 pointer-events-none" />
+                  <h3 className="text-lg font-light text-text-primary mb-2 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+                    Terms Acceptance
+                  </h3>
+                  <p className="text-xs text-text-secondary leading-relaxed">
+                    Before signing the document, you must agree to our Electronic Signature Terms & Conditions.
+                  </p>
 
-                    {verifyingError && (
-                      <div className="p-3 rounded-xl border border-red-500/20 bg-red-500/5 text-xs text-red-400">
-                        {verifyingError}
+                  <div className="p-4 rounded-2xl border border-border-color bg-bg-primary/5 text-xs text-text-secondary max-h-48 overflow-y-auto space-y-2 custom-scrollbar">
+                    <p className="font-semibold text-text-primary">Electronic Record and Disclosure</p>
+                    <p>By accepting these terms, you agree to conduct this transaction electronically and consent to the legally binding nature of your digital signature.</p>
+                    <p>All activities under this session are cryptographically logged for verification and audit trail purposes.</p>
+                  </div>
+
+                  {verifyingError && (
+                    <div className="p-3 rounded-xl border border-red-500/20 bg-red-500/5 text-xs text-red-400">
+                      {verifyingError}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleAcceptTerms}
+                    disabled={isVerifying}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50"
+                  >
+                    {isVerifying ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Accept Terms & Conditions'}
+                  </button>
+                </div>
+              ) : currentStep === 'email_otp' ? (
+                <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8 space-y-6">
+                  <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-30 pointer-events-none" />
+                  <h3 className="text-lg font-light text-text-primary mb-2 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+                    Email Authentication
+                  </h3>
+
+                  {!emailOtpSent ? (
+                    <>
+                      <p className="text-xs text-text-secondary leading-relaxed">
+                        To secure your signing session, we must verify your email address. A one-time verification code (OTP) will be sent to:
+                      </p>
+                      <div className="p-4 rounded-2xl border border-border-color bg-bg-primary/5 text-center">
+                        <span className="text-sm font-semibold text-text-primary font-mono">{maskEmail(session.signer_email)}</span>
                       </div>
-                    )}
 
-                    <div className="space-y-3">
-                      <button
-                        onClick={handleVerifyEmailOTP}
-                        disabled={isVerifying}
-                        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50"
-                      >
-                        {isVerifying ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Verify Code'}
-                      </button>
+                      {verifyingError && (
+                        <div className="p-3 rounded-xl border border-red-500/20 bg-red-500/5 text-xs text-red-400">
+                          {verifyingError}
+                        </div>
+                      )}
 
                       <button
                         onClick={handleSendEmailOTP}
                         disabled={isVerifying}
-                        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3.5 text-xs font-semibold uppercase tracking-wider transition-all duration-300 disabled:opacity-50"
+                        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50"
                       >
-                        Resend Code
+                        {isVerifying ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Send Verification Code'}
                       </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            ) : currentStep === 'national_id' ? (
-              <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8 space-y-6">
-                <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-30 pointer-events-none" />
-                <h3 className="text-lg font-light text-text-primary mb-2 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-                  National ID Verification
-                </h3>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs text-text-secondary leading-relaxed">
+                        Please enter the verification code sent to <strong className="text-text-primary">{maskEmail(session.signer_email)}</strong>.
+                      </p>
 
-                {!idPreview ? (
-                  <>
-                    <p className="text-xs text-text-secondary leading-relaxed">
-                      Upload a clear photo of your National ID or Iqama document. The OCR system will extract details and register your reference face.
-                    </p>
-                    <label className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border-color bg-card-bg p-8 cursor-pointer transition-all hover:border-cyan-500/30 hover:bg-cyan-500/5">
-                      <Upload className="h-8 w-8 text-accent/60 animate-bounce" />
-                      <div className="text-center">
-                        <p className="text-sm text-text-primary font-medium">Select ID Image</p>
-                        <p className="text-xs text-text-secondary mt-1">PNG or JPG formats supported</p>
+                      <div>
+                        <input
+                          type="text"
+                          value={emailOtpCode}
+                          onChange={(e) => setEmailOtpCode(e.target.value)}
+                          placeholder="Enter 6-digit code"
+                          maxLength={10}
+                          disabled={isVerifying}
+                          className={inputClass}
+                        />
                       </div>
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg"
-                        onChange={handleIdChange}
+
+                      {verifyingError && (
+                        <div className="p-3 rounded-xl border border-red-500/20 bg-red-500/5 text-xs text-red-400">
+                          {verifyingError}
+                        </div>
+                      )}
+
+                      <div className="space-y-3">
+                        <button
+                          onClick={handleVerifyEmailOTP}
+                          disabled={isVerifying}
+                          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50"
+                        >
+                          {isVerifying ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Verify Code'}
+                        </button>
+
+                        <button
+                          onClick={handleSendEmailOTP}
+                          disabled={isVerifying}
+                          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3.5 text-xs font-semibold uppercase tracking-wider transition-all duration-300 disabled:opacity-50"
+                        >
+                          Resend Code
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : currentStep === 'national_id' ? (
+                <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8 space-y-6">
+                  <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-30 pointer-events-none" />
+                  <h3 className="text-lg font-light text-text-primary mb-2 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+                    National ID Verification
+                  </h3>
+
+                  {!idPreview ? (
+                    <>
+                      <p className="text-xs text-text-secondary leading-relaxed">
+                        Upload a clear photo of your National ID or Iqama document. The OCR system will extract details and register your reference face.
+                      </p>
+                      <label className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border-color bg-card-bg p-8 cursor-pointer transition-all hover:border-cyan-500/30 hover:bg-cyan-500/5">
+                        <Upload className="h-8 w-8 text-accent/60 animate-bounce" />
+                        <div className="text-center">
+                          <p className="text-sm text-text-primary font-medium">Select ID Image</p>
+                          <p className="text-xs text-text-secondary mt-1">PNG or JPG formats supported</p>
+                        </div>
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg"
+                          onChange={handleIdChange}
+                          disabled={isVerifying}
+                          className="hidden"
+                        />
+                      </label>
+                    </>
+                  ) : (
+                    <>
+                      <div className="relative rounded-2xl border border-border-color bg-bg-primary/5 p-4 flex justify-center">
+                        <img src={idPreview} alt="ID preview" className="rounded-xl max-h-48 object-cover shadow-md border border-cyan-500/20" />
+                        <button
+                          onClick={handleRemoveId}
+                          className="absolute top-2 right-2 p-1.5 rounded-full bg-red-500/20 text-red-400 hover:bg-red-500/40 transition-colors"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {verifyingError && (
+                    <div className="p-3 rounded-xl border border-red-500/20 bg-red-500/5 text-xs text-red-400">
+                      {verifyingError}
+                    </div>
+                  )}
+
+                  {idPreview && (
+                    <div className="space-y-3">
+                      <button
+                        onClick={handleVerifyId}
                         disabled={isVerifying}
-                        className="hidden"
-                      />
-                    </label>
-                  </>
-                ) : (
-                  <>
-                    <div className="relative rounded-2xl border border-border-color bg-bg-primary/5 p-4 flex justify-center">
-                      <img src={idPreview} alt="ID preview" className="rounded-xl max-h-48 object-cover shadow-md border border-cyan-500/20" />
+                        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50"
+                      >
+                        {isVerifying ? (
+                          <>
+                            <RefreshCw className="h-4 w-4 animate-spin" />
+                            Processing ID...
+                          </>
+                        ) : 'Upload and Verify ID'}
+                      </button>
+
                       <button
                         onClick={handleRemoveId}
-                        className="absolute top-2 right-2 p-1.5 rounded-full bg-red-500/20 text-red-400 hover:bg-red-500/40 transition-colors"
+                        disabled={isVerifying}
+                        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3.5 text-xs font-semibold uppercase tracking-wider transition-all duration-300 disabled:opacity-50"
                       >
-                        <X className="h-4 w-4" />
+                        Choose Different Photo
                       </button>
                     </div>
-                  </>
-                )}
+                  )}
+                </div>
+              ) : currentStep === 'identity_summary_preview' ? (
+                <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8 space-y-6">
+                  <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-30 pointer-events-none" />
+                  <h3 className="text-lg font-light text-text-primary mb-2 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+                    Extracted Identity Summary
+                  </h3>
+                  <p className="text-xs text-text-secondary leading-relaxed">
+                    Below are the identity details extracted from your uploaded National ID. Please review them before proceeding.
+                  </p>
 
-                {verifyingError && (
-                  <div className="p-3 rounded-xl border border-red-500/20 bg-red-500/5 text-xs text-red-400">
-                    {verifyingError}
+                  <div className="space-y-3 p-4 rounded-2xl border border-border-color bg-bg-primary/5 text-xs">
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-text-secondary shrink-0">English Name</span>
+                      <span className="font-semibold text-text-primary text-right truncate" title={authStatus.identity_summary?.full_name_en}>
+                        {authStatus.identity_summary?.full_name_en || '—'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-text-secondary shrink-0">Arabic Name</span>
+                      <span className="font-semibold text-text-primary text-right font-sans truncate" dir="rtl" title={authStatus.identity_summary?.full_name_ar}>
+                        {authStatus.identity_summary?.full_name_ar || '—'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-text-secondary">National ID</span>
+                      <span className="font-semibold text-text-primary font-mono">
+                        {authStatus.identity_summary?.national_id || '—'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-text-secondary">Country</span>
+                      <span className="font-semibold text-text-primary capitalize">
+                        {authStatus.identity_summary?.country || '—'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-text-secondary">Document Type</span>
+                      <span className="font-semibold text-text-primary capitalize font-mono">
+                        {authStatus.identity_summary?.document_type || '—'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-text-secondary">Expiry Date</span>
+                      <span className="font-semibold text-text-primary font-mono">
+                        {authStatus.identity_summary?.expiry_date || '—'}
+                      </span>
+                    </div>
                   </div>
-                )}
 
-                {idPreview && (
-                  <div className="space-y-3">
-                    <button
-                      onClick={handleVerifyId}
-                      disabled={isVerifying}
-                      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50"
-                    >
-                      {isVerifying ? (
-                        <>
-                          <RefreshCw className="h-4 w-4 animate-spin" />
-                          Processing ID...
-                        </>
-                      ) : 'Upload and Verify ID'}
-                    </button>
-
-                    <button
-                      onClick={handleRemoveId}
-                      disabled={isVerifying}
-                      className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3.5 text-xs font-semibold uppercase tracking-wider transition-all duration-300 disabled:opacity-50"
-                    >
-                      Choose Different Photo
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : currentStep === 'face_biometric' ? (
-              <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8 space-y-6">
-                <style>{`
+                  <button
+                    onClick={() => setUserAcknowledgedIdentity(true)}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)]"
+                  >
+                    Proceed to Selfie Verification <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : currentStep === 'face_biometric' ? (
+                <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8 space-y-6">
+                  <style>{`
                   @keyframes scan {
                     0%, 100% { top: 10%; }
                     50% { top: 90%; }
@@ -1185,411 +1337,428 @@ export default function SignPage() {
                     animation: scan 3.5s ease-in-out infinite;
                   }
                 `}</style>
-                <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-30 pointer-events-none" />
-                
-                <div className="flex items-center justify-between border-b border-border-color pb-3">
-                  <h3 className="text-lg font-light text-text-primary flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-                    Face Biometric Verification
-                  </h3>
-                  <span className="inline-flex items-center gap-1 rounded-full border border-cyan-500/20 bg-cyan-500/5 px-2.5 py-0.5 text-[10px] font-bold uppercase text-cyan-400 tracking-wider">
-                    {selfiePreview ? "Photo Captured" : cameraActive ? "Camera Active" : "Camera Ready"}
-                  </span>
-                </div>
+                  <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-30 pointer-events-none" />
 
-                {selfiePreview ? (
-                  <>
-                    <div className="relative rounded-2xl border border-border-color bg-bg-primary/5 p-4 flex justify-center">
-                      <img src={selfiePreview} alt="Selfie preview" className="rounded-xl max-h-48 object-cover aspect-square shadow-md border border-cyan-500/20" />
+                  <div className="flex items-center justify-between border-b border-border-color pb-3">
+                    <h3 className="text-lg font-light text-text-primary flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+                      Face Biometric Verification
+                    </h3>
+                    <span className="inline-flex items-center gap-1 rounded-full border border-cyan-500/20 bg-cyan-500/5 px-2.5 py-0.5 text-[10px] font-bold uppercase text-cyan-400 tracking-wider">
+                      {selfiePreview ? "Photo Captured" : cameraActive ? "Camera Active" : "Camera Ready"}
+                    </span>
+                  </div>
+
+                  {selfiePreview ? (
+                    <>
+                      <div className="relative rounded-2xl border border-border-color bg-bg-primary/5 p-4 flex justify-center">
+                        <img src={selfiePreview} alt="Selfie preview" className="rounded-xl max-h-48 object-cover aspect-square shadow-md border border-cyan-500/20" />
+                      </div>
+
+                      <p className="text-[10px] text-text-secondary text-center leading-normal">
+                        Ensure your face is well-lit and not covered by hats, glasses, or masks.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      {useUploadFallback || cameraError ? (
+                        <div className="space-y-4">
+                          {cameraError && (
+                            <div className="p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 text-xs text-amber-400 text-center">
+                              Unable to access your camera.
+                            </div>
+                          )}
+                          <p className="text-xs text-text-secondary leading-relaxed">
+                            Upload a clear selfie. The matching engine will compare your facial features with the reference identity photo.
+                          </p>
+                          <label className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border-color bg-card-bg p-8 cursor-pointer transition-all hover:border-cyan-500/30 hover:bg-cyan-500/5">
+                            <Upload className="h-8 w-8 text-accent/60 animate-bounce" />
+                            <div className="text-center">
+                              <p className="text-sm text-text-primary font-medium">Select Selfie Image</p>
+                              <p className="text-xs text-text-secondary mt-1">PNG or JPG formats supported</p>
+                            </div>
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg"
+                              onChange={handleSelfieChange}
+                              disabled={isVerifying}
+                              className="hidden"
+                            />
+                          </label>
+                          {!cameraError && (
+                            <button
+                              onClick={startCamera}
+                              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3 text-xs font-semibold uppercase tracking-wider transition-all duration-300"
+                            >
+                              <Camera className="h-4 w-4" /> Use Live Camera
+                            </button>
+                          )}
+                        </div>
+                      ) : cameraActive ? (
+                        <div className="space-y-4">
+                          <div className="relative w-full aspect-square max-w-[280px] mx-auto overflow-hidden rounded-2xl border border-border-color bg-black/40 shadow-inner">
+                            <video
+                              ref={(el) => {
+                                videoRef.current = el
+                                console.log("[Camera Debug] videoRef.current (callback):", el)
+                                if (el && streamRef.current) {
+                                  if (el.srcObject !== streamRef.current) {
+                                    console.log("[Camera Debug] srcObject assignment:", streamRef.current)
+                                    el.srcObject = streamRef.current
+                                    console.log("[Camera Debug] videoRef.current.srcObject assigned correctly:", el.srcObject)
+                                  }
+                                  el.play()
+                                    .then(() => {
+                                      console.log("[Camera Debug] play() success")
+                                      console.log("[Camera Debug] video.videoWidth:", el.videoWidth)
+                                      console.log("[Camera Debug] video.videoHeight:", el.videoHeight)
+                                    })
+                                    .catch((e) => {
+                                      console.error("[Camera Debug] caught exception playing video:", e)
+                                    })
+                                }
+                              }}
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                                display: 'block'
+                              }}
+                              className="scale-x-[-1]"
+                              autoPlay
+                              playsInline
+                              muted
+                            />
+                            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                              <div className="w-2/3 h-2/3 rounded-[50%] border-2 border-dashed border-cyan-500/40 relative">
+                                <div className="absolute left-0 right-0 h-0.5 bg-cyan-400/50 shadow-[0_0_8px_#22d3ee] animate-scan" />
+                              </div>
+                            </div>
+                          </div>
+                          <p className="text-xs text-text-secondary text-center leading-normal animate-pulse">
+                            Position your face inside the guide.
+                          </p>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={capturePhoto}
+                              className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-3.5 text-xs font-bold uppercase tracking-wider transition-all duration-300"
+                            >
+                              <Camera className="h-4 w-4" /> Capture Photo
+                            </button>
+                            <button
+                              onClick={() => { stopCamera(); setUseUploadFallback(true); }}
+                              className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3.5 text-xs font-semibold uppercase tracking-wider transition-all duration-300"
+                            >
+                              Upload Photo
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-6 space-y-4">
+                          <div className="w-16 h-16 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mx-auto text-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.1)]">
+                            <Video className="h-8 w-8" />
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-text-primary">Camera Access Required</p>
+                            <p className="text-xs text-text-secondary px-4">We will use your camera to take a live selfie for verification.</p>
+                          </div>
+                          <div className="space-y-3 pt-2">
+                            <button
+                              onClick={startCamera}
+                              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-xs font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)]"
+                            >
+                              Start Camera
+                            </button>
+                            <button
+                              onClick={() => setUseUploadFallback(true)}
+                              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3 text-xs font-semibold uppercase tracking-wider transition-all duration-300"
+                            >
+                              Upload Existing Photo
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {verifyingError && (
+                    <div className="p-3 rounded-xl border border-red-500/20 bg-red-500/5 text-xs text-red-400">
+                      {verifyingError}
                     </div>
+                  )}
 
-                    <p className="text-[10px] text-text-secondary text-center leading-normal">
-                      Ensure your face is well-lit and not covered by hats, glasses, or masks.
+                  {!cameraActive && (
+                    <div className="space-y-3 pt-2 border-t border-border-color/30">
+                      <button
+                        onClick={handleVerifyFace}
+                        disabled={isVerifying || !selfiePreview}
+                        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400 disabled:shadow-none"
+                      >
+                        {isVerifying ? (
+                          <>
+                            <RefreshCw className="h-4 w-4 animate-spin" />
+                            Analyzing Features...
+                          </>
+                        ) : 'Verify Face'}
+                      </button>
+
+                      {selfiePreview && (
+                        <button
+                          onClick={useUploadFallback ? handleRemoveSelfie : handleRetake}
+                          disabled={isVerifying}
+                          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3.5 text-xs font-semibold uppercase tracking-wider transition-all duration-300 disabled:opacity-50"
+                        >
+                          {useUploadFallback ? 'Choose Different Photo' : 'Retake'}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : session?.participant_role === 'cc' ? (
+                <div className="glass-panel rounded-3xl p-8 text-center relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-30" />
+                  <User className="h-16 w-16 text-accent mx-auto mb-4" />
+                  <h3 className="text-xl font-light text-accent mb-2">View-Only Access</h3>
+                  <p className="text-sm text-text-secondary mb-6">
+                    You are a CC recipient on this workflow step. You have view-only authorization, and no further action is required from you.
+                  </p>
+                  <button
+                    onClick={() => handleAction('acknowledge')}
+                    disabled={isSigning}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50"
+                  >
+                    {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Acknowledge & Finish'}
+                  </button>
+                </div>
+              ) : session?.participant_role === 'reviewer' ? (
+                <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8 space-y-6">
+                  <h3 className="text-lg font-light text-text-primary mb-2 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+                    Reviewer Decisions
+                  </h3>
+                  <p className="text-xs text-text-secondary">
+                    Please review the document in the viewport and select an action.
+                  </p>
+
+                  <div className="space-y-4 pt-2">
+                    <button
+                      onClick={() => handleAction('approve')}
+                      disabled={isSigning}
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(16,185,129,0.2)] disabled:opacity-50"
+                    >
+                      {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Approve Document'}
+                    </button>
+
+                    <button
+                      onClick={() => handleAction('return')}
+                      disabled={isSigning}
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 hover:shadow-[0_0_20px_rgba(245,158,11,0.1)] px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 disabled:opacity-50"
+                    >
+                      {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Return Document'}
+                    </button>
+                  </div>
+                </div>
+              ) : session?.participant_role === 'approver' ? (
+                <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8 space-y-6">
+                  <h3 className="text-lg font-light text-text-primary mb-2 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+                    Approver Decisions
+                  </h3>
+                  <p className="text-xs text-text-secondary">
+                    Please review the document in the viewport and select an action.
+                  </p>
+
+                  <div className="space-y-4 pt-2">
+                    <button
+                      onClick={() => handleAction('approve')}
+                      disabled={isSigning}
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(16,185,129,0.2)] disabled:opacity-50"
+                    >
+                      {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Approve Document'}
+                    </button>
+
+                    <button
+                      onClick={() => handleAction('reject')}
+                      disabled={isSigning}
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-500/30 bg-red-500/10 text-red-500 hover:bg-red-500/20 hover:shadow-[0_0_20px_rgba(239,68,68,0.1)] px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 disabled:opacity-50"
+                    >
+                      {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Reject Document'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                authStatus && !authStatus.authorized ? (
+                  <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8 text-center space-y-6 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-br from-red-500/10 to-transparent opacity-30 pointer-events-none" />
+                    <div className="relative mb-4 flex justify-center">
+                      <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-red-500/5 border border-red-500/20 text-red-500 shadow-[0_0_30px_rgba(239,68,68,0.1)]">
+                        <ShieldCheck className="h-10 w-10 text-red-400" />
+                      </div>
+                    </div>
+                    <h3 className="text-xl font-light text-red-500">Signature Controls Locked</h3>
+                    <p className="text-xs text-text-secondary leading-relaxed max-w-sm mx-auto">
+                      Crypto signature controls are disabled because you are not authorized to sign this contract.
                     </p>
+                    
+                    <div className="p-4 rounded-2xl border border-red-500/20 bg-red-500/5 text-xs font-semibold text-red-400 max-w-sm mx-auto">
+                      Reason: {authStatus.reason || "Verification requirements not satisfied."}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8">
+                    <h3 className="text-lg font-light text-text-primary mb-6 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+                      Input Signature
+                    </h3>
+
+            {/* Signature Method Tabs */}
+            <div className="flex gap-2 p-1 rounded-2xl bg-bg-primary/5 border border-border-color mb-8">
+              {SIGNATURE_METHODS.map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => setSignatureMethod(id)}
+                  className={`relative flex-1 flex flex-col items-center justify-center gap-2 py-3 rounded-xl text-xs font-medium transition-all duration-300 ${signatureMethod === id
+                      ? 'text-accent bg-cyan-500/10'
+                      : 'text-text-secondary hover:text-text-primary hover:bg-bg-primary/20'
+                    }`}
+                >
+                  {signatureMethod === id && (
+                    <motion.div layoutId="activeTab" className="absolute inset-0 rounded-xl border border-cyan-500/30 pointer-events-none" />
+                  )}
+                  <Icon className="h-5 w-5" />
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <AnimatePresence mode="wait">
+              {/* Typed */}
+              {signatureMethod === 'typed' && (
+                <motion.div
+                  key="typed"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-6"
+                >
+                  <div>
+                    <input
+                      type="text"
+                      value={typedSignature}
+                      onChange={(e) => setTypedSignature(e.target.value)}
+                      placeholder="Type your full name"
+                      disabled={isSigning}
+                      className={inputClass}
+                    />
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Upload */}
+              {signatureMethod === 'upload' && (
+                <motion.div
+                  key="upload"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-6"
+                >
+                  {!uploadPreview ? (
+                    <label className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border-color bg-card-bg p-8 cursor-pointer transition-all hover:border-cyan-500/30 hover:bg-cyan-500/5">
+                      <Upload className="h-8 w-8 text-accent/60" />
+                      <div className="text-center">
+                        <p className="text-sm text-text-primary">Select Image File</p>
+                        <p className="text-xs text-text-secondary mt-1">PNG or JPG formats supported</p>
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg"
+                        onChange={handleUploadChange}
+                        disabled={isSigning}
+                        className="hidden"
+                      />
+                    </label>
+                  ) : (
+                    <div className="relative rounded-2xl border border-border-color bg-bg-primary/5 p-4">
+                      <img src={uploadPreview} alt="Signature preview" className="mx-auto max-h-32 object-contain" />
+                      <button
+                        onClick={handleRemoveUpload}
+                        className="absolute top-2 right-2 p-1.5 rounded-full bg-red-500/20 text-red-400 hover:bg-red-500/40 transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+
+              {/* Draw */}
+              {signatureMethod === 'draw' && (
+                <motion.div
+                  key="draw"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-4"
+                >
+                  <div className="rounded-2xl border border-border-color bg-white overflow-hidden shadow-inner relative">
+                    <SignatureCanvas
+                      ref={sigPadRef}
+                      penColor="black"
+                      minWidth={2}
+                      maxWidth={3}
+                      backgroundColor="white"
+                      onEnd={handleDrawEnd}
+                      canvasProps={{
+                        className: 'w-full',
+                        style: { height: '200px', display: 'block', touchAction: 'none' },
+                      }}
+                    />
+                  </div>
+                  <div className="flex justify-between items-center px-1">
+                    <span className="text-xs text-text-secondary">Trace within the bounds</span>
+                    <button
+                      onClick={handleClearCanvas}
+                      disabled={isSigning || isDrawEmpty}
+                      className="text-xs font-medium text-text-secondary hover:text-text-primary disabled:opacity-50"
+                    >
+                      Clear Traces
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={handleSign}
+              disabled={isSigning}
+              className="group relative mt-8 flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-cyan-500 px-4 py-4 text-sm font-bold text-black transition-all hover:bg-cyan-400 hover:shadow-[0_0_30px_rgba(34,211,238,0.4)] disabled:cursor-not-allowed disabled:opacity-50 uppercase tracking-widest"
+            >
+              <span className="relative z-10 flex items-center gap-2">
+                {isSigning ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    Committing...
                   </>
                 ) : (
                   <>
-                    {useUploadFallback || cameraError ? (
-                      <div className="space-y-4">
-                        {cameraError && (
-                          <div className="p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 text-xs text-amber-400 text-center">
-                            Unable to access your camera.
-                          </div>
-                        )}
-                        <p className="text-xs text-text-secondary leading-relaxed">
-                          Upload a clear selfie. The matching engine will compare your facial features with the reference identity photo.
-                        </p>
-                        <label className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border-color bg-card-bg p-8 cursor-pointer transition-all hover:border-cyan-500/30 hover:bg-cyan-500/5">
-                          <Upload className="h-8 w-8 text-accent/60 animate-bounce" />
-                          <div className="text-center">
-                            <p className="text-sm text-text-primary font-medium">Select Selfie Image</p>
-                            <p className="text-xs text-text-secondary mt-1">PNG or JPG formats supported</p>
-                          </div>
-                          <input
-                            type="file"
-                            accept="image/png,image/jpeg"
-                            onChange={handleSelfieChange}
-                            disabled={isVerifying}
-                            className="hidden"
-                          />
-                        </label>
-                        {!cameraError && (
-                          <button
-                            onClick={startCamera}
-                            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3 text-xs font-semibold uppercase tracking-wider transition-all duration-300"
-                          >
-                            <Camera className="h-4 w-4" /> Use Live Camera
-                          </button>
-                        )}
-                      </div>
-                    ) : cameraActive ? (
-                      <div className="space-y-4">
-                        <div className="relative w-full aspect-square max-w-[280px] mx-auto overflow-hidden rounded-2xl border border-border-color bg-black/40 shadow-inner">
-                          <video
-                            ref={(el) => {
-                              videoRef.current = el
-                              console.log("[Camera Debug] videoRef.current (callback):", el)
-                              if (el && streamRef.current) {
-                                if (el.srcObject !== streamRef.current) {
-                                  console.log("[Camera Debug] srcObject assignment:", streamRef.current)
-                                  el.srcObject = streamRef.current
-                                  console.log("[Camera Debug] videoRef.current.srcObject assigned correctly:", el.srcObject)
-                                }
-                                el.play()
-                                  .then(() => {
-                                    console.log("[Camera Debug] play() success")
-                                    console.log("[Camera Debug] video.videoWidth:", el.videoWidth)
-                                    console.log("[Camera Debug] video.videoHeight:", el.videoHeight)
-                                  })
-                                  .catch((e) => {
-                                    console.error("[Camera Debug] caught exception playing video:", e)
-                                  })
-                              }
-                            }}
-                            style={{
-                              width: '100%',
-                              height: '100%',
-                              objectFit: 'cover',
-                              display: 'block'
-                            }}
-                            className="scale-x-[-1]"
-                            autoPlay
-                            playsInline
-                            muted
-                          />
-                          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                            <div className="w-2/3 h-2/3 rounded-[50%] border-2 border-dashed border-cyan-500/40 relative">
-                              <div className="absolute left-0 right-0 h-0.5 bg-cyan-400/50 shadow-[0_0_8px_#22d3ee] animate-scan" />
-                            </div>
-                          </div>
-                        </div>
-                        <p className="text-xs text-text-secondary text-center leading-normal animate-pulse">
-                          Position your face inside the guide.
-                        </p>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={capturePhoto}
-                            className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-3.5 text-xs font-bold uppercase tracking-wider transition-all duration-300"
-                          >
-                            <Camera className="h-4 w-4" /> Capture Photo
-                          </button>
-                          <button
-                            onClick={() => { stopCamera(); setUseUploadFallback(true); }}
-                            className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3.5 text-xs font-semibold uppercase tracking-wider transition-all duration-300"
-                          >
-                            Upload Photo
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-center py-6 space-y-4">
-                        <div className="w-16 h-16 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mx-auto text-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.1)]">
-                          <Video className="h-8 w-8" />
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium text-text-primary">Camera Access Required</p>
-                          <p className="text-xs text-text-secondary px-4">We will use your camera to take a live selfie for verification.</p>
-                        </div>
-                        <div className="space-y-3 pt-2">
-                          <button
-                            onClick={startCamera}
-                            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-xs font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)]"
-                          >
-                            Start Camera
-                          </button>
-                          <button
-                            onClick={() => setUseUploadFallback(true)}
-                            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3 text-xs font-semibold uppercase tracking-wider transition-all duration-300"
-                          >
-                            Upload Existing Photo
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                    Commit Signature
                   </>
                 )}
+              </span>
+              <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent group-hover:animate-[shimmer_1.5s_infinite]" />
+            </motion.button>
 
-                {verifyingError && (
-                  <div className="p-3 rounded-xl border border-red-500/20 bg-red-500/5 text-xs text-red-400">
-                    {verifyingError}
-                  </div>
-                )}
-
-                {!cameraActive && (
-                  <div className="space-y-3 pt-2 border-t border-border-color/30">
-                    <button
-                      onClick={handleVerifyFace}
-                      disabled={isVerifying || !selfiePreview}
-                      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400 disabled:shadow-none"
-                    >
-                      {isVerifying ? (
-                        <>
-                          <RefreshCw className="h-4 w-4 animate-spin" />
-                          Analyzing Features...
-                        </>
-                      ) : 'Verify Face'}
-                    </button>
-
-                    {selfiePreview && (
-                      <button
-                        onClick={useUploadFallback ? handleRemoveSelfie : handleRetake}
-                        disabled={isVerifying}
-                        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3.5 text-xs font-semibold uppercase tracking-wider transition-all duration-300 disabled:opacity-50"
-                      >
-                        {useUploadFallback ? 'Choose Different Photo' : 'Retake'}
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            ) : session?.participant_role === 'cc' ? (
-              <div className="glass-panel rounded-3xl p-8 text-center relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-30" />
-                <User className="h-16 w-16 text-accent mx-auto mb-4" />
-                <h3 className="text-xl font-light text-accent mb-2">View-Only Access</h3>
-                <p className="text-sm text-text-secondary mb-6">
-                  You are a CC recipient on this workflow step. You have view-only authorization, and no further action is required from you.
-                </p>
-                <button
-                  onClick={() => handleAction('acknowledge')}
-                  disabled={isSigning}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50"
-                >
-                  {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Acknowledge & Finish'}
-                </button>
-              </div>
-            ) : session?.participant_role === 'reviewer' ? (
-              <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8 space-y-6">
-                <h3 className="text-lg font-light text-text-primary mb-2 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-                  Reviewer Decisions
-                </h3>
-                <p className="text-xs text-text-secondary">
-                  Please review the document in the viewport and select an action.
-                </p>
-
-                <div className="space-y-4 pt-2">
-                  <button
-                    onClick={() => handleAction('approve')}
-                    disabled={isSigning}
-                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(16,185,129,0.2)] disabled:opacity-50"
-                  >
-                    {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Approve Document'}
-                  </button>
-                  
-                  <button
-                    onClick={() => handleAction('return')}
-                    disabled={isSigning}
-                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 hover:shadow-[0_0_20px_rgba(245,158,11,0.1)] px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 disabled:opacity-50"
-                  >
-                    {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Return Document'}
-                  </button>
-                </div>
-              </div>
-            ) : session?.participant_role === 'approver' ? (
-              <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8 space-y-6">
-                <h3 className="text-lg font-light text-text-primary mb-2 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-                  Approver Decisions
-                </h3>
-                <p className="text-xs text-text-secondary">
-                  Please review the document in the viewport and select an action.
-                </p>
-
-                <div className="space-y-4 pt-2">
-                  <button
-                    onClick={() => handleAction('approve')}
-                    disabled={isSigning}
-                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(16,185,129,0.2)] disabled:opacity-50"
-                  >
-                    {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Approve Document'}
-                  </button>
-                  
-                  <button
-                    onClick={() => handleAction('reject')}
-                    disabled={isSigning}
-                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-500/30 bg-red-500/10 text-red-500 hover:bg-red-500/20 hover:shadow-[0_0_20px_rgba(239,68,68,0.1)] px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 disabled:opacity-50"
-                  >
-                    {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Reject Document'}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8">
-                
-                <h3 className="text-lg font-light text-text-primary mb-6 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-                  Input Signature
-                </h3>
-
-                {/* Signature Method Tabs */}
-                <div className="flex gap-2 p-1 rounded-2xl bg-bg-primary/5 border border-border-color mb-8">
-                  {SIGNATURE_METHODS.map(({ id, label, icon: Icon }) => (
-                    <button
-                      key={id}
-                      onClick={() => setSignatureMethod(id)}
-                      className={`relative flex-1 flex flex-col items-center justify-center gap-2 py-3 rounded-xl text-xs font-medium transition-all duration-300 ${
-                        signatureMethod === id 
-                          ? 'text-accent bg-cyan-500/10' 
-                          : 'text-text-secondary hover:text-text-primary hover:bg-bg-primary/20'
-                      }`}
-                    >
-                      {signatureMethod === id && (
-                        <motion.div layoutId="activeTab" className="absolute inset-0 rounded-xl border border-cyan-500/30 pointer-events-none" />
-                      )}
-                      <Icon className="h-5 w-5" />
-                      {label}
-                    </button>
-                  ))}
-                </div>
-
-                <AnimatePresence mode="wait">
-                  {/* Typed */}
-                  {signatureMethod === 'typed' && (
-                    <motion.div 
-                      key="typed"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="space-y-6"
-                    >
-                      <div>
-                        <input
-                          type="text"
-                          value={typedSignature}
-                          onChange={(e) => setTypedSignature(e.target.value)}
-                          placeholder="Type your full name"
-                          disabled={isSigning}
-                          className={inputClass}
-                        />
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {/* Upload */}
-                  {signatureMethod === 'upload' && (
-                    <motion.div 
-                      key="upload"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="space-y-6"
-                    >
-                      {!uploadPreview ? (
-                        <label className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border-color bg-card-bg p-8 cursor-pointer transition-all hover:border-cyan-500/30 hover:bg-cyan-500/5">
-                          <Upload className="h-8 w-8 text-accent/60" />
-                          <div className="text-center">
-                            <p className="text-sm text-text-primary">Select Image File</p>
-                            <p className="text-xs text-text-secondary mt-1">PNG or JPG formats supported</p>
-                          </div>
-                          <input
-                            type="file"
-                            accept="image/png,image/jpeg"
-                            onChange={handleUploadChange}
-                            disabled={isSigning}
-                            className="hidden"
-                          />
-                        </label>
-                      ) : (
-                        <div className="relative rounded-2xl border border-border-color bg-bg-primary/5 p-4">
-                          <img src={uploadPreview} alt="Signature preview" className="mx-auto max-h-32 object-contain" />
-                          <button
-                            onClick={handleRemoveUpload}
-                            className="absolute top-2 right-2 p-1.5 rounded-full bg-red-500/20 text-red-400 hover:bg-red-500/40 transition-colors"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
-                      )}
-                    </motion.div>
-                  )}
-
-                  {/* Draw */}
-                  {signatureMethod === 'draw' && (
-                    <motion.div 
-                      key="draw"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="space-y-4"
-                    >
-                      <div className="rounded-2xl border border-border-color bg-white overflow-hidden shadow-inner relative">
-                        <SignatureCanvas
-                          ref={sigPadRef}
-                          penColor="black"
-                          minWidth={2}
-                          maxWidth={3}
-                          backgroundColor="white"
-                          onEnd={handleDrawEnd}
-                          canvasProps={{
-                            className: 'w-full',
-                            style: { height: '200px', display: 'block', touchAction: 'none' },
-                          }}
-                        />
-                      </div>
-                      <div className="flex justify-between items-center px-1">
-                        <span className="text-xs text-text-secondary">Trace within the bounds</span>
-                        <button
-                          onClick={handleClearCanvas}
-                          disabled={isSigning || isDrawEmpty}
-                          className="text-xs font-medium text-text-secondary hover:text-text-primary disabled:opacity-50"
-                        >
-                          Clear Traces
-                        </button>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={handleSign}
-                  disabled={isSigning}
-                  className="group relative mt-8 flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-cyan-500 px-4 py-4 text-sm font-bold text-black transition-all hover:bg-cyan-400 hover:shadow-[0_0_30px_rgba(34,211,238,0.4)] disabled:cursor-not-allowed disabled:opacity-50 uppercase tracking-widest"
-                >
-                  <span className="relative z-10 flex items-center gap-2">
-                    {isSigning ? (
-                      <>
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                        Committing...
-                      </>
-                    ) : (
-                      <>
-                        Commit Signature
-                      </>
-                    )}
-                  </span>
-                  <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent group-hover:animate-[shimmer_1.5s_infinite]" />
-                </motion.button>
-                
-                {successMessage && (
-                  <div className="mt-4 text-center text-sm font-medium text-emerald-400">
-                    {successMessage}
-                  </div>
-                )}
+            {successMessage && (
+              <div className="mt-4 text-center text-sm font-medium text-emerald-400">
+                {successMessage}
               </div>
             )}
+          </div>
+        ) )
+        }
           </motion.div>
         </div>
         )

@@ -1,0 +1,90 @@
+{
+  "iteration": 1,
+  "timestamp": "2026-07-07T22:02:08.790263",
+  "metrics": {
+    "threshold": 0.6,
+    "genuine_match_rate_pct": 0.0,
+    "impostor_rejection_rate_pct": 0.0,
+    "avg_genuine_similarity": 0.0,
+    "avg_impostor_similarity": 0.0,
+    "true_accepts": 0,
+    "false_rejects": 0,
+    "true_rejects": 0,
+    "false_accepts": 0,
+    "genuine_retries": 4,
+    "impostor_retries": 2,
+    "retry_rate_pct": 100.0,
+    "total_genuine_pairs": 4,
+    "total_impostor_pairs": 2
+  },
+  "genuine_pairs": [
+    {
+      "id": "id.jpeg",
+      "selfie": "selfie_1.jpg",
+      "decision": "RETRY",
+      "score": 0.0,
+      "reason": "Quality check failed on ID image: Face crop area is too blurry (sharpness score: 20.27 < 50.0).",
+      "retry": true,
+      "stage_failures": [
+        "face_quality[id_image]: Face crop area is too blurry (sharpness score: 20.27 < 50.0)."
+      ]
+    },
+    {
+      "id": "id.jpeg",
+      "selfie": "selfie_2.jpg",
+      "decision": "RETRY",
+      "score": 0.0,
+      "reason": "Quality check failed on ID image: Face crop area is too blurry (sharpness score: 20.27 < 50.0).",
+      "retry": true,
+      "stage_failures": [
+        "face_quality[id_image]: Face crop area is too blurry (sharpness score: 20.27 < 50.0)."
+      ]
+    },
+    {
+      "id": "id.jpeg",
+      "selfie": "selfie_3.jpg",
+      "decision": "RETRY",
+      "score": 0.0,
+      "reason": "Quality check failed on ID image: Face crop area is too blurry (sharpness score: 20.27 < 50.0).",
+      "retry": true,
+      "stage_failures": [
+        "face_quality[id_image]: Face crop area is too blurry (sharpness score: 20.27 < 50.0)."
+      ]
+    },
+    {
+      "id": "id.jpeg",
+      "selfie": "selfie_4.jpg",
+      "decision": "RETRY",
+      "score": 0.0,
+      "reason": "Quality check failed on ID image: Face crop area is too blurry (sharpness score: 20.27 < 50.0).",
+      "retry": true,
+      "stage_failures": [
+        "face_quality[id_image]: Face crop area is too blurry (sharpness score: 20.27 < 50.0)."
+      ]
+    }
+  ],
+  "impostor_pairs": [
+    {
+      "id": "id.jpeg",
+      "selfie": "friend_1.JPG",
+      "decision": "RETRY",
+      "score": 0.0,
+      "reason": "Quality check failed on ID image: Face crop area is too blurry (sharpness score: 20.27 < 50.0).",
+      "retry": true,
+      "stage_failures": [
+        "face_quality[id_image]: Face crop area is too blurry (sharpness score: 20.27 < 50.0)."
+      ]
+    },
+    {
+      "id": "id.jpeg",
+      "selfie": "friend_2.jpeg",
+      "decision": "RETRY",
+      "score": 0.0,
+      "reason": "Quality check failed on ID image: Face crop area is too blurry (sharpness score: 20.27 < 50.0).",
+      "retry": true,
+      "stage_failures": [
+        "face_quality[id_image]: Face crop area is too blurry (sharpness score: 20.27 < 50.0)."
+      ]
+    }
+  ]
+}

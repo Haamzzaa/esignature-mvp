@@ -113,7 +113,7 @@ class ESignatureProviderRegistry:
             provider_name = esign_config.notification_provider.lower()
 
             def _factory():
-                if provider_name in ('email', 'smtp'):
+                if provider_name in ('email', 'smtp', 'brevo'):
                     from esign.providers.notification import SMTPEmailNotificationProvider
                     return SMTPEmailNotificationProvider()
                 else:

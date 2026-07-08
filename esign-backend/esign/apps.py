@@ -31,15 +31,17 @@ class EsignConfig(AppConfig):
                 "          ╚══════════════════════════════════════════════╝\n"
                 "          module=%s  version=%s  environment=%s\n"
                 "          api_version=%s\n"
-                "          providers.ocr=%s  providers.face=%s\n"
-                "          providers.liveness=%s  providers.notification=%s\n"
+                "          providers.identity_ocr=%s  providers.contract_ocr=%s\n"
+                "          providers.face=%s  providers.liveness=%s\n"
+                "          providers.notification=%s\n"
                 "          events_enabled=%s  webhooks_enabled=%s\n"
                 "          event_logging=%s",
                 esign_config.module_name,
                 "1.0.0",
                 env,
                 esign_config.api_version,
-                esign_config.ocr_provider,
+                esign_config.identity_ocr_provider,
+                esign_config.contract_ocr_provider,
                 esign_config.face_provider,
                 esign_config.liveness_provider,
                 esign_config.notification_provider,

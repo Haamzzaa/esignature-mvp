@@ -8,7 +8,7 @@ from esign.models import Document, ContractAnalysis
 
 logger = logging.getLogger(__name__)
 
-def extract_contract_authorization(pdf_path):
+def extract_contract_authorization(pdf_path, document=None):
     """
     Extracts representative authorization details from the given PDF contract.
     Utilizes file-hash-based caching in ContractAnalysis to minimize API token usage.
@@ -26,7 +26,7 @@ def extract_contract_authorization(pdf_path):
             for chunk in iter(lambda: f.read(65536), b''):
                 hasher.update(chunk)
         file_hash = hasher.hexdigest()
-    except Exception as e:
+    except OSError as e:
         return {
             "error": "contract_ocr_failed",
             "message": f"Failed to calculate file hash: {str(e)}"
@@ -55,7 +55,7 @@ def extract_contract_authorization(pdf_path):
         with open(pdf_path, "rb") as f:
             pdf_bytes = f.read()
         encoded_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-    except Exception as e:
+    except OSError as e:
         logger.info("Contract OCR failed")
         return {
             "error": "contract_ocr_failed",
@@ -138,7 +138,7 @@ def extract_contract_authorization(pdf_path):
                 "message": f"Gemini API request failed with status code {response.status_code}."
             }
         logger.info("Contract OCR completed")
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         logger.info("Contract OCR failed")
         return {
             "error": "contract_ocr_failed",
@@ -172,7 +172,7 @@ def extract_contract_authorization(pdf_path):
                 text = "\n".join(lines[1:-1]).strip()
 
         ocr_data = json.loads(text)
-    except Exception as e:
+    except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
         logger.info("Contract OCR failed")
         return {
             "error": "json_parsing_failed",
@@ -182,7 +182,9 @@ def extract_contract_authorization(pdf_path):
     # 6. Storage in ContractAnalysis
     try:
         # Get or create Document
-        doc = Document.objects.filter(file_hash=file_hash).first()
+        doc = document
+        if not doc:
+            doc = Document.objects.filter(file_hash=file_hash).first()
         if not doc:
             from django.core.files import File
             with open(pdf_path, 'rb') as f:

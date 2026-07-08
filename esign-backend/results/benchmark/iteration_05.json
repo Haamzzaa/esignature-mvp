@@ -1,0 +1,78 @@
+{
+  "iteration": 5,
+  "timestamp": "2026-07-07T22:13:37.514204",
+  "metrics": {
+    "threshold": 0.53,
+    "genuine_match_rate_pct": 100.0,
+    "impostor_rejection_rate_pct": 100.0,
+    "avg_genuine_similarity": 0.5707,
+    "avg_impostor_similarity": 0.2463,
+    "true_accepts": 4,
+    "false_rejects": 0,
+    "true_rejects": 2,
+    "false_accepts": 0,
+    "genuine_retries": 0,
+    "impostor_retries": 0,
+    "retry_rate_pct": 0.0,
+    "total_genuine_pairs": 4,
+    "total_impostor_pairs": 2
+  },
+  "genuine_pairs": [
+    {
+      "id": "id.jpeg",
+      "selfie": "selfie_1.jpg",
+      "decision": "MATCH",
+      "score": 0.5762332081794739,
+      "reason": "Face similarity matches successfully (similarity 0.5762 >= threshold 0.53).",
+      "retry": false,
+      "stage_failures": []
+    },
+    {
+      "id": "id.jpeg",
+      "selfie": "selfie_2.jpg",
+      "decision": "MATCH",
+      "score": 0.5689390897750854,
+      "reason": "Face similarity matches successfully (similarity 0.5689 >= threshold 0.53).",
+      "retry": false,
+      "stage_failures": []
+    },
+    {
+      "id": "id.jpeg",
+      "selfie": "selfie_3.jpg",
+      "decision": "MATCH",
+      "score": 0.5575286746025085,
+      "reason": "Face similarity matches successfully (similarity 0.5575 >= threshold 0.53).",
+      "retry": false,
+      "stage_failures": []
+    },
+    {
+      "id": "id.jpeg",
+      "selfie": "selfie_4.jpg",
+      "decision": "MATCH",
+      "score": 0.5802242159843445,
+      "reason": "Face similarity matches successfully (similarity 0.5802 >= threshold 0.53).",
+      "retry": false,
+      "stage_failures": []
+    }
+  ],
+  "impostor_pairs": [
+    {
+      "id": "id.jpeg",
+      "selfie": "friend_1.JPG",
+      "decision": "NO_MATCH",
+      "score": 0.22873198986053467,
+      "reason": "Biometric mismatch. Score 0.2287 is significantly below threshold 0.53.",
+      "retry": false,
+      "stage_failures": []
+    },
+    {
+      "id": "id.jpeg",
+      "selfie": "friend_2.jpeg",
+      "decision": "NO_MATCH",
+      "score": 0.26385560631752014,
+      "reason": "Biometric mismatch. Score 0.2639 is significantly below threshold 0.53.",
+      "retry": false,
+      "stage_failures": []
+    }
+  ]
+}

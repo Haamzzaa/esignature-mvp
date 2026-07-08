@@ -140,6 +140,7 @@ def check_otp_lockout(participant_id):
         try:
             cache.delete(lock_key)
         except Exception:
+            # Safely ignore cache deletion errors as lock expiration is handled by expiry times
             pass
     return False, None
 

@@ -1,0 +1,78 @@
+{
+  "iteration": 3,
+  "timestamp": "2026-07-07T22:07:09.851168",
+  "metrics": {
+    "threshold": 0.6,
+    "genuine_match_rate_pct": 0.0,
+    "impostor_rejection_rate_pct": 100.0,
+    "avg_genuine_similarity": 0.5044,
+    "avg_impostor_similarity": 0.2484,
+    "true_accepts": 0,
+    "false_rejects": 4,
+    "true_rejects": 2,
+    "false_accepts": 0,
+    "genuine_retries": 0,
+    "impostor_retries": 0,
+    "retry_rate_pct": 0.0,
+    "total_genuine_pairs": 4,
+    "total_impostor_pairs": 2
+  },
+  "genuine_pairs": [
+    {
+      "id": "id.jpeg",
+      "selfie": "selfie_1.jpg",
+      "decision": "MANUAL_REVIEW",
+      "score": 0.519845724105835,
+      "reason": "Biometric anomaly. Score 0.5198 is close but below threshold 0.60.",
+      "retry": false,
+      "stage_failures": []
+    },
+    {
+      "id": "id.jpeg",
+      "selfie": "selfie_2.jpg",
+      "decision": "MANUAL_REVIEW",
+      "score": 0.5036829113960266,
+      "reason": "Biometric anomaly. Score 0.5037 is close but below threshold 0.60.",
+      "retry": false,
+      "stage_failures": []
+    },
+    {
+      "id": "id.jpeg",
+      "selfie": "selfie_3.jpg",
+      "decision": "MANUAL_REVIEW",
+      "score": 0.49268773198127747,
+      "reason": "Biometric anomaly. Score 0.4927 is close but below threshold 0.60.",
+      "retry": false,
+      "stage_failures": []
+    },
+    {
+      "id": "id.jpeg",
+      "selfie": "selfie_4.jpg",
+      "decision": "MANUAL_REVIEW",
+      "score": 0.5012475848197937,
+      "reason": "Biometric anomaly. Score 0.5012 is close but below threshold 0.60.",
+      "retry": false,
+      "stage_failures": []
+    }
+  ],
+  "impostor_pairs": [
+    {
+      "id": "id.jpeg",
+      "selfie": "friend_1.JPG",
+      "decision": "NO_MATCH",
+      "score": 0.19877050817012787,
+      "reason": "Biometric mismatch. Score 0.1988 is significantly below threshold 0.60.",
+      "retry": false,
+      "stage_failures": []
+    },
+    {
+      "id": "id.jpeg",
+      "selfie": "friend_2.jpeg",
+      "decision": "NO_MATCH",
+      "score": 0.2980472445487976,
+      "reason": "Biometric mismatch. Score 0.2980 is significantly below threshold 0.60.",
+      "retry": false,
+      "stage_failures": []
+    }
+  ]
+}

@@ -62,6 +62,14 @@ class ESignatureConfig:
         return str(getattr(settings, "ESIGN_OCR_PROVIDER", "paddle"))
 
     @property
+    def identity_ocr_provider(self) -> str:
+        return str(getattr(settings, "IDENTITY_OCR_PROVIDER", "gemini"))
+
+    @property
+    def contract_ocr_provider(self) -> str:
+        return str(getattr(settings, "CONTRACT_OCR_PROVIDER", "gemini"))
+
+    @property
     def ocr_timeout(self) -> int:
         return int(getattr(settings, "ESIGN_OCR_TIMEOUT_SECONDS", 30))
 
@@ -72,11 +80,11 @@ class ESignatureConfig:
     # ── 4. Face Verification ───────────────────────────────────────────────
     @property
     def face_provider(self) -> str:
-        return str(getattr(settings, "ESIGN_FACE_PROVIDER", "internal"))
+        return str(getattr(settings, "FACE_PROVIDER", getattr(settings, "ESIGN_FACE_PROVIDER", "insightface")))
 
     @property
     def liveness_provider(self) -> str:
-        return str(getattr(settings, "ESIGN_LIVENESS_PROVIDER", "internal"))
+        return str(getattr(settings, "LIVENESS_PROVIDER", getattr(settings, "ESIGN_LIVENESS_PROVIDER", "internal")))
 
     @property
     def liveness_enabled(self) -> bool:
@@ -89,7 +97,7 @@ class ESignatureConfig:
 
     @property
     def notification_provider(self) -> str:
-        return str(getattr(settings, "ESIGN_NOTIFICATION_PROVIDER", "email"))
+        return str(getattr(settings, "NOTIFICATION_PROVIDER", getattr(settings, "ESIGN_NOTIFICATION_PROVIDER", "brevo")))
 
     @property
     def notification_retry_count(self) -> int:
