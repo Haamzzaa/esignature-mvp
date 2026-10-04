@@ -1,0 +1,14 @@
+{
+  "nav.dashboard": "E-Sign Dashboard",
+  "auth.welcome_back": "Welcome back",
+  "dashboard.recent_activity": "Recent Activity",
+  "dashboard.stat_completed": "Completed",
+  "upload.create_package": "Create Package",
+  "upload.drop_zone_cta": "Drag & drop or click to browse",
+  "sign.sign_document": "Sign Document",
+  "sign.accept_terms": "Accept Terms & Conditions",
+  "sign.otp_placeholder": "Enter 6-digit code",
+  "inbox.step_progress": "Step {current} of {total}",
+  "success.document_signed": "Document Successfully Signed",
+  "workspace.welcome_empty_desc": "Create your first document workflow, upload securely, set recipients and track signatures."
+}

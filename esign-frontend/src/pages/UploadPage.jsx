@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createEnvelope, sendEnvelope, uploadDocument, createTemplate, getTemplateDetail, getPackageDetail, saveDraft, updateDraft, apiClient, API_URL, confirmCandidates, ignoreCandidates, analyzeContract } from '../services/api.js'
 import UserNav from '../components/UserNav.jsx'
+import { useLocale } from '../context/LocaleContext'
 import { Document, Page, pdfjs } from 'react-pdf'
 import { motion, AnimatePresence } from 'framer-motion'
 import { UploadCloud, User, Mail, FileText, X, ArrowRight, CheckCircle2, Sparkles, Crosshair, Plus, Trash2, Edit3, UserPlus, Check, ChevronDown, Sparkles as SparkleIcon, Bell, Share2, Printer, Settings, Activity, Eye, ArrowLeft, Shield, AlertCircle } from 'lucide-react'
@@ -228,6 +229,7 @@ const steps = [
 ];
 
 export default function UploadPage() {
+  const { t } = useLocale()
   const navigate = useNavigate()
   const templateId = useMemo(() => new URLSearchParams(window.location.search).get('templateId'), [])
   const [loadedTemplate, setLoadedTemplate] = useState(null)
@@ -1167,7 +1169,7 @@ export default function UploadPage() {
                     </div>
                   )}
                   <h1 className="text-4xl font-bold tracking-tight text-text-primary sm:text-[60px] sm:leading-none">
-                    Create Package
+                    {t('upload.create_package')}
                   </h1>
                   <p className="text-sm font-medium text-text-secondary sm:text-base">
                     Upload, configure, and send documents for signature.
@@ -1307,7 +1309,6 @@ export default function UploadPage() {
                                     }
                                   }
                                 } catch (analysisErr) {
-                                  console.error("Auto draft/analysis failed:", analysisErr)
                                   setAnalysisError(
                                     analysisErr?.response?.data?.detail ||
                                     analysisErr?.message ||
@@ -1370,7 +1371,7 @@ export default function UploadPage() {
                           ) : (
                             <div className="text-center">
                               <span className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/70 mb-1.5 block">PDF Document • Secure upload</span>
-                              <p className="text-sm font-medium text-text-primary">Drag & drop or click to browse</p>
+                              <p className="text-sm font-medium text-text-primary">{t('upload.drop_zone_cta')}</p>
                               <p className="mt-1 text-xs text-text-secondary">Only PDF files are supported</p>
                             </div>
                           )}

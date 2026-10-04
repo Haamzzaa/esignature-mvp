@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { getPackages } from '../services/api.js'
 import UserNav from '../components/UserNav.jsx'
+import { useLocale } from '../context/LocaleContext'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Inbox, 
@@ -49,6 +50,7 @@ function formatTimeAgo(dateString) {
 }
 
 export default function InboxPage() {
+  const { t } = useLocale()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const categoryParam = searchParams.get('category') || 'awaiting-me'
@@ -445,7 +447,7 @@ export default function InboxPage() {
                             {/* Current Step Progress */}
                             <td className="px-6 py-4 text-center font-mono font-bold text-text-primary align-middle">
                               <span className="inline-flex items-center justify-center bg-bg-primary/50 px-2.5 py-1 rounded-lg border border-border-color text-[10px]">
-                                Step {pkg.current_step} of {pkg.total_steps}
+                                {t('inbox.step_progress', { current: pkg.current_step, total: pkg.total_steps })}
                               </span>
                             </td>
 

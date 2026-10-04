@@ -1,0 +1,14 @@
+{
+  "nav.dashboard": "",
+  "auth.welcome_back": "",
+  "dashboard.recent_activity": "",
+  "dashboard.stat_completed": "",
+  "upload.create_package": "",
+  "upload.drop_zone_cta": "",
+  "sign.sign_document": "",
+  "sign.accept_terms": "",
+  "sign.otp_placeholder": "",
+  "inbox.step_progress": "",
+  "success.document_signed": "",
+  "workspace.welcome_empty_desc": ""
+}

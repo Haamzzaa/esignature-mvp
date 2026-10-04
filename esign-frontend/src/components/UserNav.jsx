@@ -1,10 +1,12 @@
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
-import { User, LogOut, Sun, Moon } from 'lucide-react'
+import { useLocale } from '../context/LocaleContext'
+import { User, LogOut, Sun, Moon, Globe } from 'lucide-react'
 
 export default function UserNav() {
   const { user, logout } = useAuth()
   const { theme, toggleTheme } = useTheme()
+  const { language, toggleLanguage } = useLocale()
   
   if (!user) return null
   
@@ -14,6 +16,16 @@ export default function UserNav() {
         <div className="h-1.5 w-1.5 rounded-full bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.4)] animate-pulse" />
         <span className="font-semibold text-text-primary">{user.username}</span>
       </div>
+      <div className="h-3 w-px bg-border-color" />
+      <button
+        type="button"
+        onClick={toggleLanguage}
+        className="text-text-secondary hover:text-cyan-400 transition-colors cursor-pointer font-medium flex items-center gap-1 focus:outline-none"
+        title={`Switch to ${language === 'en' ? 'العربية' : 'English'}`}
+      >
+        <Globe className="h-3.5 w-3.5" />
+        <span>{language === 'en' ? 'العربية' : 'English'}</span>
+      </button>
       <div className="h-3 w-px bg-border-color" />
       <button
         type="button"

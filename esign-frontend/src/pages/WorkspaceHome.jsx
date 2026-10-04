@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getDashboardData } from '../services/api.js'
 import UserNav from '../components/UserNav.jsx'
+import { useLocale } from '../context/LocaleContext'
 
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
@@ -29,6 +30,7 @@ import {
 import { Link, useNavigate } from 'react-router-dom'
 
 export default function WorkspaceHome() {
+  const { t } = useLocale()
   const navigate = useNavigate()
   const [data, setData] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -55,9 +57,7 @@ export default function WorkspaceHome() {
     loadWorkspaceData()
   }, [])
 
-  // Derived metrics calculations
-  const pendingRequests = (data?.stats?.sent ?? 0) + (data?.stats?.viewed ?? 0)
-  const recentActivityCount = data?.recent_activity?.length ?? 0
+
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -442,7 +442,7 @@ export default function WorkspaceHome() {
                         </div>
                         <div className="space-y-1 max-w-sm">
                           <h3 className="text-base font-semibold text-text-primary">Welcome to E-Sign Workspace</h3>
-                          <p className="text-xs text-text-secondary">Create your first document workflow, upload securely, set recipients and track signatures.</p>
+                          <p className="text-xs text-text-secondary">{t('workspace.welcome_empty_desc')}</p>
                         </div>
                         <Link 
                           to="/create-request"

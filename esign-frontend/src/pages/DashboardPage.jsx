@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getDashboardData } from '../services/api.js'
+import { useLocale } from '../context/LocaleContext'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Folder, 
@@ -18,6 +19,7 @@ import {
 import { Link, useNavigate } from 'react-router-dom'
 
 export default function DashboardPage() {
+  const { t } = useLocale()
   const navigate = useNavigate()
   const [data, setData] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -74,7 +76,7 @@ export default function DashboardPage() {
             Consolidated Platform View
           </div>
           <h1 className="text-3xl font-light tracking-tight text-white sm:text-5xl neon-text-glow">
-            E-Sign Dashboard
+            {t('nav.dashboard')}
           </h1>
           <p className="text-sm font-medium text-zinc-400 sm:text-base">
             Track packages, participants, and real-time signing activity.
@@ -189,7 +191,7 @@ export default function DashboardPage() {
               {/* Completed */}
               <motion.div variants={itemVariants} className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[120px] relative group hover:border-emerald-500/20 transition-all duration-300 col-span-2 md:col-span-1">
                 <div className="flex justify-between items-start">
-                  <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">Completed</span>
+                  <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">{t('dashboard.stat_completed')}</span>
                   <CheckCircle2 className="h-5 w-5 text-emerald-500/50 group-hover:text-emerald-400 transition-colors" />
                 </div>
                 <div className="mt-4">
@@ -282,7 +284,7 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between border-b border-white/5 bg-white/[0.01] px-6 py-5">
                   <h2 className="text-base font-semibold tracking-wide text-white flex items-center gap-2">
                     <Clock className="h-4 w-4 text-cyan-400" />
-                    Recent Activity
+                    {t('dashboard.recent_activity')}
                   </h2>
                   <span className="text-[10px] text-zinc-500 font-mono uppercase">Audit Trail</span>
                 </div>

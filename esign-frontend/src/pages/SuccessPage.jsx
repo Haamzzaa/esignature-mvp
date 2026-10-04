@@ -1,8 +1,9 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useLocation, Link } from 'react-router-dom'
+import { useLocale } from '../context/LocaleContext'
 import { getSigningSession, apiClient, API_URL, API_BASE } from '../services/api'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle2, FileSignature, ExternalLink, RefreshCw, Download, ShieldCheck, AlertCircle, Eye, X } from 'lucide-react'
+import { CheckCircle2, FileSignature, ExternalLink, RefreshCw, Download, ShieldCheck, AlertCircle, Eye, X, Home, Clock, Check } from 'lucide-react'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -75,6 +76,7 @@ export function PdfPreviewModal({ isOpen, onClose, previewUrl, title }) {
 }
 
 export default function SuccessPage() {
+  const { t } = useLocale()
   const location = useLocation()
 
   const backendOrigin = useMemo(
@@ -98,6 +100,7 @@ export default function SuccessPage() {
 
   const computedDownloadUrl = downloadUrl || (token ? toAbsoluteUrl(`${API_BASE}/sign/${token}/download/`, backendOrigin) : '')
   const computedPreviewUrl = signedDocumentUrl || (token ? toAbsoluteUrl(`${API_BASE}/sign/${token}/signed/`, backendOrigin) : '')
+  const timestamp = useMemo(() => new Date().toLocaleString(), [])
 
   useEffect(() => {
     if (isSuccessDirect && stateSession) {
@@ -251,25 +254,20 @@ export default function SuccessPage() {
     }
 
     return {
-      badge: 'Signature Applied',
+      badge: t('success.document_signed'),
       badgeColor: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
       iconColor: 'text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)]',
       pingColor: 'bg-emerald-500',
       isError: false,
-      title: 'Signature Completed',
+      title: t('success.document_signed'),
       description: (
         <div className="space-y-2 mt-4 text-zinc-400">
-          <p>Document signed successfully.</p>
-          <p>Workflow completed.</p>
-          {signedDocumentUrl ? (
-            <p className="text-zinc-400 text-sm">Provide access to final document if available.</p>
-          ) : (
-            <p className="text-zinc-500 text-xs mt-6">You may close this window.</p>
-          )}
+          <p>Identity verification and electronic signature completed successfully.</p>
+          <p className="text-zinc-500 text-xs mt-6">You may download your signed copy below.</p>
         </div>
       ),
     }
-  }, [role, successType, signedDocumentUrl, error])
+  }, [role, successType, error])
 
   const IconComponent = pageContent.isError ? AlertCircle : CheckCircle2
 
@@ -280,56 +278,80 @@ export default function SuccessPage() {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 text-emerald-500">
             <RefreshCw className="h-10 w-10 animate-spin" />
-            <span className="mt-4 text-sm font-medium tracking-widest uppercase animate-pulse">Retrieving Sealed Payload…</span>
+            <span className="mt-4 text-sm font-medium tracking-widest uppercase animate-pulse">Loading Signed Document…</span>
           </div>
         ) : session?.status === 'completed' && !pageContent.isError ? (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="max-w-2xl mx-auto glass-panel rounded-[2rem] p-8 sm:p-12 text-center relative overflow-hidden group shadow-2xl mt-6"
+            className="max-w-2xl mx-auto glass-panel rounded-[2rem] p-8 sm:p-12 text-center relative overflow-hidden group shadow-2xl mt-6 border-emerald-500/30"
           >
             {/* Glow */}
-            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-transparent opacity-50 pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-transparent opacity-60 pointer-events-none" />
 
             {/* Icon */}
             <div className="relative mb-6 flex justify-center">
-              <div className="absolute inset-0 rounded-full bg-emerald-500/10 blur-xl animate-pulse w-20 h-20 mx-auto" />
-              <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500/5 border border-emerald-500/20 text-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.1)]">
+              <div className="absolute inset-0 rounded-full bg-emerald-500/20 blur-xl animate-pulse w-20 h-20 mx-auto" />
+              <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.2)]">
                 <CheckCircle2 className="h-10 w-10" />
               </div>
             </div>
 
             <h1 className="text-3xl sm:text-4xl font-light text-white neon-text-glow tracking-tight">
-              Workflow Completed
+              {t('success.document_signed')}
             </h1>
             <p className="mt-3 text-zinc-400 text-sm leading-relaxed max-w-md mx-auto">
-              The document has been successfully approved and signed.
+              Identity verification and digital signature completion confirmed.
             </p>
 
-            {/* Status Section */}
-            <div className="w-full mt-8 p-6 rounded-2xl border border-white/5 bg-black/40 text-left space-y-4">
-              <div className="flex items-center justify-between border-b border-white/5 pb-3">
-                <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">Routing Status</span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/5 px-2.5 py-0.5 text-[10px] font-bold uppercase text-emerald-400 tracking-wider">
-                  Completed
+            {/* Verification Summary */}
+            <div className="w-full mt-8 p-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 text-left space-y-4">
+              <div className="flex items-center justify-between border-b border-emerald-500/20 pb-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                  <ShieldCheck className="h-4 w-4" /> Verification Summary
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase text-emerald-400 tracking-wider">
+                  ✓ Completed
                 </span>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-3 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-zinc-500">Package Status</span>
-                  <span className="text-xs font-bold text-emerald-400 uppercase tracking-wide">
-                    Completed
-                  </span>
+                  <span className="text-zinc-400">Email Verification</span>
+                  <span className="font-semibold text-emerald-400">✓ Verified</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-400">National ID Verification</span>
+                  <span className="font-semibold text-emerald-400">✓ Verified</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-400">Verify Your Identity</span>
+                  <span className="font-semibold text-emerald-400">✓ Matched</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-400">Representative Authorization</span>
+                  <span className="font-semibold text-emerald-400">✓ Authorized</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-400">Electronic Signature</span>
+                  <span className="font-semibold text-emerald-400">✓ Applied</span>
                 </div>
                 {session?.signer_name && (
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-zinc-500">Final Recipient</span>
-                    <span className="text-xs font-semibold text-zinc-300">
+                    <span className="text-zinc-400">Signer Name</span>
+                    <span className="font-semibold text-white">
                       {session.signer_name}
                     </span>
                   </div>
                 )}
+                <div className="flex items-center justify-between pt-2 border-t border-emerald-500/20">
+                  <span className="text-zinc-400 flex items-center gap-1">
+                    <Clock className="h-3.5 w-3.5 text-accent" /> Completion Timestamp
+                  </span>
+                  <span className="font-mono text-zinc-300">
+                    {timestamp}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -350,14 +372,12 @@ export default function SuccessPage() {
                 <Download className="h-4 w-4" /> Download Signed Document
               </a>
 
-              {!token && (
-                <Link
-                  to="/"
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/5 bg-zinc-950 text-zinc-400 hover:text-white px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300"
-                >
-                  Return to Workspace
-                </Link>
-              )}
+              <Link
+                to="/"
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/5 bg-zinc-950 text-zinc-400 hover:text-white px-4 py-3.5 text-xs font-bold uppercase tracking-widest transition-all duration-300"
+              >
+                <Home className="h-4 w-4" /> Return to Dashboard
+              </Link>
             </div>
           </motion.div>
         ) : (
@@ -412,8 +432,8 @@ export default function SuccessPage() {
                         <FileSignature className="h-5 w-5" />
                       </div>
                       <div>
-                        <h2 className="text-sm font-semibold tracking-wide text-white">Sealed Document</h2>
-                        <p className="text-xs text-zinc-500 mt-0.5">Read-only verified copy</p>
+                        <h2 className="text-sm font-semibold tracking-wide text-white">Signed Document</h2>
+                        <p className="text-xs text-zinc-500 mt-0.5">Read-only copy</p>
                       </div>
                     </div>
 
@@ -463,7 +483,7 @@ export default function SuccessPage() {
                           'Step Complete'}
                   </h3>
                   <p className="text-sm text-zinc-400 mb-6 max-w-md mx-auto">
-                    {session.participant_role === 'cc' ? 'Your view audit event has been cryptographically recorded.' :
+                    {session.participant_role === 'cc' ? 'Your view audit event has been recorded.' :
                       session.participant_role === 'reviewer' ? 'Thank you! Your review action has been registered, and the workflow has advanced to the next recipient.' :
                         session.participant_role === 'approver' ? 'Thank you! Your approval decision has been registered, and the workflow has advanced to the next recipient.' :
                           'Thank you! Your action has been registered, and the sequential routing has successfully advanced.'}

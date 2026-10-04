@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
+import { useLocale } from '../context/LocaleContext'
 import { useNavigate } from 'react-router-dom'
-import { KeyRound, User, Mail, Lock, Sparkles, AlertCircle } from 'lucide-react'
+import { KeyRound, User, Mail, Lock, Sparkles, AlertCircle, Globe } from 'lucide-react'
 
 export default function AuthPage() {
   const [activeTab, setActiveTab] = useState('login') // login, register
   const { login, register } = useAuth()
+  const { t, language, toggleLanguage } = useLocale()
   const navigate = useNavigate()
 
   const [username, setUsername] = useState('')
@@ -51,6 +53,18 @@ export default function AuthPage() {
 
   return (
     <div className="mx-auto w-full max-w-md px-4 py-20 min-h-dvh flex flex-col justify-center relative z-10">
+      <div className="flex justify-end mb-4">
+        <button
+          type="button"
+          onClick={toggleLanguage}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl glass-panel text-xs text-text-secondary hover:text-cyan-400 transition-colors cursor-pointer"
+          title={`Switch to ${language === 'en' ? 'العربية' : 'English'}`}
+        >
+          <Globe className="h-3.5 w-3.5" />
+          <span>{language === 'en' ? 'العربية' : 'English'}</span>
+        </button>
+      </div>
+
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
@@ -65,7 +79,7 @@ export default function AuthPage() {
               E-Sign Security Gateway
             </div>
             <h1 className="text-3xl font-light tracking-tight text-white neon-text-glow">
-              Welcome back
+              {t('auth.welcome_back')}
             </h1>
             <p className="text-sm font-medium text-zinc-400 mt-2">
               Sign in to manage your document signing workflows.
