@@ -1,12 +1,14 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import enMessages from '../locales/en.json'
-import arMessages from '../locales/ar.json'
+
+// Safely discover and load any existing locale JSON files via Vite eager glob
+const localeFiles = import.meta.glob('../locales/*.json', { eager: true, import: 'default' })
 
 const LocaleContext = createContext()
 
 const messages = {
   en: enMessages,
-  ar: arMessages,
+  ar: localeFiles['../locales/ar.json'] || {},
 }
 
 export function LocaleProvider({ children }) {
@@ -28,10 +30,14 @@ export function LocaleProvider({ children }) {
   const t = useCallback(
     (key, params) => {
       const activeDict = messages[language] || messages.en
-      let template = Object.prototype.hasOwnProperty.call(activeDict, key)
-        ? activeDict[key]
-        : Object.prototype.hasOwnProperty.call(messages.en, key)
-          ? messages.en[key]
+      const targetVal = activeDict?.[key]
+      const fallbackVal = messages.en?.[key]
+
+      // If active dictionary value exists and is non-empty, use it; otherwise fallback to en, then key
+      let template = (typeof targetVal === 'string' && targetVal.trim() !== '')
+        ? targetVal
+        : (typeof fallbackVal === 'string' && fallbackVal.trim() !== '')
+          ? fallbackVal
           : key
 
       if (typeof template === 'string' && params) {

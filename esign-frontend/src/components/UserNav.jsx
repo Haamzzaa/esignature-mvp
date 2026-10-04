@@ -6,7 +6,7 @@ import { User, LogOut, Sun, Moon, Globe } from 'lucide-react'
 export default function UserNav() {
   const { user, logout } = useAuth()
   const { theme, toggleTheme } = useTheme()
-  const { language, toggleLanguage } = useLocale()
+  const { language, toggleLanguage, t } = useLocale()
   
   if (!user) return null
   
@@ -44,7 +44,7 @@ export default function UserNav() {
         title="Sign out of workspace"
       >
         <LogOut className="h-3.5 w-3.5" />
-        <span>Logout</span>
+        <span>{t('nav.logout')}</span>
       </button>
     </div>
   )

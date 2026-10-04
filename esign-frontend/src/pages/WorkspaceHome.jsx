@@ -84,13 +84,13 @@ export default function WorkspaceHome() {
         >
           <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-cyan-400 backdrop-blur-md">
             <Sparkles className="h-3.5 w-3.5" />
-            Enterprise Workflow Hub
+            {t('workspace.hero_badge')}
           </div>
           <h1 className="text-4xl font-bold tracking-tight text-text-primary sm:text-[60px] sm:leading-none">
-            E-Sign Workspace
+            {t('workspace.title')}
           </h1>
           <p className="text-sm font-medium text-text-secondary sm:text-base">
-            Manage document workflows, approvals, signatures, and package activity from a centralized workspace.
+            {t('workspace.subtitle')}
           </p>
         </motion.div>
 
@@ -109,7 +109,7 @@ export default function WorkspaceHome() {
             className="inline-flex items-center gap-1.5 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 px-4 h-10 text-xs font-semibold text-text-primary hover:text-cyan-400 transition-all cursor-pointer"
           >
             <Layers className="h-3.5 w-3.5 shrink-0" />
-            Templates
+            {t('nav.templates')}
           </Link>
 
           <Link
@@ -117,7 +117,7 @@ export default function WorkspaceHome() {
             className="inline-flex items-center gap-1.5 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 px-4 h-10 text-xs font-semibold text-text-primary hover:text-cyan-400 transition-all cursor-pointer"
           >
             <Inbox className="h-3.5 w-3.5 shrink-0" />
-            Inbox
+            {t('nav.inbox')}
           </Link>
 
           <div className="relative group">
@@ -140,7 +140,7 @@ export default function WorkspaceHome() {
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-6 h-10 text-xs font-bold transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.45)] uppercase tracking-wider cursor-pointer ml-auto sm:ml-0"
           >
             <Plus className="h-4 w-4 stroke-[3]" />
-            Create New Request
+            {t('workspace.btn_create_request')}
           </Link>
         </motion.div>
       </div>
@@ -199,7 +199,7 @@ export default function WorkspaceHome() {
                 className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[130px] relative group hover:border-cyan-500/30 hover:bg-cyan-500/5 transition-all duration-300 cursor-pointer"
               >
                 <div className="flex justify-between items-start">
-                  <span className="text-[10px] uppercase tracking-widest text-text-secondary font-bold">Awaiting Me</span>
+                  <span className="text-[10px] uppercase tracking-widest text-text-secondary font-bold">{t('workspace.stat_awaiting_me')}</span>
                   <Inbox className="h-6 w-6 text-text-secondary group-hover:text-cyan-400 transition-colors" />
                 </div>
                 <div className="mt-4">
@@ -215,7 +215,7 @@ export default function WorkspaceHome() {
                 className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[130px] relative group hover:border-violet-500/30 hover:bg-violet-500/5 transition-all duration-300 cursor-pointer"
               >
                 <div className="flex justify-between items-start">
-                  <span className="text-[10px] uppercase tracking-widest text-text-secondary font-bold">Awaiting Others</span>
+                  <span className="text-[10px] uppercase tracking-widest text-text-secondary font-bold">{t('workspace.stat_awaiting_others')}</span>
                   <Users className="h-6 w-6 text-text-secondary group-hover:text-violet-400 transition-colors" />
                 </div>
                 <div className="mt-4">
@@ -231,7 +231,7 @@ export default function WorkspaceHome() {
                 className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[130px] relative group hover:border-sky-500/30 hover:bg-sky-500/5 transition-all duration-300 cursor-pointer"
               >
                 <div className="flex justify-between items-start">
-                  <span className="text-[10px] uppercase tracking-widest text-text-secondary font-bold">In Progress</span>
+                  <span className="text-[10px] uppercase tracking-widest text-text-secondary font-bold">{t('workspace.stat_in_progress')}</span>
                   <Clock className="h-6 w-6 text-text-secondary group-hover:text-sky-400 transition-colors" />
                 </div>
                 <div className="mt-4">
@@ -247,7 +247,7 @@ export default function WorkspaceHome() {
                 className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[130px] relative group hover:border-emerald-500/30 hover:bg-emerald-500/5 transition-all duration-300 cursor-pointer"
               >
                 <div className="flex justify-between items-start">
-                  <span className="text-[10px] uppercase tracking-widest text-text-secondary font-bold">Completed</span>
+                  <span className="text-[10px] uppercase tracking-widest text-text-secondary font-bold">{t('workspace.stat_completed')}</span>
                   <CheckCircle2 className="h-6 w-6 text-text-secondary group-hover:text-emerald-400 transition-colors" />
                 </div>
                 <div className="mt-4">
@@ -263,7 +263,7 @@ export default function WorkspaceHome() {
                 className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[130px] relative group hover:border-zinc-500/30 hover:bg-zinc-500/5 transition-all duration-300 cursor-pointer"
               >
                 <div className="flex justify-between items-start">
-                  <span className="text-[10px] uppercase tracking-widest text-text-secondary font-bold">Drafts</span>
+                  <span className="text-[10px] uppercase tracking-widest text-text-secondary font-bold">{t('workspace.stat_drafts')}</span>
                   <FileText className="h-6 w-6 text-text-secondary group-hover:text-zinc-300 transition-colors" />
                 </div>
                 <div className="mt-4">
@@ -284,7 +284,7 @@ export default function WorkspaceHome() {
                 <motion.div variants={itemVariants} className="space-y-4">
                   <h2 className="text-lg font-light text-text-primary flex items-center gap-2">
                     <Layers className="h-4 w-4 text-cyan-400" />
-                    Quick Start Workflows
+                    {t('workspace.quick_start_title')}
                   </h2>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -297,7 +297,7 @@ export default function WorkspaceHome() {
                         <Plus className="h-5 w-5 stroke-[2.5]" />
                       </div>
                       <div className="space-y-1">
-                        <h4 className="text-sm font-bold text-text-primary group-hover:text-cyan-400 transition-colors">Create New Request</h4>
+                        <h4 className="text-sm font-bold text-text-primary group-hover:text-cyan-400 transition-colors">{t('workspace.card_create_request')}</h4>
                         <p className="text-xs text-text-secondary">Design sequential steps, upload payloads, and securely route copy.</p>
                       </div>
                       <ChevronRight className="h-4 w-4 text-zinc-700 group-hover:text-cyan-400 transition-colors absolute right-4 top-1/2 -translate-y-1/2" />
@@ -312,7 +312,7 @@ export default function WorkspaceHome() {
                         <FileUp className="h-5 w-5 stroke-[2.5]" />
                       </div>
                       <div className="space-y-1">
-                        <h4 className="text-sm font-bold text-text-primary group-hover:text-violet-400 transition-colors">Upload Document</h4>
+                        <h4 className="text-sm font-bold text-text-primary group-hover:text-violet-400 transition-colors">{t('workspace.card_upload_doc')}</h4>
                         <p className="text-xs text-text-secondary">Instantly parse PDF file elements and define target coordinates.</p>
                       </div>
                       <ChevronRight className="h-4 w-4 text-zinc-700 group-hover:text-violet-400 transition-colors absolute right-4 top-1/2 -translate-y-1/2" />
@@ -327,7 +327,7 @@ export default function WorkspaceHome() {
                         <Layers className="h-5 w-5 stroke-[2.5]" />
                       </div>
                       <div className="space-y-1">
-                        <h4 className="text-sm font-bold text-text-primary group-hover:text-emerald-400 transition-colors">Use Template</h4>
+                        <h4 className="text-sm font-bold text-text-primary group-hover:text-emerald-400 transition-colors">{t('workspace.card_use_template')}</h4>
                         <p className="text-xs text-text-secondary">Deploy standard business workflows and prepopulate parameters instantly.</p>
                       </div>
                       <ChevronRight className="h-4 w-4 text-zinc-700 group-hover:text-emerald-400 transition-colors absolute right-4 top-1/2 -translate-y-1/2" />
@@ -342,7 +342,7 @@ export default function WorkspaceHome() {
                         <Inbox className="h-5 w-5 stroke-[2.5]" />
                       </div>
                       <div className="space-y-1">
-                        <h4 className="text-sm font-bold text-text-primary group-hover:text-cyan-400 transition-colors">View Inbox</h4>
+                        <h4 className="text-sm font-bold text-text-primary group-hover:text-cyan-400 transition-colors">{t('workspace.card_view_inbox')}</h4>
                         <p className="text-xs text-text-secondary">Inspect outstanding incoming actions and monitor active routing steps.</p>
                       </div>
                       <ChevronRight className="h-4 w-4 text-zinc-700 group-hover:text-cyan-400 transition-colors absolute right-4 top-1/2 -translate-y-1/2" />
@@ -355,7 +355,7 @@ export default function WorkspaceHome() {
                   <div className="flex items-center justify-between border-b border-border-color bg-card-bg px-6 py-5">
                     <h2 className="text-base font-semibold tracking-wide text-text-primary flex items-center gap-2">
                       <Folder className="h-4 w-4 text-cyan-400" />
-                      Recent Requests
+                      {t('workspace.recent_requests_title')}
                     </h2>
                     <span className="text-[10px] text-text-secondary font-mono uppercase">Transaction Monitor</span>
                   </div>
@@ -365,11 +365,11 @@ export default function WorkspaceHome() {
                       <table className="w-full text-left border-collapse text-sm">
                         <thead>
                           <tr className="border-b border-border-color text-text-secondary uppercase text-[9px] font-bold tracking-wider bg-table-header-bg">
-                            <th className="px-6 py-4">Package Name</th>
-                            <th className="px-6 py-4">Status</th>
-                            <th className="px-6 py-4 text-center">Participants</th>
-                            <th className="px-6 py-4">Created Date</th>
-                            <th className="px-6 py-4 text-right">Actions</th>
+                            <th className="px-6 py-4">{t('workspace.col_package_name')}</th>
+                            <th className="px-6 py-4">{t('workspace.col_status')}</th>
+                            <th className="px-6 py-4 text-center">{t('workspace.col_participants')}</th>
+                            <th className="px-6 py-4">{t('workspace.col_created_date')}</th>
+                            <th className="px-6 py-4 text-right">{t('workspace.col_actions')}</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border-color">
@@ -399,7 +399,7 @@ export default function WorkspaceHome() {
                                     'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                                   }`}>
                                     {(isSent || isViewed || isCompleted) && (
-                                      <span className={`h-1.5 w-1.5 rounded-full ${
+                                       <span className={`h-1.5 w-1.5 rounded-full ${
                                         isCompleted ? 'bg-emerald-400 animate-pulse' :
                                         isSent ? 'bg-violet-400 animate-pulse' : 'bg-cyan-400 animate-pulse'
                                       }`} />
@@ -424,7 +424,7 @@ export default function WorkspaceHome() {
                                       to={`/packages/${pkg.id}`}
                                       className="inline-flex items-center gap-1 rounded-lg bg-bg-primary border border-border-color hover:border-cyan-400 px-3 py-1.5 text-[11px] font-bold text-text-primary hover:bg-cyan-500 hover:text-black transition-all"
                                     >
-                                      Open Package
+                                      {t('workspace.btn_open_package')}
                                       <ArrowUpRight className="h-3 w-3" />
                                     </Link>
                                   </div>
@@ -465,14 +465,14 @@ export default function WorkspaceHome() {
                 <motion.div variants={itemVariants} className="glass-panel rounded-3xl overflow-hidden p-6 space-y-5">
                   <h2 className="text-sm font-bold uppercase tracking-wider text-text-primary border-b border-border-color pb-3 flex items-center gap-2">
                     <TrendingUp className="h-4 w-4 text-cyan-400" />
-                    Workflow Insights
+                    {t('workspace.workflow_insights_title')}
                   </h2>
 
                   <div className="space-y-4">
                     {/* Insight Card 1 */}
                     <div className="flex items-center justify-between bg-card-bg border border-border-color rounded-2xl p-4 shadow-sm">
                       <div className="space-y-0.5">
-                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Pending Approvals</span>
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">{t('workspace.insight_pending_approvals')}</span>
                         <h4 className="text-xs font-bold text-text-primary">Review & Approve Stages</h4>
                       </div>
                       <span className="text-2xl font-light text-cyan-400 font-mono">
@@ -483,7 +483,7 @@ export default function WorkspaceHome() {
                     {/* Insight Card 2 */}
                     <div className="flex items-center justify-between bg-card-bg border border-border-color rounded-2xl p-4 shadow-sm">
                       <div className="space-y-0.5">
-                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Awaiting Signature</span>
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">{t('workspace.insight_awaiting_signature')}</span>
                         <h4 className="text-xs font-bold text-text-primary">Active Signing Steps</h4>
                       </div>
                       <span className="text-2xl font-light text-violet-400 font-mono">
@@ -494,7 +494,7 @@ export default function WorkspaceHome() {
                     {/* Insight Card 3 */}
                     <div className="flex items-center justify-between bg-card-bg border border-border-color rounded-2xl p-4 shadow-sm">
                       <div className="space-y-0.5">
-                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Recently Completed</span>
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">{t('workspace.insight_recently_completed')}</span>
                         <h4 className="text-xs font-bold text-text-primary">Fully Executed Packages</h4>
                       </div>
                       <span className="text-2xl font-light text-emerald-400 font-mono">
@@ -512,7 +512,7 @@ export default function WorkspaceHome() {
                   <div className="flex items-center justify-between border-b border-border-color bg-card-bg px-6 py-5">
                     <h2 className="text-base font-semibold tracking-wide text-text-primary flex items-center gap-2">
                       <Clock className="h-4 w-4 text-cyan-400" />
-                      Recent Activity
+                      {t('dashboard.recent_activity')}
                     </h2>
                     <span className="text-[10px] text-zinc-500 font-mono uppercase">Audit Trail</span>
                   </div>
