@@ -4,11 +4,12 @@ Middleware for the E-Signature Platform.
 RequestIDMiddleware  — generates/propagates X-Request-ID per request.
 RequestTimingMiddleware — logs every request with method, path, status, duration.
 """
+import logging
 import time
 import uuid
-import logging
 
-from esign.request_context import set_request_id, get_request_id, clear_request_id
+from esign.request_context import (clear_request_id, get_request_id,
+                                   set_request_id)
 
 logger = logging.getLogger("esign.middleware")
 
@@ -101,8 +102,8 @@ class BrowserSecurityMiddleware:
             "script-src": ["'self'"],
             "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             "font-src": ["'self'", "https://fonts.gstatic.com"],
-            "img-src": ["'self'", "data:", "blob:"],
-            "connect-src": ["'self'"],
+            "img-src": ["'self'", "data:", "blob:", "https:"],
+            "connect-src": ["'self'", "https:", "wss:"],
             "frame-ancestors": ["'none'"]
         })
         
@@ -122,8 +123,8 @@ class BrowserSecurityMiddleware:
         response['Permissions-Policy'] = 'camera=(self), microphone=(), geolocation=(), payment=(), usb=(), fullscreen=(self)'
 
         # 6. Cross-Origin Policies
-        response['Cross-Origin-Opener-Policy'] = 'same-origin'
-        response['Cross-Origin-Resource-Policy'] = 'same-origin'
+        response['Cross-Origin-Opener-Policy'] = 'same-origin-allow-popups'
+        response['Cross-Origin-Resource-Policy'] = 'cross-origin'
 
         # 7. Browser Cache Protections for sensitive views
         path = request.path

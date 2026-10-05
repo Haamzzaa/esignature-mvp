@@ -7,10 +7,11 @@ keeping views thin and this module testable in isolation.
 from __future__ import annotations
 
 import logging
-from datetime import timezone as dt_timezone
 from datetime import datetime
+from datetime import timezone as dt_timezone
 
 from django.conf import settings
+
 from esign.request_context import get_request_id
 
 logger = logging.getLogger("esign.health")
@@ -28,7 +29,7 @@ def _check_database() -> dict:
         return {"status": "ok"}
     except Exception as exc:
         logger.error("[HealthService] Database check failed: %s", exc)
-        return {"status": "error", "detail": "Database connectivity failed"}
+        return {"status": "error", "detail": f"Database connectivity failed: {exc}"}
 
 
 def _check_storage() -> dict:

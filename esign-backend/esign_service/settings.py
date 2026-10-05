@@ -1,9 +1,12 @@
 
 from pathlib import Path
+
 from corsheaders.defaults import default_headers
+
 CORS_ALLOW_HEADERS = list(default_headers)
 # pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
+
 load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -14,6 +17,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 import os
+
 # pyrefly: ignore [missing-import]
 import dj_database_url
 
@@ -27,6 +31,7 @@ if not SECRET_KEY:
 ALLOWED_HOSTS = [
     "localhost",
     "127.0.0.1",
+    "0.0.0.0",
     "esignature-mvp.onrender.com",
 ]
 
@@ -52,14 +57,14 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
-    'esign.middleware.BrowserSecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    'esign.middleware.BrowserSecurityMiddleware',
     # ── Observability: must come first so request_id is set before all downstream ──
     'esign.middleware.RequestIDMiddleware',
     'esign.middleware.RequestTimingMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -142,33 +147,44 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = BASE_DIR.parent / 'media'
 
 # CORS Configuration
+_extra_cors = os.environ.get("CORS_ALLOWED_ORIGINS", "")
+_extra_cors_list = [origin.strip() for origin in _extra_cors.split(",") if origin.strip()]
+
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "https://esignature-mvp.vercel.app",
-]
+    "https://esignature-kmh7el2i0-haamzzaas-projects.vercel.app",
+] + _extra_cors_list
 
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^http://localhost:\d+$",
     r"^http://127\.0\.0\.1:\d+$",
+    r"^https://esignature-[a-z0-9]+-haamzzaas-projects\.vercel\.app$",
+    r"^https://[a-zA-Z0-9_-]+\.vercel\.app$",
 ]
 
 CORS_ALLOW_HEADERS = list(default_headers) + [
     "x-participant-token",
     "x-request-id",
 ]
+CORS_ALLOW_CREDENTIALS = True
+
 # CSRF Configuration
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
+    "http://localhost:8001",
+    "http://127.0.0.1:8001",
     "https://esignature-mvp.vercel.app",
+    "https://esignature-kmh7el2i0-haamzzaas-projects.vercel.app",
     "https://esignature-mvp.onrender.com",
-]
+] + _extra_cors_list
 
 X_FRAME_OPTIONS = "DENY"
 
@@ -208,6 +224,7 @@ CELERY_TASK_SOFT_TIME_LIMIT = 30
 CELERY_TASK_TIME_LIMIT = 60
 
 import sys
+
 if 'test' in sys.argv:
     USE_CELERY = True
     CELERY_TASK_ALWAYS_EAGER = True
