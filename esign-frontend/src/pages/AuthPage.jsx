@@ -76,13 +76,13 @@ export default function AuthPage() {
           <div className="relative z-10 mb-8 flex flex-col items-center text-center">
             <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-cyan-400 backdrop-blur-md mb-4">
               <Sparkles className="h-3.5 w-3.5" />
-              E-Sign Security Gateway
+              {t('auth.security_gateway')}
             </div>
             <h1 className="text-3xl font-light tracking-tight text-white neon-text-glow">
               {t('auth.welcome_back')}
             </h1>
             <p className="text-sm font-medium text-zinc-400 mt-2">
-              Sign in to manage your document signing workflows.
+              {t('auth.subtitle')}
             </p>
           </div>
 
@@ -100,7 +100,7 @@ export default function AuthPage() {
                   : 'text-zinc-400 hover:text-white'
               }`}
             >
-              Sign In
+              {t('auth.tab_signin')}
             </button>
             <button
               type="button"
@@ -114,7 +114,7 @@ export default function AuthPage() {
                   : 'text-zinc-400 hover:text-white'
               }`}
             >
-              Register
+              {t('auth.tab_register')}
             </button>
           </div>
 
@@ -132,7 +132,7 @@ export default function AuthPage() {
 
             {/* Username Field */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Username</label>
+              <label className="block text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">{t('auth.label_username')}</label>
               <div className="relative">
                 <User className="absolute left-3.5 h-4 w-4 text-zinc-500 top-1/2 -translate-y-1/2" />
                 <input
@@ -149,7 +149,7 @@ export default function AuthPage() {
             {/* Register Fields */}
             {activeTab === 'register' && (
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Email Address</label>
+                <label className="block text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">{t('auth.label_email')}</label>
                 <div className="relative">
                   <Mail className="absolute left-3.5 h-4 w-4 text-zinc-500 top-1/2 -translate-y-1/2" />
                   <input
@@ -166,7 +166,7 @@ export default function AuthPage() {
 
             {/* Password Field */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Password</label>
+              <label className="block text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">{t('auth.label_password')}</label>
               <div className="relative">
                 <Lock className="absolute left-3.5 h-4 w-4 text-zinc-500 top-1/2 -translate-y-1/2" />
                 <input
@@ -183,7 +183,7 @@ export default function AuthPage() {
             {/* Confirm Password Field for Register */}
             {activeTab === 'register' && (
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Confirm Password</label>
+                <label className="block text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">{t('auth.label_confirm_password')}</label>
                 <div className="relative">
                   <Lock className="absolute left-3.5 h-4 w-4 text-zinc-500 top-1/2 -translate-y-1/2" />
                   <input
@@ -205,7 +205,7 @@ export default function AuthPage() {
               className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-6 py-3.5 text-xs font-bold transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.4)] uppercase tracking-wider cursor-pointer mt-4"
             >
               <KeyRound className="h-4 w-4 shrink-0" />
-              <span>{isSubmitting ? 'Authenticating...' : activeTab === 'login' ? 'Sign In' : 'Register Account'}</span>
+              <span>{isSubmitting ? 'Authenticating...' : activeTab === 'login' ? t('auth.btn_signin') : t('auth.btn_register')}</span>
             </button>
           </form>
         </div>
