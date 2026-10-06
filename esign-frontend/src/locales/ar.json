@@ -2,7 +2,7 @@
   "auth.welcome_back": "أهلاً وسهلاً بك في منصة التوقيع الإلكتروني الذكية",
   "auth.subtitle": "سجّل الدخول لإدارة ومتابعة سير عمل توقيع المستندات بسهولة.",
   "auth.security_gateway": "بوابة E-Sign الأمنية",
-  "auth.tab_signin": "تسجيل الدخول (1791203117)",
+  "auth.tab_signin": "تسجيل الدخول",
   "auth.tab_register": "إنشاء حساب",
   "auth.label_username": "اسم المستخدم",
   "auth.label_email": "البريد الإلكتروني",

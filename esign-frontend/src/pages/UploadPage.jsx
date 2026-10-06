@@ -26,6 +26,7 @@ const cellInputClass =
   'w-full bg-card-bg border border-border-color rounded-xl px-3 py-2.5 text-sm text-text-primary placeholder:text-text-secondary/60 outline-none transition-all duration-200 focus:border-cyan-500/30 focus:bg-cyan-950/5 focus:ring-1 focus:ring-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60'
 
 function CustomSelect({ value, onChange, options, disabled }) {
+  const { t } = useLocale()
   const [isOpen, setIsOpen] = useState(false)
   const selectRef = useRef(null)
 
@@ -49,9 +50,9 @@ function CustomSelect({ value, onChange, options, disabled }) {
         type="button"
         disabled={disabled}
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full rounded-2xl border border-border-color bg-card-bg px-4 py-3.5 text-sm text-text-primary text-left outline-none backdrop-blur-xl transition-all duration-300 focus:border-cyan-500/50 focus:bg-cyan-950/10 focus:ring-2 focus:ring-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60 flex items-center justify-between cursor-pointer"
+        className="w-full rounded-2xl border border-border-color bg-card-bg px-4 py-3.5 text-sm text-text-primary text-left rtl:text-right outline-none backdrop-blur-xl transition-all duration-300 focus:border-cyan-500/50 focus:bg-cyan-950/10 focus:ring-2 focus:ring-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60 flex items-center justify-between cursor-pointer"
       >
-        <span className="truncate">{selectedOption ? selectedOption.label : 'Select role'}</span>
+        <span className="truncate">{selectedOption ? selectedOption.label : (t('upload.select_role') || 'Select role')}</span>
         <ChevronDown className={`h-4 w-4 text-text-secondary transition-transform duration-300 ${isOpen ? 'rotate-180 text-cyan-400' : ''}`} />
       </button>
 
@@ -75,7 +76,7 @@ function CustomSelect({ value, onChange, options, disabled }) {
                       onChange(opt.value)
                       setIsOpen(false)
                     }}
-                    className={`w-full text-left px-4 py-3 rounded-xl text-sm transition-all duration-200 flex items-center justify-between cursor-pointer ${isSelected
+                    className={`w-full text-left rtl:text-right px-4 py-3 rounded-xl text-sm transition-all duration-200 flex items-center justify-between cursor-pointer ${isSelected
                         ? 'bg-cyan-500 text-black font-semibold border border-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.25)]'
                         : 'text-text-primary hover:bg-cyan-500 hover:text-black border border-transparent'
                       }`}
@@ -94,6 +95,7 @@ function CustomSelect({ value, onChange, options, disabled }) {
 }
 
 function SuccessScreen({ sentPackageInfo, onTrackProgress, onViewDetails, onReturn }) {
+  const { t } = useLocale()
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -110,56 +112,56 @@ function SuccessScreen({ sentPackageInfo, onTrackProgress, onViewDetails, onRetu
       </div>
 
       <h2 className="text-3xl font-bold tracking-tight text-text-primary sm:text-4xl">
-        Workflow Dispatched
+        {t('upload.success_title')}
       </h2>
       <p className="mt-2 text-sm text-zinc-400 max-w-md">
-        Your document has been sent successfully. The sequential enterprise routing sequence is now active.
+        {t('upload.success_desc')}
       </p>
 
       {/* Details Receipt Card */}
-      <div className="w-full max-w-md mt-8 p-6 rounded-2xl glass-panel text-left space-y-4 shadow-lg">
+      <div className="w-full max-w-md mt-8 p-6 rounded-2xl glass-panel text-left rtl:text-right space-y-4 shadow-lg">
         <div className="flex items-center justify-between border-b border-border-color pb-3">
-          <span className="text-xs font-bold uppercase tracking-wider text-text-secondary">Envelope Details</span>
+          <span className="text-xs font-bold uppercase tracking-wider text-text-secondary">{t('upload.envelope_details') || 'Envelope Details'}</span>
           <span className="inline-flex items-center gap-1 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-mono font-bold uppercase text-cyan-400 tracking-wider animate-pulse">
-            <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-ping mr-1" />
-            In Progress
+            <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-ping mr-1 rtl:mr-0 rtl:ml-1" />
+            {t('common.status_in_progress') || 'In Progress'}
           </span>
         </div>
 
         <div className="space-y-3">
           <div className="flex items-start justify-between gap-4">
-            <span className="text-xs text-text-secondary shrink-0">Document</span>
+            <span className="text-xs text-text-secondary shrink-0">{t('upload.document_label') || 'Document'}</span>
             <span className="text-xs font-medium text-text-primary truncate flex items-center gap-1.5 max-w-[240px]">
               <FileText className="h-3.5 w-3.5 text-text-secondary shrink-0" />
-              <span className="truncate" title={sentPackageInfo.documentName}>{sentPackageInfo.documentName}</span>
+              <span className="truncate" title={sentPackageInfo.documentName} dir="ltr">{sentPackageInfo.documentName}</span>
             </span>
           </div>
 
           <div className="flex items-center justify-between">
-            <span className="text-xs text-text-secondary">Active Routing Step</span>
+            <span className="text-xs text-text-secondary">{t('upload.active_routing_step') || 'Active Routing Step'}</span>
             <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border bg-cyan-500/10 text-cyan-400 border-cyan-500/20">
-              Step 1 - {sentPackageInfo.firstStepRole}
+              {t('templates.step_number', { number: 1 })} - {t('templates.role_' + sentPackageInfo.firstStepRole) || sentPackageInfo.firstStepRole}
             </span>
           </div>
 
           <div className="flex items-center justify-between">
-            <span className="text-xs text-text-secondary">Total Participants</span>
-            <span className="text-xs font-semibold text-text-primary font-mono">
-              {sentPackageInfo.totalParticipants} enrolled
+            <span className="text-xs text-text-secondary">{t('upload.total_participants') || 'Total Participants'}</span>
+            <span className="text-xs font-semibold text-text-primary font-mono" dir="ltr">
+              {sentPackageInfo.totalParticipants}
             </span>
           </div>
 
           <div className="flex items-center justify-between">
-            <span className="text-xs text-text-secondary">Dispatched Date</span>
-            <span className="text-xs font-semibold text-text-primary font-mono">
+            <span className="text-xs text-text-secondary">{t('upload.dispatched_date') || 'Dispatched Date'}</span>
+            <span className="text-xs font-semibold text-text-primary font-mono" dir="ltr">
               {sentPackageInfo.createdDate}
             </span>
           </div>
         </div>
 
         <div className="border-t border-border-color pt-3 flex justify-between items-center text-[10px] text-text-secondary">
-          <span>Envelope ID</span>
-          <span className="font-mono text-text-primary select-all truncate max-w-[200px]" title={sentPackageInfo.id}>
+          <span>{t('upload.envelope_id') || 'Envelope ID'}</span>
+          <span className="font-mono text-text-primary select-all truncate max-w-[200px]" title={sentPackageInfo.id} dir="ltr">
             {sentPackageInfo.id}
           </span>
         </div>
@@ -174,7 +176,7 @@ function SuccessScreen({ sentPackageInfo, onTrackProgress, onViewDetails, onRetu
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-3.5 text-xs font-bold transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.45)] uppercase tracking-wider cursor-pointer"
           >
             <Activity className="h-4 w-4" />
-            Track Progress
+            {t('upload.btn_track_progress')}
           </button>
 
           <button
@@ -183,7 +185,7 @@ function SuccessScreen({ sentPackageInfo, onTrackProgress, onViewDetails, onRetu
             className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-primary hover:text-cyan-400 px-4 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
           >
             <Eye className="h-4 w-4" />
-            View Package
+            {t('package_detail.title')}
           </button>
         </div>
 
@@ -192,45 +194,45 @@ function SuccessScreen({ sentPackageInfo, onTrackProgress, onViewDetails, onRetu
           onClick={onReturn}
           className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-4 py-3 text-xs font-medium transition-all duration-300 cursor-pointer"
         >
-          Return to Workspace
-          <ArrowRight className="h-3.5 w-3.5" />
+          {t('nav.back_to_dashboard')}
+          <ArrowRight className="h-3.5 w-3.5 rtl:rotate-180" />
         </button>
       </div>
     </motion.div>
   )
 }
 
-const steps = [
-  {
-    id: "documents",
-    title: "Documents",
-    description: "Upload document"
-  },
-  {
-    id: "recipients",
-    title: "Recipients",
-    description: "Configure signers"
-  },
-  {
-    id: "prepare",
-    title: "Prepare",
-    description: "Place fields"
-  },
-  {
-    id: "settings",
-    title: "Settings",
-    description: "Package settings"
-  },
-  {
-    id: "review",
-    title: "Review",
-    description: "Final review"
-  }
-];
-
 export default function UploadPage() {
   const { t } = useLocale()
   const navigate = useNavigate()
+
+  const steps = useMemo(() => [
+    {
+      id: "documents",
+      title: t('upload.step_documents'),
+      description: t('upload.step_documents_desc')
+    },
+    {
+      id: "recipients",
+      title: t('upload.step_recipients'),
+      description: t('upload.step_recipients_desc')
+    },
+    {
+      id: "prepare",
+      title: t('upload.step_prepare'),
+      description: t('upload.step_prepare_desc')
+    },
+    {
+      id: "settings",
+      title: t('upload.step_settings'),
+      description: t('upload.step_settings_desc')
+    },
+    {
+      id: "review",
+      title: t('upload.step_review_tab'),
+      description: t('upload.step_review_desc')
+    }
+  ], [t]);
   const templateId = useMemo(() => new URLSearchParams(window.location.search).get('templateId'), [])
   const [loadedTemplate, setLoadedTemplate] = useState(null)
 
@@ -1122,8 +1124,8 @@ export default function UploadPage() {
             to="/"
             className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-400 hover:text-cyan-400 transition-colors"
           >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Dashboard
+            <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
+            {t('nav.back_to_dashboard')}
           </Link>
           <UserNav />
         </motion.div>
@@ -1165,14 +1167,14 @@ export default function UploadPage() {
                   {loadedTemplate && (
                     <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-semibold text-violet-400 backdrop-blur-md mb-2">
                       <SparkleIcon className="h-3 w-3 animate-pulse text-violet-400" />
-                      Template: {loadedTemplate.name}
+                      {t('templates.modal_tab_details')}: {loadedTemplate.name}
                     </div>
                   )}
                   <h1 className="text-4xl font-bold tracking-tight text-text-primary sm:text-[60px] sm:leading-none">
                     {t('upload.create_package')}
                   </h1>
                   <p className="text-sm font-medium text-text-secondary sm:text-base">
-                    Upload, configure, and send documents for signature.
+                    {t('upload.subtitle')}
                   </p>
                 </div>
               </div>
@@ -1189,7 +1191,7 @@ export default function UploadPage() {
               {/* Promoted Step Header */}
               <div className="flex flex-col gap-1 mb-6 z-10 relative">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-accent">
-                  STEP {currentStepInfo.num} OF {steps.length}
+                  {t('upload.step_num_of_total', { num: currentStepInfo.num, total: steps.length })}
                 </span>
                 <h2 className="text-3xl font-extrabold tracking-tight text-text-primary sm:text-4xl">
                   {currentStepInfo.title}
@@ -1214,7 +1216,7 @@ export default function UploadPage() {
                           setCurrentTab(tab.id);
                           setError('');
                         }}
-                        className={`flex-1 text-left glass-panel rounded-2xl py-7 px-6 min-h-[110px] transition-all duration-200 relative overflow-hidden group hover:-translate-y-[2px] ${isActive
+                        className={`flex-1 text-left rtl:text-right glass-panel rounded-2xl py-7 px-6 min-h-[110px] transition-all duration-200 relative overflow-hidden group hover:-translate-y-[2px] ${isActive
                             ? 'bg-cyan-500/5 border-cyan-500/30 shadow-md'
                             : isCompleted
                               ? 'bg-emerald-500/5 border-emerald-500/25'
@@ -1222,10 +1224,10 @@ export default function UploadPage() {
                           } disabled:opacity-50 disabled:cursor-not-allowed`}
                       >
                         {/* Tiny side accent color bar */}
-                        <div className={`absolute left-0 top-0 bottom-0 w-1 transition-all ${isActive ? 'bg-accent' : isCompleted ? 'bg-emerald-400' : 'bg-transparent'
+                        <div className={`absolute left-0 rtl:left-auto rtl:right-0 top-0 bottom-0 w-1 transition-all ${isActive ? 'bg-accent' : isCompleted ? 'bg-emerald-400' : 'bg-transparent'
                           }`} />
 
-                        <div className="flex items-center justify-between mb-1.5 pl-1.5">
+                        <div className="flex items-center justify-between mb-1.5 pl-1.5 rtl:pl-0 rtl:pr-1.5">
                           <span className={`text-[10px] font-bold uppercase tracking-widest ${isActive ? 'text-accent' : isCompleted ? 'text-emerald-400' : 'text-text-secondary'
                             }`}>
                             {idx + 1}. {tab.title}
@@ -1236,7 +1238,7 @@ export default function UploadPage() {
                             <div className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
                           ) : null}
                         </div>
-                        <p className="text-[10px] font-normal text-text-secondary/70 pl-1.5 truncate group-hover:text-accent transition-colors">
+                        <p className="text-[10px] font-normal text-text-secondary/70 pl-1.5 rtl:pl-0 rtl:pr-1.5 truncate group-hover:text-accent transition-colors">
                           {tab.description}
                         </p>
                       </button>
@@ -1253,7 +1255,7 @@ export default function UploadPage() {
                     <div className="space-y-2">
                       <h3 className="text-base font-semibold text-text-primary flex items-center gap-2 mb-2">
                         <FileText className="h-4.5 w-4.5 text-accent" />
-                        Encrypted Payload (PDF)
+                        {t('upload.encrypted_payload')}
                       </h3>
                       <div className="relative group/upload">
                         <input
@@ -1277,7 +1279,7 @@ export default function UploadPage() {
 
                               const isFilePdf = selectedFile.type === 'application/pdf' || selectedFile.name?.toLowerCase().endsWith('.pdf')
                               if (!isFilePdf) {
-                                setUploadError('Only PDF documents are supported.')
+                                setUploadError(t('errors.pdf_only'))
                                 return
                               }
 
@@ -1364,15 +1366,15 @@ export default function UploadPage() {
                           </motion.div>
                           {(file || existingDocName) ? (
                             <div className="text-center">
-                              <span className="text-[10px] font-bold uppercase tracking-widest text-accent/70 mb-1.5 block">PDF Document • Secure upload</span>
-                              <p className="text-sm font-medium text-accent">{file ? file.name : existingDocName}</p>
-                              <p className="mt-1 text-xs text-accent/75">Ready for processing</p>
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-accent/70 mb-1.5 block">{t('upload.pdf_secure_upload')}</span>
+                              <p className="text-sm font-medium text-accent" dir="ltr">{file ? file.name : existingDocName}</p>
+                              <p className="mt-1 text-xs text-accent/75">{t('upload.ready_for_processing')}</p>
                             </div>
                           ) : (
                             <div className="text-center">
-                              <span className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/70 mb-1.5 block">PDF Document • Secure upload</span>
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/70 mb-1.5 block">{t('upload.pdf_secure_upload')}</span>
                               <p className="text-sm font-medium text-text-primary">{t('upload.drop_zone_cta')}</p>
-                              <p className="mt-1 text-xs text-text-secondary">Only PDF files are supported</p>
+                              <p className="mt-1 text-xs text-text-secondary">{t('upload.only_pdf_supported')}</p>
                             </div>
                           )}
                         </div>
@@ -1380,12 +1382,12 @@ export default function UploadPage() {
                       {isValidating && (
                         <div className="mt-3 flex items-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-4 py-2.5 text-xs text-accent">
                           <span className="h-3.5 w-3.5 rounded-full border-2 border-accent border-t-transparent animate-spin shrink-0" />
-                          <span>Validating document payload...</span>
+                          <span>{t('upload.validating_payload')}</span>
                         </div>
                       )}
                       {uploadError && (
                         <div className="mt-3 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-2.5 text-xs text-red-400">
-                          <span className="font-bold shrink-0">⚠️ Error:</span>
+                          <span className="font-bold shrink-0">⚠️ {t('common.error')}:</span>
                           <span>{uploadError}</span>
                         </div>
                       )}
@@ -1399,7 +1401,7 @@ export default function UploadPage() {
                           onClick={handleSaveDraft}
                           className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {isSavingDraft ? 'Saving…' : draftSaved ? '✓ Saved' : 'Save Draft'}
+                          {isSavingDraft ? t('upload.saving_draft') : draftSaved ? t('upload.saved_draft') : t('upload.save_draft')}
                         </button>
                         <button
                           type="button"
@@ -1407,7 +1409,7 @@ export default function UploadPage() {
                           className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
                         >
                           <SparkleIcon className="h-4 w-4 shrink-0 text-text-secondary" />
-                          Save as Template
+                          {t('upload.save_as_template')}
                         </button>
                       </div>
                       <button
@@ -1416,8 +1418,8 @@ export default function UploadPage() {
                         onClick={() => setCurrentTab('recipients')}
                         className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-6 py-3.5 text-xs font-bold transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.45)] uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        Continue to Recipients
-                        <ArrowRight className="h-4 w-4 stroke-[2.5]" />
+                        {t('upload.continue_to_recipients')}
+                        <ArrowRight className="h-4 w-4 stroke-[2.5] rtl:rotate-180" />
                       </button>
                     </div>
                   </div>
@@ -1430,10 +1432,10 @@ export default function UploadPage() {
                       <div>
                         <h3 className="text-base font-semibold tracking-wide text-text-primary flex items-center gap-2">
                           <UserPlus className="h-5 w-5 text-accent" />
-                          Workflow Builder
+                          {t('upload.workflow_builder')}
                         </h3>
                         <p className="text-xs text-text-secondary mt-1">
-                          Design a sequential routing workflow. Participants in each step will receive the document in order.
+                          {t('upload.workflow_builder_desc')}
                         </p>
                       </div>
 
@@ -1444,7 +1446,7 @@ export default function UploadPage() {
                         className="inline-flex items-center gap-1.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 hover:bg-cyan-500 hover:text-black hover:border-cyan-400 px-4 py-2.5 text-xs font-semibold text-accent transition-all duration-300 shadow-[0_0_15px_rgba(34,211,238,0.05)] cursor-pointer shrink-0 self-start sm:self-auto"
                       >
                         <Plus className="h-4 w-4" />
-                        Add Workflow Step
+                        {t('upload.add_workflow_step')}
                       </button>
                     </div>
 
@@ -1453,9 +1455,9 @@ export default function UploadPage() {
                       <div className="flex items-center gap-3 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-4 text-sm text-cyan-200 animate-pulse">
                         <Sparkles className="h-5 w-5 text-cyan-400 shrink-0 animate-spin" />
                         <div>
-                          <p className="font-semibold text-cyan-300">Analyzing Signing Authority...</p>
+                          <p className="font-semibold text-cyan-300">{t('upload.analyzing_authority')}</p>
                           <p className="text-xs text-cyan-200/80 mt-0.5 font-mono">
-                            Extracting representatives and validation parameters. Please hold.
+                            {t('upload.analyzing_authority_desc')}
                           </p>
                         </div>
                       </div>
@@ -1472,13 +1474,13 @@ export default function UploadPage() {
                       <div className="flex items-start gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200">
                         <Sparkles className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
                         <div>
-                          <p className="font-semibold text-emerald-300 font-mono">Representative Pre-populated</p>
+                          <p className="font-semibold text-emerald-300 font-mono">{t('upload.rep_prepopulated')}</p>
                           <p className="text-xs text-emerald-200/80 mt-0.5 leading-relaxed">
-                            We automatically detected <strong>{candidates[0].name_en || candidates[0].name_ar}</strong> ({candidates[0].title_en || candidates[0].title_ar}) as the authorized signatory and pre-populated them in the list. Please add their email below.
+                            {t('upload.rep_detected_single', { name: candidates[0].name_en || candidates[0].name_ar, title: candidates[0].title_en || candidates[0].title_ar })}
                           </p>
                           {candidates[0].authority_clause && (
                             <p className="text-[11px] text-emerald-200/60 mt-1.5 border-t border-emerald-500/20 pt-1.5 italic">
-                              Clause: "{candidates[0].authority_clause}"
+                              {t('upload.clause_prefix')} "{candidates[0].authority_clause}"
                             </p>
                           )}
                         </div>
@@ -1490,11 +1492,11 @@ export default function UploadPage() {
                         <div className="flex items-center gap-2">
                           <Sparkles className="h-5 w-5 text-cyan-400 animate-pulse" />
                           <h4 className="text-sm font-semibold text-text-primary">
-                            Signing Representatives Detected
+                            {t('upload.signing_rep_detected')}
                           </h4>
                         </div>
                         <p className="text-xs text-text-secondary">
-                          Multiple authorized signatories were found in this contract. Select who you would like to include as signers in the workflow:
+                          {t('upload.signing_rep_desc')}
                         </p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-1">
                           {pendingCandidates.map((cand) => {
@@ -1537,7 +1539,7 @@ export default function UploadPage() {
                             disabled={selectedCandidateIds.length === 0 || isSubmitting}
                             className="rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-2.5 text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
                           >
-                            Add Selected Signers
+                            {t('upload.add_selected_signers')}
                           </button>
                           <button
                             type="button"
@@ -1545,7 +1547,7 @@ export default function UploadPage() {
                             disabled={isSubmitting}
                             className="rounded-xl bg-transparent border border-border-color text-text-secondary hover:text-text-primary px-4 py-2.5 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
                           >
-                            Skip
+                            {t('upload.skip')}
                           </button>
                         </div>
                       </div>
@@ -1554,7 +1556,7 @@ export default function UploadPage() {
                     {!isAnalyzing && candidates && candidates.length === 0 && file && (
                       <div className="flex items-center gap-3 rounded-2xl border border-border-color bg-card-bg/50 px-4 py-4 text-xs text-text-secondary">
                         <AlertCircle className="h-4 w-4 text-zinc-500 shrink-0" />
-                        <span>No representatives detected in this contract. Please add participants manually.</span>
+                        <span>{t('upload.no_rep_detected')}</span>
                       </div>
                     )}
 
@@ -1566,14 +1568,14 @@ export default function UploadPage() {
                             {/* Step Header */}
                             <div className="flex items-center justify-between mb-4 pb-3 border-b border-border-color">
                               <div className="flex items-center gap-3">
-                                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-cyan-500/10 border border-cyan-500/30 text-xs font-bold text-accent">
+                                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-cyan-500/10 border border-cyan-500/30 text-xs font-bold text-accent font-mono">
                                   {step.stepNumber}
                                 </span>
                                 <div>
                                   <h4 className="text-sm font-semibold text-text-primary uppercase tracking-wider">
-                                    Step {step.stepNumber} Recipients
+                                    {t('upload.step_recipients_title', { number: step.stepNumber })}
                                   </h4>
-                                  <p className="text-[10px] text-text-secondary">Executes in parallel at this sequence number</p>
+                                  <p className="text-[10px] text-text-secondary">{t('upload.step_parallel_desc')}</p>
                                 </div>
                               </div>
 
@@ -1584,7 +1586,7 @@ export default function UploadPage() {
                                   disabled={isSubmitting || stepIdx === 0}
                                   onClick={() => moveStep(step.stepNumber, 'up')}
                                   className="rounded-lg p-1.5 text-text-secondary hover:text-accent hover:bg-cyan-500/10 transition-all disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed animate-none"
-                                  title="Move Step Up"
+                                  title={t('upload.move_step_up')}
                                 >
                                   <ChevronDown className="h-4 w-4 rotate-180" />
                                 </button>
@@ -1595,7 +1597,7 @@ export default function UploadPage() {
                                   disabled={isSubmitting || stepIdx === workflowSteps.length - 1}
                                   onClick={() => moveStep(step.stepNumber, 'down')}
                                   className="rounded-lg p-1.5 text-text-secondary hover:text-accent hover:bg-cyan-500/10 transition-all disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed animate-none"
-                                  title="Move Step Down"
+                                  title={t('upload.move_step_down')}
                                 >
                                   <ChevronDown className="h-4 w-4" />
                                 </button>
@@ -1606,7 +1608,7 @@ export default function UploadPage() {
                                   disabled={isSubmitting || workflowSteps.length <= 1}
                                   onClick={() => removeStep(step.stepNumber)}
                                   className="rounded-lg p-1.5 text-text-secondary hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed animate-none"
-                                  title="Delete Step"
+                                  title={t('upload.delete_step')}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </button>
@@ -1615,13 +1617,13 @@ export default function UploadPage() {
 
                             {/* Step Recipients List/Table */}
                             <div className="overflow-visible">
-                              <table className="w-full text-left border-collapse text-sm">
+                              <table className="w-full text-left rtl:text-right border-collapse text-sm">
                                 <thead>
                                   <tr className="text-text-secondary uppercase text-[9px] font-bold tracking-wider bg-bg-primary/5 border-b border-border-color">
-                                    <th className="px-4 py-2 min-w-[200px]">Name</th>
-                                    <th className="px-4 py-2 min-w-[220px]">Email Address</th>
-                                    <th className="px-4 py-2 min-w-[200px]">Role</th>
-                                    <th className="px-4 py-2 text-center w-[80px]">Actions</th>
+                                    <th className="px-4 py-2 min-w-[200px]">{t('upload.col_name')}</th>
+                                    <th className="px-4 py-2 min-w-[220px]">{t('upload.col_email')}</th>
+                                    <th className="px-4 py-2 min-w-[200px]">{t('upload.col_role')}</th>
+                                    <th className="px-4 py-2 text-center w-[80px]">{t('upload.col_actions')}</th>
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border-color">
@@ -1630,13 +1632,13 @@ export default function UploadPage() {
                                       <td colSpan="4" className="px-4 py-8 text-center text-text-secondary">
                                         <div className="flex flex-col items-center justify-center">
                                           <User className="h-6 w-6 text-text-secondary/55 mb-1 stroke-[1.5]" />
-                                          <p className="text-xs font-medium text-text-secondary">No participants in this step.</p>
+                                          <p className="text-xs font-medium text-text-secondary">{t('upload.no_participants_in_step')}</p>
                                           <button
                                             type="button"
                                             onClick={() => addParticipantToStep(step.stepNumber)}
-                                            className="mt-2 text-[10px] text-accent hover:underline font-semibold"
+                                            className="mt-2 text-[10px] text-accent hover:underline font-semibold cursor-pointer"
                                           >
-                                            + Add Participant
+                                            {t('upload.add_participant_step_btn')}
                                           </button>
                                         </div>
                                       </td>
@@ -1646,23 +1648,24 @@ export default function UploadPage() {
                                       <tr key={p.id} className="hover:bg-bg-primary/30 transition-colors group/row">
                                         <td className="px-3 py-2.5 align-middle">
                                           <div className="relative">
-                                            <User className="absolute left-3 h-4 w-4 text-text-secondary/60 top-1/2 -translate-y-1/2" />
+                                            <User className="absolute left-3 rtl:left-auto rtl:right-3 h-4 w-4 text-text-secondary/60 top-1/2 -translate-y-1/2" />
                                             <input
                                               type="text"
                                               value={p.name}
                                               onChange={(e) => updateParticipant(step.stepNumber, p.id, 'name', e.target.value)}
-                                              placeholder="Full Name"
+                                              placeholder={t('upload.placeholder_full_name')}
                                               disabled={isSubmitting}
-                                              className={`${cellInputClass} pl-9`}
+                                              className={`${cellInputClass} pl-9 rtl:pl-3 rtl:pr-9`}
                                             />
                                           </div>
                                         </td>
                                         <td className="px-3 py-2.5 align-middle">
                                           <div className="relative">
-                                            <Mail className={`absolute left-3 h-4 w-4 top-1/2 -translate-y-1/2 ${participantErrors[p.id] ? 'text-red-400' : 'text-text-secondary/60'}`} />
+                                            <Mail className={`absolute left-3 rtl:left-auto rtl:right-3 h-4 w-4 top-1/2 -translate-y-1/2 ${participantErrors[p.id] ? 'text-red-400' : 'text-text-secondary/60'}`} />
                                             <input
                                               type="email"
                                               value={p.email}
+                                              dir="ltr"
                                               onChange={(e) => {
                                                 updateParticipant(step.stepNumber, p.id, 'email', e.target.value)
                                                 // Clear inline error as user types
@@ -1674,9 +1677,9 @@ export default function UploadPage() {
                                                   })
                                                 }
                                               }}
-                                              placeholder="Email Address"
+                                              placeholder={t('upload.placeholder_email_addr')}
                                               disabled={isSubmitting}
-                                              className={`${cellInputClass} pl-9 font-mono ${participantErrors[p.id]
+                                              className={`${cellInputClass} pl-9 rtl:pl-3 rtl:pr-9 font-mono ${participantErrors[p.id]
                                                   ? 'border-red-500/60 focus:border-red-500/60 focus:ring-red-500/20 bg-red-950/10'
                                                   : ''
                                                 }`}
@@ -1694,10 +1697,10 @@ export default function UploadPage() {
                                             onChange={(val) => updateParticipant(step.stepNumber, p.id, 'role', val)}
                                             disabled={isSubmitting}
                                             options={[
-                                              { value: 'signer', label: 'Signer (Signs)' },
-                                              { value: 'approver', label: 'Approver (Approves)' },
-                                              { value: 'reviewer', label: 'Reviewer (Reviews)' },
-                                              { value: 'cc', label: 'CC (Receives copy)' }
+                                              { value: 'signer', label: t('templates.role_signer_desc') },
+                                              { value: 'approver', label: t('templates.role_approver_desc') },
+                                              { value: 'reviewer', label: t('templates.role_reviewer_desc') },
+                                              { value: 'cc', label: t('templates.role_cc_desc') }
                                             ]}
                                           />
                                         </td>
@@ -1729,7 +1732,7 @@ export default function UploadPage() {
                                   className="inline-flex items-center gap-1.5 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-primary hover:text-cyan-400 px-3 py-1.5 text-xs font-semibold transition-all duration-200 cursor-pointer"
                                 >
                                   <Plus className="h-3 w-3" />
-                                  Add Recipient to Step {step.stepNumber}
+                                  {t('upload.add_recipient_to_step', { number: step.stepNumber })}
                                 </button>
                               </div>
                             )}
@@ -1757,7 +1760,7 @@ export default function UploadPage() {
                           onClick={() => setCurrentTab('documents')}
                           className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-6 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
                         >
-                          Back
+                          {t('common.back')}
                         </button>
                         <button
                           type="button"
@@ -1765,7 +1768,7 @@ export default function UploadPage() {
                           onClick={handleSaveDraft}
                           className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {isSavingDraft ? 'Saving…' : draftSaved ? '✓ Saved' : 'Save Draft'}
+                          {isSavingDraft ? t('upload.saving_draft') : draftSaved ? t('upload.saved_draft') : t('upload.save_draft')}
                         </button>
                         <button
                           type="button"
@@ -1773,11 +1776,11 @@ export default function UploadPage() {
                           className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
                         >
                           <SparkleIcon className="h-4 w-4 shrink-0 text-text-secondary" />
-                          Save as Template
+                          {t('upload.save_as_template')}
                         </button>
                       </div>
 
-                      <div className="flex flex-col items-end gap-1">
+                      <div className="flex flex-col items-end rtl:items-start gap-1">
                         <button
                           type="button"
                           onClick={() => {
@@ -1788,9 +1791,9 @@ export default function UploadPage() {
                               step.participants.forEach(p => {
                                 const email = p.email.trim()
                                 if (!email) {
-                                  errors[p.id] = 'Email address is required.'
+                                  errors[p.id] = t('errors.required_fields')
                                 } else if (!emailRegex.test(email)) {
-                                  errors[p.id] = 'Enter a valid email address.'
+                                  errors[p.id] = t('errors.invalid_email')
                                 }
                               })
                             })
@@ -1804,12 +1807,12 @@ export default function UploadPage() {
                           }}
                           className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-6 py-3.5 text-xs font-bold transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.45)] uppercase tracking-wider cursor-pointer"
                         >
-                          Continue to Prepare
-                          <ArrowRight className="h-4 w-4 stroke-[2.5]" />
+                          {t('upload.continue_to_prepare')}
+                          <ArrowRight className="h-4 w-4 stroke-[2.5] rtl:rotate-180" />
                         </button>
                         {!hasSignerRole && (
                           <p className="text-[10px] text-amber-400 font-semibold mt-1">
-                            At least one participant must be assigned the "Signer" role.
+                            {t('upload.signer_must_exist')}
                           </p>
                         )}
                       </div>
@@ -1823,10 +1826,10 @@ export default function UploadPage() {
                     <div>
                       <h3 className="text-base font-semibold tracking-wide text-text-primary flex items-center gap-2">
                         <Crosshair className="h-5 w-5 text-accent" />
-                        Place Fields on Document
+                        {t('upload.place_fields_title')}
                       </h3>
                       <p className="text-xs text-text-secondary mt-1">
-                        Select a recipient, choose the field type, and click directly on the PDF pages below to position signature fields.
+                        {t('upload.place_fields_desc')}
                       </p>
                     </div>
 
@@ -1834,13 +1837,13 @@ export default function UploadPage() {
                       {/* Summary Card 1: Fields Count */}
                       <div className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[140px] relative hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
                         <div className="flex justify-between items-start">
-                          <span className="text-[10px] uppercase font-bold tracking-widest text-text-secondary">Summary</span>
+                          <span className="text-[10px] uppercase font-bold tracking-widest text-text-secondary">{t('upload.summary_card_title')}</span>
                           <FileText className="h-5 w-5 text-accent" />
                         </div>
                         <div className="mt-4 space-y-1">
-                          <h4 className="text-sm font-bold text-text-primary">Total Placed Fields</h4>
-                          <p className="text-[10px] text-text-secondary">Signature fields placed on document pages.</p>
-                          <div className="text-3xl font-light text-accent font-mono mt-2">
+                          <h4 className="text-sm font-bold text-text-primary">{t('upload.total_placed_fields')}</h4>
+                          <p className="text-[10px] text-text-secondary">{t('upload.placed_fields_desc')}</p>
+                          <div className="text-3xl font-light text-accent font-mono mt-2" dir="ltr">
                             {placedFields.length}
                           </div>
                         </div>
@@ -1849,15 +1852,15 @@ export default function UploadPage() {
                       {/* Summary Card 2: Instructions */}
                       <div className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[140px] md:col-span-2 relative hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
                         <div className="flex justify-between items-start">
-                          <span className="text-[10px] uppercase font-bold tracking-widest text-text-secondary">Instructions</span>
+                          <span className="text-[10px] uppercase font-bold tracking-widest text-text-secondary">{t('upload.instructions_card_title')}</span>
                           <SparkleIcon className="h-5 w-5 text-violet-400" />
                         </div>
                         <div className="mt-4 space-y-1">
-                          <h4 className="text-sm font-bold text-text-primary">How to position signature zones</h4>
+                          <h4 className="text-sm font-bold text-text-primary">{t('upload.how_to_position')}</h4>
                           <p className="text-xs text-text-secondary leading-relaxed">
-                            1. Select a recipient from the dropdown below or in the document editor.<br />
-                            2. Scroll down to the document editor below.<br />
-                            3. Click on any page where you want the signer to sign.
+                            {t('upload.position_step_1')}<br />
+                            {t('upload.position_step_2')}<br />
+                            {t('upload.position_step_3')}
                           </p>
                         </div>
                       </div>
@@ -1868,37 +1871,37 @@ export default function UploadPage() {
                       <div>
                         <h4 className="text-sm font-bold uppercase tracking-wider text-text-primary flex items-center gap-2">
                           <CheckCircle2 className="h-4 w-4 text-accent" />
-                          Placed Fields Summary
+                          {t('upload.placed_fields_summary')}
                         </h4>
-                        <p className="text-[10px] text-text-secondary mt-0.5">List of all active signature zones placed on the document.</p>
+                        <p className="text-[10px] text-text-secondary mt-0.5">{t('upload.placed_fields_list_desc')}</p>
                       </div>
 
                       {placedFields.length === 0 ? (
                         <div className="rounded-xl border border-dashed border-border-color bg-card-bg/40 p-8 text-center text-xs text-text-secondary">
-                          No fields placed yet. Scroll down to position your first signature zone on the PDF page.
+                          {t('upload.no_fields_placed')}
                         </div>
                       ) : (
                         <div className="max-h-60 overflow-y-auto custom-scrollbar divide-y divide-border-color">
                           {placedFields.map((field) => (
                             <div key={field.id} className="py-3 flex items-center justify-between text-xs hover:bg-cyan-500/[0.02] px-2 rounded-xl transition-all">
                               <div className="flex items-center gap-4">
-                                <span className="flex h-5 w-5 items-center justify-center rounded bg-cyan-500/10 text-[10px] font-bold text-accent">
+                                <span className="flex h-5 w-5 items-center justify-center rounded bg-cyan-500/10 text-[10px] font-bold text-accent font-mono" dir="ltr">
                                   P{field.page}
                                 </span>
                                 <div>
-                                  <span className="font-semibold text-text-primary">{field.participant_name || 'Signer'}</span>
-                                  <span className="text-[10px] text-text-secondary font-mono ml-2">({field.participant_email})</span>
+                                  <span className="font-semibold text-text-primary">{field.participant_name || t('templates.role_signer')}</span>
+                                  <span className="text-[10px] text-text-secondary font-mono ml-2 rtl:mr-2 rtl:ml-0" dir="ltr">({field.participant_email})</span>
                                 </div>
                               </div>
                               <div className="flex items-center gap-4">
-                                <span className="text-[10px] font-mono text-text-secondary">
+                                <span className="text-[10px] font-mono text-text-secondary" dir="ltr">
                                   X: {field.x_ratio.toFixed(2)} Y: {field.y_ratio.toFixed(2)}
                                 </span>
                                 <button
                                   type="button"
                                   onClick={() => removeField(field.id)}
                                   className="rounded-lg p-1 text-text-secondary hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
-                                  title="Delete Field"
+                                  title={t('common.delete')}
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </button>
@@ -1917,7 +1920,7 @@ export default function UploadPage() {
                           onClick={() => setCurrentTab('recipients')}
                           className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-6 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
                         >
-                          Back
+                          {t('upload.btn_back')}
                         </button>
                         <button
                           type="button"
@@ -1925,7 +1928,7 @@ export default function UploadPage() {
                           onClick={handleSaveDraft}
                           className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {isSavingDraft ? 'Saving…' : draftSaved ? '✓ Saved' : 'Save Draft'}
+                          {isSavingDraft ? t('upload.saving_draft') : draftSaved ? t('upload.saved_draft') : t('upload.save_draft')}
                         </button>
                         <button
                           type="button"
@@ -1933,7 +1936,7 @@ export default function UploadPage() {
                           className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
                         >
                           <SparkleIcon className="h-4 w-4 shrink-0 text-text-secondary" />
-                          Save as Template
+                          {t('upload.save_as_template')}
                         </button>
                       </div>
                       <div className="flex flex-col items-end gap-1">
@@ -1943,12 +1946,12 @@ export default function UploadPage() {
                           onClick={() => setCurrentTab('settings')}
                           className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-6 py-3.5 text-xs font-bold transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.45)] uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          Continue to Settings
-                          <ArrowRight className="h-4 w-4 stroke-[2.5]" />
+                          {t('upload.continue_to_settings')}
+                          <ArrowRight className="h-4 w-4 stroke-[2.5] rtl:rotate-180" />
                         </button>
                         {!isSignaturePlaced && (
                           <p className="text-[10px] text-amber-400 font-semibold mt-1">
-                            Please scroll down and place at least one signature zone.
+                            {t('upload.must_place_signature')}
                           </p>
                         )}
                       </div>
@@ -1962,10 +1965,10 @@ export default function UploadPage() {
                     <div>
                       <h3 className="text-base font-semibold tracking-wide text-text-primary flex items-center gap-2">
                         <Settings className="h-5 w-5 text-accent" />
-                        Request Settings
+                        {t('upload.request_settings_title')}
                       </h3>
                       <p className="text-xs text-text-secondary mt-1">
-                        Configure request alerts, document distribution, and delivery settings before dispatching.
+                        {t('upload.request_settings_desc')}
                       </p>
                     </div>
 
@@ -1973,13 +1976,13 @@ export default function UploadPage() {
                       {/* Switch 1: Reminders */}
                       <div className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[140px] relative hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
                         <div className="flex justify-between items-start">
-                          <span className="text-[10px] uppercase font-bold tracking-widest text-text-secondary">Alerts</span>
+                          <span className="text-[10px] uppercase font-bold tracking-widest text-text-secondary">{t('templates.card_alerts')}</span>
                           <Bell className={`h-5 w-5 ${sendReminders ? 'text-accent' : 'text-text-secondary'}`} />
                         </div>
                         <div className="mt-4 space-y-3">
                           <div>
-                            <h4 className="text-sm font-bold text-text-primary">Automatic Reminders</h4>
-                            <p className="text-[10px] text-text-secondary mt-0.5">Send status email alerts to pending signers.</p>
+                            <h4 className="text-sm font-bold text-text-primary">{t('upload.automatic_reminders')}</h4>
+                            <p className="text-[10px] text-text-secondary mt-0.5">{t('upload.automatic_reminders_desc')}</p>
                           </div>
                           <label className="flex items-center gap-2 cursor-pointer select-none">
                             <input
@@ -1989,9 +1992,9 @@ export default function UploadPage() {
                               disabled={isSubmitting}
                               className="sr-only peer"
                             />
-                            <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
+                            <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
                             <span className="text-xs text-text-secondary peer-checked:text-accent font-medium">
-                              {sendReminders ? 'Enabled' : 'Disabled'}
+                              {sendReminders ? t('common.enabled') : t('common.disabled')}
                             </span>
                           </label>
                         </div>
@@ -2000,13 +2003,13 @@ export default function UploadPage() {
                       {/* Switch 2: Final Document Delivery */}
                       <div className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[140px] relative hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
                         <div className="flex justify-between items-start">
-                          <span className="text-[10px] uppercase font-bold tracking-widest text-text-secondary">Distribution</span>
+                          <span className="text-[10px] uppercase font-bold tracking-widest text-text-secondary">{t('templates.card_delivery')}</span>
                           <Share2 className={`h-5 w-5 ${sendFinalEmail ? 'text-accent' : 'text-text-secondary'}`} />
                         </div>
                         <div className="mt-4 space-y-3">
                           <div>
-                            <h4 className="text-sm font-bold text-text-primary">Final Delivery</h4>
-                            <p className="text-[10px] text-text-secondary mt-0.5">Deliver completed copy to all participants.</p>
+                            <h4 className="text-sm font-bold text-text-primary">{t('upload.final_delivery')}</h4>
+                            <p className="text-[10px] text-text-secondary mt-0.5">{t('upload.final_delivery_desc')}</p>
                           </div>
                           <label className="flex items-center gap-2 cursor-pointer select-none">
                             <input
@@ -2016,9 +2019,9 @@ export default function UploadPage() {
                               disabled={isSubmitting}
                               className="sr-only peer"
                             />
-                            <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
+                            <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
                             <span className="text-xs text-text-secondary peer-checked:text-accent font-medium">
-                              {sendFinalEmail ? 'Deliver' : 'Do Not Deliver'}
+                              {sendFinalEmail ? t('common.enabled') : t('common.disabled')}
                             </span>
                           </label>
                         </div>
@@ -2027,13 +2030,13 @@ export default function UploadPage() {
                       {/* Switch 3: Allow Printing */}
                       <div className="glass-panel rounded-2xl p-5 flex flex-col justify-between min-h-[140px] relative hover:-translate-y-1 hover:shadow-lg transition-all duration-200">
                         <div className="flex justify-between items-start">
-                          <span className="text-[10px] uppercase font-bold tracking-widest text-text-secondary">Permissions</span>
+                          <span className="text-[10px] uppercase font-bold tracking-widest text-text-secondary">{t('templates.card_permissions')}</span>
                           <Printer className={`h-5 w-5 ${allowPrinting ? 'text-accent' : 'text-text-secondary'}`} />
                         </div>
                         <div className="mt-4 space-y-3">
                           <div>
-                            <h4 className="text-sm font-bold text-text-primary">Allow Printing</h4>
-                            <p className="text-[10px] text-text-secondary mt-0.5">Allow recipients to download or print copies.</p>
+                            <h4 className="text-sm font-bold text-text-primary">{t('upload.allow_printing_title')}</h4>
+                            <p className="text-[10px] text-text-secondary mt-0.5">{t('upload.allow_printing_desc')}</p>
                           </div>
                           <label className="flex items-center gap-2 cursor-pointer select-none">
                             <input
@@ -2043,9 +2046,9 @@ export default function UploadPage() {
                               disabled={isSubmitting}
                               className="sr-only peer"
                             />
-                            <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
+                            <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
                             <span className="text-xs text-text-secondary peer-checked:text-accent font-medium">
-                              {allowPrinting ? 'Allowed' : 'Restricted'}
+                              {allowPrinting ? t('common.enabled') : t('common.disabled')}
                             </span>
                           </label>
                         </div>
@@ -2057,17 +2060,17 @@ export default function UploadPage() {
                       <div>
                         <h4 className="text-base font-semibold text-text-primary flex items-center gap-2">
                           <Shield className="h-5 w-5 text-accent" />
-                          Security & Authentication
+                          {t('upload.security_auth_title')}
                         </h4>
-                        <p className="text-[10px] text-text-secondary mt-0.5">Enforce identity verification and security requirements for signers.</p>
+                        <p className="text-[10px] text-text-secondary mt-0.5">{t('upload.security_auth_desc')}</p>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Toggle: Terms Acceptance */}
                         <div className="flex items-start justify-between p-4 rounded-xl border border-border-color bg-card-bg/30">
-                          <div className="space-y-1 pr-4">
-                            <label className="text-xs font-semibold text-text-primary">Terms Acceptance</label>
-                            <p className="text-[10px] text-text-secondary leading-relaxed">Require signers to accept the terms before signing.</p>
+                          <div className="space-y-1 pr-4 rtl:pl-4 rtl:pr-0">
+                            <label className="text-xs font-semibold text-text-primary">{t('upload.terms_acceptance_title')}</label>
+                            <p className="text-[10px] text-text-secondary leading-relaxed">{t('upload.terms_acceptance_desc')}</p>
                           </div>
                           <label className="flex items-center gap-2 cursor-pointer select-none shrink-0">
                             <input
@@ -2077,15 +2080,15 @@ export default function UploadPage() {
                               disabled={isSubmitting}
                               className="sr-only peer"
                             />
-                            <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
+                            <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
                           </label>
                         </div>
 
                         {/* Toggle: Email OTP */}
                         <div className="flex items-start justify-between p-4 rounded-xl border border-border-color bg-card-bg/30">
-                          <div className="space-y-1 pr-4">
-                            <label className="text-xs font-semibold text-text-primary">Email OTP</label>
-                            <p className="text-[10px] text-text-secondary leading-relaxed">Require email verification before signing.</p>
+                          <div className="space-y-1 pr-4 rtl:pl-4 rtl:pr-0">
+                            <label className="text-xs font-semibold text-text-primary">{t('upload.email_otp_title')}</label>
+                            <p className="text-[10px] text-text-secondary leading-relaxed">{t('upload.email_otp_desc')}</p>
                           </div>
                           <label className="flex items-center gap-2 cursor-pointer select-none shrink-0">
                             <input
@@ -2095,18 +2098,18 @@ export default function UploadPage() {
                               disabled={isSubmitting}
                               className="sr-only peer"
                             />
-                            <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
+                            <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
                           </label>
                         </div>
 
                         {/* Toggle: SMS OTP */}
                         <div className="flex items-start justify-between p-4 rounded-xl border border-border-color bg-card-bg/30 opacity-60">
-                          <div className="space-y-1 pr-4">
+                          <div className="space-y-1 pr-4 rtl:pl-4 rtl:pr-0">
                             <div className="flex items-center gap-2">
-                              <label className="text-xs font-semibold text-text-primary">SMS OTP</label>
-                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">Coming Soon</span>
+                              <label className="text-xs font-semibold text-text-primary">{t('upload.sms_otp_title')}</label>
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">{t('nav.coming_soon')}</span>
                             </div>
-                            <p className="text-[10px] text-text-secondary leading-relaxed">Require SMS verification before signing.</p>
+                            <p className="text-[10px] text-text-secondary leading-relaxed">{t('upload.sms_otp_desc')}</p>
                           </div>
                           <label className="flex items-center gap-2 cursor-not-allowed select-none shrink-0">
                             <input
@@ -2121,9 +2124,9 @@ export default function UploadPage() {
 
                         {/* Toggle: National ID Verification */}
                         <div className="flex items-start justify-between p-4 rounded-xl border border-border-color bg-card-bg/30">
-                          <div className="space-y-1 pr-4">
-                            <label className="text-xs font-semibold text-text-primary">National ID Verification</label>
-                            <p className="text-[10px] text-text-secondary leading-relaxed">Require identity document verification.</p>
+                          <div className="space-y-1 pr-4 rtl:pl-4 rtl:pr-0">
+                            <label className="text-xs font-semibold text-text-primary">{t('upload.national_id_title')}</label>
+                            <p className="text-[10px] text-text-secondary leading-relaxed">{t('upload.national_id_desc')}</p>
                           </div>
                           <label className="flex items-center gap-2 cursor-pointer select-none shrink-0">
                             <input
@@ -2133,16 +2136,16 @@ export default function UploadPage() {
                               disabled={isSubmitting}
                               className="sr-only peer"
                             />
-                            <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
+                            <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
                           </label>
                         </div>
 
                         {/* Toggle: Face Verification */}
                         <div className="flex items-start justify-between p-4 rounded-xl border border-border-color bg-card-bg/30">
-                          <div className="space-y-1 pr-4">
-                            <label className="text-xs font-semibold text-text-primary">Face Verification</label>
-                            <p className="text-[9px] text-amber-500 font-semibold mt-0.5">Requires National ID Verification</p>
-                            <p className="text-[10px] text-text-secondary leading-relaxed">Require biometric face verification before signing.</p>
+                          <div className="space-y-1 pr-4 rtl:pl-4 rtl:pr-0">
+                            <label className="text-xs font-semibold text-text-primary">{t('upload.face_verification_title')}</label>
+                            <p className="text-[9px] text-amber-500 font-semibold mt-0.5">{t('upload.face_req_id_hint')}</p>
+                            <p className="text-[10px] text-text-secondary leading-relaxed">{t('upload.face_verification_desc')}</p>
                           </div>
                           <label className="flex items-center gap-2 cursor-pointer select-none shrink-0">
                             <input
@@ -2152,16 +2155,16 @@ export default function UploadPage() {
                               disabled={isSubmitting}
                               className="sr-only peer"
                             />
-                            <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
+                            <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
                           </label>
                         </div>
 
                         {/* Toggle: Representative Match */}
                         <div className="flex items-start justify-between p-4 rounded-xl border border-border-color bg-card-bg/30">
-                          <div className="space-y-1 pr-4">
-                            <label className="text-xs font-semibold text-text-primary">Representative Match</label>
-                            <p className="text-[9px] text-amber-500 font-semibold mt-0.5">Requires Face Verification and National ID Verification</p>
-                            <p className="text-[10px] text-text-secondary leading-relaxed">Require representative identity verification.</p>
+                          <div className="space-y-1 pr-4 rtl:pl-4 rtl:pr-0">
+                            <label className="text-xs font-semibold text-text-primary">{t('upload.representative_match_title')}</label>
+                            <p className="text-[9px] text-amber-500 font-semibold mt-0.5">{t('upload.rep_req_face_hint')}</p>
+                            <p className="text-[10px] text-text-secondary leading-relaxed">{t('upload.representative_match_desc')}</p>
                           </div>
                           <label className="flex items-center gap-2 cursor-pointer select-none shrink-0">
                             <input
@@ -2171,7 +2174,7 @@ export default function UploadPage() {
                               disabled={isSubmitting}
                               className="sr-only peer"
                             />
-                            <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
+                            <div className="relative w-10 h-6 bg-text-secondary/20 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-text-secondary after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500 peer-checked:after:bg-white peer-checked:after:border-cyan-400" />
                           </label>
                         </div>
                       </div>
@@ -2182,16 +2185,17 @@ export default function UploadPage() {
                       <div>
                         <h4 className="text-base font-semibold text-text-primary flex items-center gap-2">
                           <Mail className="h-4 w-4 text-accent" />
-                          Additional Recipients
+                          {t('upload.additional_recipients_title')}
                         </h4>
-                        <p className="text-[10px] text-text-secondary mt-0.5">Receive a carbon copy (CC) of the completed transaction record.</p>
+                        <p className="text-[10px] text-text-secondary mt-0.5">{t('upload.additional_recipients_desc')}</p>
                       </div>
 
                       <div className="flex flex-col sm:flex-row gap-3">
                         <div className="flex-1 relative">
-                          <Mail className="absolute left-3 h-4 w-4 text-text-secondary/60 top-1/2 -translate-y-1/2" />
+                          <Mail className="absolute left-3 rtl:right-3 rtl:left-auto h-4 w-4 text-text-secondary/60 top-1/2 -translate-y-1/2" />
                           <input
                             type="email"
+                            dir="ltr"
                             value={newRecipientEmail}
                             onChange={(e) => {
                               setNewRecipientEmail(e.target.value)
@@ -2203,9 +2207,9 @@ export default function UploadPage() {
                                 addRecipientEmail()
                               }
                             }}
-                            placeholder="Add observer email address (e.g. admin@company.com)"
+                            placeholder={t('upload.additional_recipient_placeholder')}
                             disabled={isSubmitting}
-                            className={`${inputClass} pl-10`}
+                            className={`${inputClass} pl-10 rtl:pr-10 rtl:pl-4`}
                           />
                         </div>
                         <button
@@ -2215,7 +2219,7 @@ export default function UploadPage() {
                           className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-card-bg hover:bg-cyan-500 hover:text-black border border-border-color hover:border-cyan-400 px-5 py-3.5 text-xs font-semibold text-text-primary transition-all duration-300 cursor-pointer shrink-0"
                         >
                           <Plus className="h-4 w-4" />
-                          Add Recipient
+                          {t('upload.add_recipient_btn')}
                         </button>
                       </div>
 
@@ -2229,6 +2233,7 @@ export default function UploadPage() {
                           {additionalRecipients.map((email) => (
                             <span
                               key={email}
+                              dir="ltr"
                               className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-300 font-mono animate-none"
                             >
                               {email}
@@ -2254,7 +2259,7 @@ export default function UploadPage() {
                           onClick={() => setCurrentTab('prepare')}
                           className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-6 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
                         >
-                          Back
+                          {t('upload.btn_back')}
                         </button>
                         <button
                           type="button"
@@ -2262,7 +2267,7 @@ export default function UploadPage() {
                           onClick={handleSaveDraft}
                           className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {isSavingDraft ? 'Saving…' : draftSaved ? '✓ Saved' : 'Save Draft'}
+                          {isSavingDraft ? t('upload.saving_draft') : draftSaved ? t('upload.saved_draft') : t('upload.save_draft')}
                         </button>
                         <button
                           type="button"
@@ -2270,7 +2275,7 @@ export default function UploadPage() {
                           className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
                         >
                           <SparkleIcon className="h-4 w-4 shrink-0 text-text-secondary" />
-                          Save as Template
+                          {t('upload.save_as_template')}
                         </button>
                       </div>
                       <button
@@ -2278,8 +2283,8 @@ export default function UploadPage() {
                         onClick={() => setCurrentTab('review')}
                         className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-6 py-3.5 text-xs font-bold transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.45)] uppercase tracking-wider cursor-pointer"
                       >
-                        Continue to Review
-                        <ArrowRight className="h-4 w-4 stroke-[2.5]" />
+                        {t('upload.continue_to_review')}
+                        <ArrowRight className="h-4 w-4 stroke-[2.5] rtl:rotate-180" />
                       </button>
                     </div>
                   </div>
@@ -2291,10 +2296,10 @@ export default function UploadPage() {
                     <div>
                       <h3 className="text-base font-semibold tracking-wide text-text-primary flex items-center gap-2">
                         <Sparkles className="h-5 w-5 text-accent" />
-                        Review & Prepare
+                        {t('upload.review_prepare_title')}
                       </h3>
                       <p className="text-xs text-text-secondary mt-1">
-                        Preflight checklist validation and configuration summary before dispatch.
+                        {t('upload.review_prepare_desc')}
                       </p>
                     </div>
 
@@ -2305,17 +2310,17 @@ export default function UploadPage() {
                           <div className="flex items-center justify-between border-b border-border-color pb-3">
                             <h4 className="text-sm font-bold uppercase tracking-wider text-text-primary flex items-center gap-2">
                               <Sparkles className="h-4 w-4 text-violet-400" />
-                              Workflow Ready
+                              {t('upload.workflow_ready')}
                             </h4>
-                            <span className="text-[10px] text-text-secondary font-mono uppercase">Routing Overview</span>
+                            <span className="text-[10px] text-text-secondary font-mono uppercase">{t('upload.routing_overview')}</span>
                           </div>
 
                           <div className="flex items-center justify-between bg-card-bg border border-border-color rounded-2xl p-4 shadow-sm hover:-translate-y-0.5 hover:shadow-md transition-all duration-200">
                             <div className="space-y-0.5">
-                              <span className="text-[10px] text-text-secondary uppercase tracking-widest font-bold">Participants Enrolled</span>
-                              <h4 className="text-xs font-bold text-text-primary">Enrolled routing sequence</h4>
+                              <span className="text-[10px] text-text-secondary uppercase tracking-widest font-bold">{t('upload.participants_enrolled')}</span>
+                              <h4 className="text-xs font-bold text-text-primary">{t('upload.enrolled_routing_seq')}</h4>
                             </div>
-                            <span className="text-2xl font-light text-violet-400 font-mono">
+                            <span className="text-2xl font-light text-violet-400 font-mono" dir="ltr">
                               {workflowSteps.flatMap(s => s.participants).length}
                             </span>
                           </div>
@@ -2325,16 +2330,16 @@ export default function UploadPage() {
                             {workflowSteps.map((step, stepIdx) => {
                               const isFirst = step.stepNumber === 1;
                               return (
-                                <div key={step.stepNumber} className="relative pl-6 border-l border-border-color space-y-1">
+                                <div key={step.stepNumber} className="relative pl-6 rtl:pr-6 rtl:pl-0 border-l rtl:border-r rtl:border-l-0 border-border-color space-y-1">
                                   {/* Indicator dot */}
-                                  <div className={`absolute -left-[5.5px] top-1.5 h-2.5 w-2.5 rounded-full border border-bg-primary ${isFirst ? 'bg-violet-400 shadow-[0_0_8px_rgba(167,139,250,0.5)]' : 'bg-zinc-700'
+                                  <div className={`absolute -left-[5.5px] rtl:-right-[5.5px] rtl:left-auto top-1.5 h-2.5 w-2.5 rounded-full border border-bg-primary ${isFirst ? 'bg-violet-400 shadow-[0_0_8px_rgba(167,139,250,0.5)]' : 'bg-zinc-700'
                                     }`} />
 
                                   <div className="flex items-center justify-between text-xs">
-                                    <span className="font-semibold text-text-primary">Step {step.stepNumber}</span>
+                                    <span className="font-semibold text-text-primary">{t('templates.step_number', { number: step.stepNumber })}</span>
                                     <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold uppercase ${isFirst ? 'bg-violet-500/10 text-violet-400 border border-violet-500/20' : 'bg-card-bg text-text-secondary border border-border-color'
                                       }`}>
-                                      {isFirst ? 'Active on launch' : 'Pending'}
+                                      {isFirst ? t('upload.active_on_launch') : t('common.status_pending')}
                                     </span>
                                   </div>
                                   <div className="flex flex-wrap gap-1.5 pt-0.5">
@@ -2344,7 +2349,7 @@ export default function UploadPage() {
                                             p.role === 'reviewer' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' :
                                               'bg-card-bg text-text-primary border-border-color'
                                         }`}>
-                                        {p.name || 'Unnamed'} ({p.role})
+                                        {p.name || t('templates.role_signer')} ({t(`templates.role_${p.role}`) || p.role})
                                       </span>
                                     ))}
                                   </div>
@@ -2354,9 +2359,9 @@ export default function UploadPage() {
                           </div>
 
                           <div className="flex justify-between items-center bg-violet-500/10 border border-violet-500/20 rounded-xl px-4 py-3 text-xs mt-4">
-                            <span className="text-text-secondary font-semibold">Launch Status</span>
+                            <span className="text-text-secondary font-semibold">{t('upload.launch_status')}</span>
                             <span className="text-violet-400 font-bold uppercase tracking-wider animate-pulse">
-                              Ready To Launch
+                              {t('upload.ready_to_launch')}
                             </span>
                           </div>
                         </div>
@@ -2367,42 +2372,42 @@ export default function UploadPage() {
                         <div className="flex items-center justify-between border-b border-border-color pb-3 mb-4">
                           <h4 className="text-sm font-bold uppercase tracking-wider text-text-primary flex items-center gap-2">
                             <CheckCircle2 className="h-4 w-4 text-accent" />
-                            Launch Checklist
+                            {t('upload.launch_checklist')}
                           </h4>
-                          <span className="text-[10px] text-text-secondary font-mono uppercase">Preflight Check</span>
+                          <span className="text-[10px] text-text-secondary font-mono uppercase">{t('upload.preflight_check')}</span>
                         </div>
 
                         <div className="space-y-3">
                           {[
                             {
-                              label: 'Document Ready',
+                              label: t('upload.check_doc_ready'),
                               isValid: isDocumentValid,
-                              desc: 'Valid PDF payload is uploaded and parsed.'
+                              desc: t('upload.check_doc_ready_desc')
                             },
                             {
-                              label: 'Participants Configured',
+                              label: t('upload.check_participants_ready'),
                               isValid: isWorkflowValid,
-                              desc: 'All recipient names and email addresses are valid.'
+                              desc: t('upload.check_participants_ready_desc')
                             },
                             {
-                              label: 'Workflow Configured',
+                              label: t('upload.check_workflow_ready'),
                               isValid: isWorkflowValid && hasSignerRole,
-                              desc: 'Sequential routing steps and signer roles are configured.'
+                              desc: t('upload.check_workflow_ready_desc')
                             },
                             {
-                              label: 'Request Settings Configured',
+                              label: t('upload.check_settings_ready'),
                               isValid: settingsValid,
-                              desc: 'Delivery settings and notifications set to default.'
+                              desc: t('upload.check_settings_ready_desc')
                             },
                             {
-                              label: 'Signature Zone Placed',
+                              label: t('upload.check_sig_placed'),
                               isValid: isSignaturePlaced,
-                              desc: 'Signature placement coordinates selected on document.'
+                              desc: t('upload.check_sig_placed_desc')
                             },
                             {
-                              label: 'Ready To Send',
+                              label: t('upload.check_ready_to_send'),
                               isValid: isDocumentValid && isWorkflowValid && hasSignerRole && isSignaturePlaced && settingsValid,
-                              desc: 'Workflow is verified and ready for dispatch.'
+                              desc: t('upload.check_ready_to_send_desc')
                             }
                           ].map((item, idx) => (
                             <div
@@ -2440,7 +2445,7 @@ export default function UploadPage() {
                           disabled={isSubmitting}
                           className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-6 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer disabled:opacity-50"
                         >
-                          Back
+                          {t('upload.btn_back')}
                         </button>
                         <button
                           type="button"
@@ -2448,7 +2453,7 @@ export default function UploadPage() {
                           onClick={handleSaveDraft}
                           className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {isSavingDraft ? 'Saving…' : draftSaved ? '✓ Saved' : 'Save Draft'}
+                          {isSavingDraft ? t('upload.saving_draft') : draftSaved ? t('upload.saved_draft') : t('upload.save_draft')}
                         </button>
                         <button
                           type="button"
@@ -2456,7 +2461,7 @@ export default function UploadPage() {
                           className="inline-flex items-center justify-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-5 py-3.5 text-xs font-bold transition-all duration-300 uppercase tracking-wider cursor-pointer"
                         >
                           <SparkleIcon className="h-4 w-4 shrink-0 text-text-secondary" />
-                          Save as Template
+                          {t('upload.save_as_template')}
                         </button>
                       </div>
 
@@ -2467,15 +2472,15 @@ export default function UploadPage() {
                           className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed px-8 py-3.5 text-xs font-bold text-black transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.45)] uppercase tracking-wider cursor-pointer"
                         >
                           <span className="relative z-10 flex items-center gap-2">
-                            {isSubmitting ? 'Launching Workflow…' : 'Send Package'}
-                            {!isSubmitting && <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />}
+                            {isSubmitting ? t('upload.launch_workflow') : t('upload.send_package_btn')}
+                            {!isSubmitting && <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1 rtl:rotate-180" />}
                           </span>
                           <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent group-hover:animate-[shimmer_1.5s_infinite]" />
                         </button>
 
                         {!isSignaturePlaced && (
                           <p className="text-[11px] text-amber-400 font-semibold text-right max-w-sm">
-                            Please scroll down to "Target Signature Zone" below and select a signature coordinate on the PDF document to enable sending.
+                            {t('upload.sig_placement_warning')}
                           </p>
                         )}
                       </div>
@@ -2518,10 +2523,10 @@ export default function UploadPage() {
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-medium uppercase tracking-widest text-violet-400 mb-3">
                   <Crosshair className="h-3.5 w-3.5" />
-                  Spatial Placement
+                  {t('upload.spatial_placement')}
                 </div>
-                <h2 className="text-base font-semibold tracking-wide text-text-primary font-sans">Place Fields on Document</h2>
-                <p className="mt-1 text-xs text-text-secondary">Select recipient and field type, then click on the PDF to place fields.</p>
+                <h2 className="text-base font-semibold tracking-wide text-text-primary font-sans">{t('upload.place_fields_header')}</h2>
+                <p className="mt-1 text-xs text-text-secondary">{t('upload.place_fields_sub')}</p>
               </div>
 
               {/* Selectors and Toolbar */}
@@ -2529,7 +2534,7 @@ export default function UploadPage() {
                 {/* Coordinate readout */}
                 {sigPosition && (
                   <div className="flex items-center gap-3 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 backdrop-blur-md self-end lg:self-center">
-                    <div className="flex gap-3 text-[10px] font-mono text-accent">
+                    <div className="flex gap-3 text-[10px] font-mono text-accent" dir="ltr">
                       <div><span className="text-cyan-600">P:</span>{sigPosition.page}</div>
                       <div><span className="text-cyan-600">X:</span>{sigPosition.x_ratio.toFixed(2)}</div>
                       <div><span className="text-cyan-600">Y:</span>{sigPosition.y_ratio.toFixed(2)}</div>
@@ -2539,16 +2544,16 @@ export default function UploadPage() {
 
                 {/* Participant Selector */}
                 <div className="flex flex-col gap-1">
-                  <span className="text-[9px] uppercase font-bold tracking-widest text-text-secondary">Recipient</span>
+                  <span className="text-[9px] uppercase font-bold tracking-widest text-text-secondary">{t('upload.recipient_label')}</span>
                   <select
                     value={activeParticipantEmail}
                     onChange={(e) => setActiveParticipantEmail(e.target.value)}
                     className="rounded-xl border border-border-color bg-card-bg text-xs text-text-primary px-3 py-2 outline-none focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20 max-w-[200px] cursor-pointer"
                   >
-                    <option value="">-- Choose Recipient --</option>
+                    <option value="">{t('upload.choose_recipient_option')}</option>
                     {allParticipants.map((p) => (
                       <option key={p.email} value={p.email}>
-                        {p.name} ({p.role})
+                        {p.name} ({t(`templates.role_${p.role}`) || p.role})
                       </option>
                     ))}
                   </select>
@@ -2556,27 +2561,21 @@ export default function UploadPage() {
 
                 {/* Field Type Toolbar */}
                 <div className="flex flex-col gap-1">
-                  <span className="text-[9px] uppercase font-bold tracking-widest text-text-secondary">Field Type</span>
+                  <span className="text-[9px] uppercase font-bold tracking-widest text-text-secondary">{t('upload.field_type_label')}</span>
                   <div className="flex rounded-xl bg-bg-primary/5 border border-border-color p-0.5">
-                    {/* Note: Current MVP supports only signature placement.
-                        Future planned field types:
-                        - date
-                        - text
-                        - checkbox
-                        These remain supported in the data model for future enterprise workflow expansion. */}
                     {[
-                      { id: 'signature', label: 'Signature' },
-                    ].map((t) => (
+                      { id: 'signature', label: t('upload.field_type_signature') },
+                    ].map((tField) => (
                       <button
-                        key={t.id}
+                        key={tField.id}
                         type="button"
-                        onClick={() => setSelectedFieldType(t.id)}
-                        className={`px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${selectedFieldType === t.id
+                        onClick={() => setSelectedFieldType(tField.id)}
+                        className={`px-2.5 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all ${selectedFieldType === tField.id
                             ? 'text-accent bg-cyan-500/10 border border-cyan-500/20'
                             : 'text-text-secondary hover:text-text-primary'
                           }`}
                       >
-                        {t.label}
+                        {tField.label}
                       </button>
                     ))}
                   </div>
@@ -2591,12 +2590,12 @@ export default function UploadPage() {
                 loading={
                   <div className="flex h-64 flex-col items-center justify-center gap-4 text-accent">
                     <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-                    <span className="text-sm font-medium animate-pulse tracking-widest uppercase">Rendering Data…</span>
+                    <span className="text-sm font-medium animate-pulse tracking-widest uppercase">{t('sign.rendering_data')}</span>
                   </div>
                 }
                 error={
                   <div className="flex h-64 items-center justify-center text-sm text-red-400">
-                    Failed to decode document.
+                    {t('sign.failed_decode_doc')}
                   </div>
                 }
               >
@@ -2617,7 +2616,7 @@ export default function UploadPage() {
                           <div className="absolute inset-0 border-2 border-cyan-500 shadow-[0_0_30px_rgba(34,211,238,0.3)] z-0 pointer-events-none" />
                         )}
 
-                        <div className="absolute left-4 top-4 z-10 rounded-lg border border-border-color bg-card-bg/85 px-3 py-1.5 text-xs font-mono text-text-primary backdrop-blur-md">
+                        <div className="absolute left-4 rtl:right-4 rtl:left-auto top-4 z-10 rounded-lg border border-border-color bg-card-bg/85 px-3 py-1.5 text-xs font-mono text-text-primary backdrop-blur-md" dir="ltr">
                           {pageNumber} / {numPages}
                         </div>
 
@@ -2657,7 +2656,7 @@ export default function UploadPage() {
                                       e.stopPropagation();
                                       removeField(f.id);
                                     }}
-                                    className="ml-1 rounded-full p-0.5 hover:bg-white/10 text-text-secondary hover:text-red-400 transition-colors pointer-events-auto cursor-pointer"
+                                    className="ml-1 rtl:mr-1 rtl:ml-0 rounded-full p-0.5 hover:bg-white/10 text-text-secondary hover:text-red-400 transition-colors pointer-events-auto cursor-pointer"
                                   >
                                     <X className="h-2.5 w-2.5" />
                                   </button>
@@ -2689,7 +2688,7 @@ export default function UploadPage() {
                               </div>
                               <div className="absolute left-0 top-3 -translate-x-1/2 pt-1">
                                 <div className="whitespace-nowrap rounded-lg border border-cyan-500/50 bg-card-bg/95 px-3 py-1 text-[10px] font-bold tracking-widest text-accent shadow-[0_0_20px_rgba(34,211,238,0.25)] backdrop-blur-md uppercase">
-                                  Sign Here
+                                  {t('upload.sign_here_marker')}
                                 </div>
                               </div>
                             </motion.div>
@@ -2727,7 +2726,7 @@ export default function UploadPage() {
               <button
                 type="button"
                 onClick={() => setIsTemplateModalOpen(false)}
-                className="absolute right-6 top-6 rounded-full bg-border-color p-1 text-text-secondary hover:bg-bg-primary/20 hover:text-text-primary transition-colors cursor-pointer"
+                className="absolute right-6 rtl:left-6 rtl:right-auto top-6 rounded-full bg-border-color p-1 text-text-secondary hover:bg-bg-primary/20 hover:text-text-primary transition-colors cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -2735,59 +2734,59 @@ export default function UploadPage() {
               <div className="mb-6 space-y-1">
                 <div className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent animate-none">
                   <SparkleIcon className="h-3 w-3" />
-                  Save Workflow Blueprint
+                  {t('upload.save_blueprint_badge')}
                 </div>
-                <h3 className="text-xl font-light text-text-primary sm:text-2xl">Save as Reusable Template</h3>
-                <p className="text-xs text-text-secondary">Persist the current workflow steps, roles, and settings configuration as a blueprint template.</p>
+                <h3 className="text-xl font-light text-text-primary sm:text-2xl">{t('upload.save_as_reusable_tpl')}</h3>
+                <p className="text-xs text-text-secondary">{t('upload.save_tpl_desc')}</p>
               </div>
 
               <form onSubmit={handleSaveTemplateSubmit} className="space-y-4">
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wide">Template Name</label>
+                  <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wide">{t('upload.tpl_name_label')}</label>
                   <input
                     type="text"
                     value={templateName}
                     onChange={(e) => setTemplateName(e.target.value)}
-                    placeholder="Standard NDA, Employment Offer, etc."
+                    placeholder={t('upload.tpl_name_placeholder')}
                     className="w-full rounded-xl border border-border-color bg-card-bg px-4 py-3 text-xs text-text-primary outline-none transition-all focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20"
                     required
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wide">Description</label>
+                  <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wide">{t('upload.tpl_desc_label')}</label>
                   <textarea
                     rows="3"
                     value={templateDescription}
                     onChange={(e) => setTemplateDescription(e.target.value)}
-                    placeholder="Describe this reusable business workflow template..."
+                    placeholder={t('upload.tpl_desc_placeholder')}
                     className="w-full rounded-xl border border-border-color bg-card-bg px-4 py-3 text-xs text-text-primary outline-none transition-all focus:border-cyan-500/40 resize-none focus:ring-1 focus:ring-cyan-500/20"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wide">Category</label>
+                    <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wide">{t('upload.tpl_category_label')}</label>
                     <select
                       value={templateCategory}
                       onChange={(e) => setTemplateCategory(e.target.value)}
                       className="w-full rounded-xl border border-border-color bg-card-bg px-4 py-3 text-xs text-text-primary outline-none cursor-pointer focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20"
                     >
                       {['General', 'Legal', 'HR', 'Finance', 'Operations'].map(c => (
-                        <option key={c} value={c} className="bg-card-bg text-text-primary">{c}</option>
+                        <option key={c} value={c} className="bg-card-bg text-text-primary">{t(`templates.cat_${c.toLowerCase()}`) || c}</option>
                       ))}
                     </select>
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wide">Visibility</label>
+                    <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wide">{t('upload.tpl_visibility_label')}</label>
                     <select
                       value={templateVisibility}
                       onChange={(e) => setTemplateVisibility(e.target.value)}
                       className="w-full rounded-xl border border-border-color bg-card-bg px-4 py-3 text-xs text-text-primary outline-none cursor-pointer focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20"
                     >
-                      <option value="private" className="bg-card-bg text-text-primary">Private (Self)</option>
-                      <option value="public" className="bg-card-bg text-text-primary">Public / Shared</option>
+                      <option value="private" className="bg-card-bg text-text-primary">{t('upload.tpl_visibility_private')}</option>
+                      <option value="public" className="bg-card-bg text-text-primary">{t('upload.tpl_visibility_public')}</option>
                     </select>
                   </div>
                 </div>
@@ -2803,14 +2802,14 @@ export default function UploadPage() {
                     disabled={isSavingTemplate}
                     className="rounded-xl glass-panel hover:bg-cyan-500/10 hover:border-cyan-500/30 text-text-secondary hover:text-cyan-400 px-4 py-2.5 text-xs font-semibold transition-all cursor-pointer"
                   >
-                    Cancel
+                    {t('templates.btn_cancel')}
                   </button>
                   <button
                     type="submit"
                     disabled={isSavingTemplate}
                     className="inline-flex items-center justify-center rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-5 py-2.5 text-xs font-bold transition-all shadow-[0_0_15px_rgba(34,211,238,0.15)] cursor-pointer"
                   >
-                    {isSavingTemplate ? 'Saving Template...' : 'Save Template'}
+                    {isSavingTemplate ? t('upload.tpl_btn_saving') : t('upload.tpl_btn_save')}
                   </button>
                 </div>
               </form>

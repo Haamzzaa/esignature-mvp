@@ -88,14 +88,8 @@ const SIGNATURE_METHODS = [
 ]
 
 function WorkflowPendingScreen({ session }) {
-  const roleLabels = {
-    signer: 'Signer',
-    approver: 'Approver',
-    reviewer: 'Reviewer',
-    cc: 'CC Recipient'
-  }
-
-  const roleName = roleLabels[session.participant_role] || session.participant_role || 'Participant'
+  const { t } = useLocale()
+  const roleName = t(`templates.role_${session.participant_role}`) || session.participant_role || t('templates.role_signer')
 
   return (
     <motion.div
@@ -114,46 +108,46 @@ function WorkflowPendingScreen({ session }) {
       </div>
 
       <h2 className="text-2xl sm:text-3xl font-light tracking-tight text-text-primary neon-text-glow">
-        Workflow Not Yet Available
+        {t('sign.workflow_not_yet_available')}
       </h2>
       <p className="mt-3 text-sm text-text-secondary leading-relaxed">
-        This document is currently waiting for a previous workflow participant to complete their action.
+        {t('sign.workflow_waiting_desc')}
       </p>
 
-      <div className="w-full mt-8 p-6 rounded-2xl border border-border-color bg-bg-primary/5 text-left space-y-4">
+      <div className="w-full mt-8 p-6 rounded-2xl border border-border-color bg-bg-primary/5 text-left rtl:text-right space-y-4">
         <div className="flex items-center justify-between border-b border-border-color pb-3">
-          <span className="text-xs font-bold uppercase tracking-wider text-text-secondary">Your Action Details</span>
+          <span className="text-xs font-bold uppercase tracking-wider text-text-secondary">{t('sign.your_action_details')}</span>
           <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/5 px-2.5 py-0.5 text-[10px] font-bold uppercase text-amber-500 tracking-wider">
-            Pending
+            {t('common.status_pending')}
           </span>
         </div>
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-text-secondary">Your Role</span>
+            <span className="text-xs text-text-secondary">{t('sign.your_role')}</span>
             <span className="text-xs font-semibold text-text-primary capitalize">
               {roleName}
             </span>
           </div>
 
           <div className="flex items-center justify-between">
-            <span className="text-xs text-text-secondary">Your Step</span>
-            <span className="text-xs font-semibold text-text-primary font-mono">
-              {session.participant_step} of {session.total_steps}
+            <span className="text-xs text-text-secondary">{t('sign.your_step')}</span>
+            <span className="text-xs font-semibold text-text-primary font-mono" dir="ltr">
+              {t('sign.step_x_of_y', { step: session.participant_step, total: session.total_steps })}
             </span>
           </div>
 
           <div className="flex items-center justify-between">
-            <span className="text-xs text-text-secondary">Current Workflow Status</span>
+            <span className="text-xs text-text-secondary">{t('workspace.col_status')}</span>
             <span className="text-xs font-semibold text-amber-400">
-              Waiting For Previous Step
+              {t('sign.waiting_for_previous_step')}
             </span>
           </div>
         </div>
       </div>
 
       <p className="mt-8 text-xs text-text-secondary max-w-sm mx-auto leading-normal">
-        You will be able to review and complete actions on this document once the workflow reaches your assigned step.
+        {t('sign.waiting_previous_desc')}
       </p>
     </motion.div>
   )
@@ -767,7 +761,7 @@ export default function SignPage() {
     if (!file) return
 
     if (!['image/png', 'image/jpeg'].includes(file.type)) {
-      setError('Only PNG and JPG files are accepted.')
+      setError(t('errors.pdf_only', 'Only PNG and JPG files are accepted.'))
       return
     }
 
@@ -795,7 +789,7 @@ export default function SignPage() {
   const isAccessGranted = isCompleted || authenticationRequirementsSatisfied
 
   // Document Title
-  const documentTitle = session?.document_title || session?.title || 'Contract Agreement'
+  const documentTitle = session?.document_title || session?.title || t('sign.contract_agreement', 'Contract Agreement')
 
   // ── Render Left Column (Document Viewport & Summaries) ────────────────────
   const leftColumnContent = (
@@ -817,10 +811,10 @@ export default function SignPage() {
             </div>
           </div>
           <h2 className="text-2xl sm:text-3xl font-light tracking-tight text-text-primary neon-text-glow">
-            Secure Document
+            {t('sign.secure_document')}
           </h2>
           <p className="mt-3 text-sm text-text-secondary leading-relaxed max-w-md mx-auto">
-            This document is protected. Complete the required authentication steps to access and review the document.
+            {t('sign.secure_document_desc')}
           </p>
         </motion.div>
       ) : isTransitioningToAccess ? (
@@ -841,13 +835,13 @@ export default function SignPage() {
             </div>
           </div>
           <h3 className="text-2xl font-light text-emerald-400 tracking-tight neon-text-glow mb-2">
-            Authentication Complete
+            {t('sign.auth_complete')}
           </h3>
           <p className="text-sm text-text-secondary leading-relaxed mb-6 max-w-md mx-auto">
-            Your identity has been successfully verified.
+            {t('sign.auth_complete_desc')}
           </p>
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 text-cyan-400 text-xs font-mono font-semibold animate-pulse">
-            <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Loading document...
+            <RefreshCw className="h-3.5 w-3.5 animate-spin" /> {t('sign.loading_doc')}
           </div>
         </motion.div>
       ) : (
@@ -862,21 +856,21 @@ export default function SignPage() {
                 </span>
               </div>
               <div>
-                <p className="text-sm font-medium text-text-primary">{session?.signer_name || 'Unknown User'}</p>
+                <p className="text-sm font-medium text-text-primary">{session?.signer_name || t('templates.role_signer')}</p>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-xs text-text-secondary">{session?.signer_email || 'No email provided'}</span>
+                  <span className="text-xs text-text-secondary font-mono" dir="ltr">{session?.signer_email || ''}</span>
                   {session?.participant_role && (
                     <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-card-bg text-text-primary border border-border-color">
-                      {session.participant_role}
+                      {t(`templates.role_${session.participant_role}`) || session.participant_role}
                     </span>
                   )}
                 </div>
               </div>
             </div>
             <div className="flex flex-col items-start sm:items-end">
-              <span className="text-[10px] uppercase tracking-widest text-text-secondary">Status</span>
+              <span className="text-[10px] uppercase tracking-widest text-text-secondary">{t('common.status')}</span>
               <span className={`text-sm font-medium uppercase tracking-wider ${isCompleted ? 'text-emerald-500' : 'text-accent'}`}>
-                {session?.status || 'Active'}
+                {session?.status ? (t(`inbox.filter_status_${session.status.toLowerCase()}`) || session.status) : t('common.status_pending')}
               </span>
             </div>
           </div>
@@ -893,7 +887,7 @@ export default function SignPage() {
                   <div>
                     <h2 className="text-sm font-semibold tracking-wide truncate max-w-xs sm:max-w-md">{documentTitle}</h2>
                     <div className="flex items-center gap-3 text-[11px] text-text-secondary mt-0.5">
-                      <span>Page count: <strong className="text-text-primary">{numPages ? `${numPages} pages` : 'Loading...'}</strong></span>
+                      <span>{t('sign.page_count')} <strong className="text-text-primary" dir="ltr">{numPages ? t('sign.pages_unit', { count: numPages }) : t('common.loading')}</strong></span>
                     </div>
                   </div>
                 </div>
@@ -904,7 +898,7 @@ export default function SignPage() {
                   rel="noreferrer"
                   className="flex items-center gap-2 text-xs font-medium text-accent hover:text-accent/80 transition-colors bg-cyan-500/10 px-3 py-1.5 rounded-lg hover:bg-cyan-500/20 shrink-0"
                 >
-                  External View <ChevronRight className="h-3 w-3" />
+                  {t('sign.external_view')} <ChevronRight className="h-3 w-3 rtl:rotate-180" />
                 </a>
               </div>
 
@@ -913,7 +907,7 @@ export default function SignPage() {
                 <div className="px-6 py-2.5 bg-emerald-500/10 border-b border-emerald-500/20 text-xs text-emerald-400 flex items-center gap-2">
                   <UserCheckIcon className="h-4 w-4 shrink-0 text-emerald-400" />
                   <span>
-                    Authorized Representative: <strong className="font-semibold">{identifiedRepresentative}</strong>
+                    {t('sign.auth_rep_banner')} <strong className="font-semibold">{identifiedRepresentative}</strong>
                   </span>
                 </div>
               )}
@@ -926,12 +920,12 @@ export default function SignPage() {
                   loading={
                     <div className="flex h-64 flex-col items-center justify-center gap-4 text-accent">
                       <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-                      <span className="text-sm font-medium animate-pulse tracking-widest uppercase">Rendering Data…</span>
+                      <span className="text-sm font-medium animate-pulse tracking-widest uppercase">{t('sign.rendering_data')}</span>
                     </div>
                   }
                   error={
                     <div className="flex h-64 items-center justify-center text-sm text-red-400">
-                      Failed to decode document payload.
+                      {t('sign.failed_decode_doc')}
                     </div>
                   }
                 >
@@ -945,7 +939,7 @@ export default function SignPage() {
                           className="relative mx-auto mb-8 w-fit shadow-lg border border-border-color last:mb-0"
                           style={{ userSelect: 'none' }}
                         >
-                          <div className="absolute left-4 top-4 z-10 rounded-lg border border-border-color bg-card-bg/85 px-3 py-1.5 text-xs font-mono text-text-primary backdrop-blur-md">
+                          <div className="absolute left-4 rtl:right-4 rtl:left-auto top-4 z-10 rounded-lg border border-border-color bg-card-bg/85 px-3 py-1.5 text-xs font-mono text-text-primary backdrop-blur-md" dir="ltr">
                             {pageNumber} / {numPages}
                           </div>
 
@@ -982,7 +976,7 @@ export default function SignPage() {
                                     <div className="relative h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_10px_#22d3ee]" />
                                   </div>
                                   <div className="absolute left-0 top-3 -translate-x-1/2 pt-1 flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-cyan-500/50 bg-card-bg/95 px-2.5 py-1 text-[9px] font-bold tracking-wider text-accent shadow-[0_0_20px_rgba(34,211,238,0.25)] backdrop-blur-md uppercase">
-                                    <span>↓ SIGN HERE</span>
+                                    <span>{t('sign.sign_here_marker')}</span>
                                     <span className="text-text-secondary/60">|</span>
                                     <span className="text-text-primary max-w-[100px] truncate" title={session.signer_name}>{session.signer_name}</span>
                                   </div>
@@ -999,7 +993,7 @@ export default function SignPage() {
             </div>
           ) : (
             <div className="glass-panel rounded-3xl p-8 text-center text-text-secondary">
-              No document payload available for this session.
+              {t('sign.no_doc_payload')}
             </div>
           )}
         </>
@@ -1027,10 +1021,7 @@ export default function SignPage() {
         failedStageId={verifyingError ? currentStep : null}
       />
 
-      {/* Persistent Verification Session Status Panel — Mounted ONCE (Persistent) */}
-      <VerificationStatus authStatus={authStatus} documentLoaded={isAccessGranted && !isTransitioningToAccess && !!documentUrl} />
-
-      {/* Active Step Container — AnimatePresence animates ONLY the active step card */}
+      {/* Active Step Container — AnimatePresence animates ONLY the active step card (Primary Focus) */}
       <AnimatePresence mode="wait">
         {isCompleted ? (
           <motion.div
@@ -1044,16 +1035,16 @@ export default function SignPage() {
             <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-50" />
             <CheckCircle2 className="h-16 w-16 text-emerald-400 mx-auto mb-4" />
             <h3 className="text-xl font-light text-emerald-500 mb-2">
-              {session?.participant_role === 'cc' ? 'Document Viewed' :
-                session?.participant_role === 'reviewer' ? 'Review Completed' :
-                  session?.participant_role === 'approver' ? 'Approval Completed' :
-                    'Signature Verified'}
+              {session?.participant_role === 'cc' ? t('success.receipt_acknowledged') :
+                session?.participant_role === 'reviewer' ? t('success.review_completed') :
+                  session?.participant_role === 'approver' ? t('success.approval_submitted') :
+                    t('success.document_signed')}
             </h3>
             <p className="text-sm text-text-secondary mb-6">
-              {session?.participant_role === 'cc' ? 'You have successfully viewed this document.' :
-                session?.participant_role === 'reviewer' ? 'Your review action has been registered and advanced.' :
-                  session?.participant_role === 'approver' ? 'Your approval action has been registered and advanced.' :
-                    'This document has been successfully signed.'}
+              {session?.participant_role === 'cc' ? t('success.workflow_advanced') :
+                session?.participant_role === 'reviewer' ? t('success.workflow_advanced') :
+                  session?.participant_role === 'approver' ? t('success.workflow_advanced') :
+                    t('success.signed_desc')}
             </p>
             {signedDocumentUrl && (
               <a
@@ -1062,7 +1053,7 @@ export default function SignPage() {
                 rel="noreferrer"
                 className="inline-flex items-center justify-center gap-2 w-full rounded-2xl bg-emerald-500/20 border border-emerald-500/30 px-4 py-3 text-sm font-semibold text-emerald-500 transition-all hover:bg-emerald-500/30"
               >
-                <Download className="h-4 w-4" /> View Signed Document
+                <Download className="h-4 w-4" /> {t('sign.view_signed_doc')}
               </a>
             )}
           </motion.div>
@@ -1083,10 +1074,10 @@ export default function SignPage() {
               </div>
             </div>
             <h3 className="text-xl font-light text-amber-500 mb-2">
-              Manual Review Required
+              {t('sign.manual_review_required')}
             </h3>
             <p className="text-sm text-text-secondary leading-relaxed mb-4">
-              Your identity verification requires administrative review. Please contact support or wait for approval.
+              {t('sign.manual_review_desc')}
             </p>
             {verifyingError && (
               <div className="mt-4 p-3 rounded-xl border border-red-500/20 bg-red-500/5 text-xs text-red-400">
@@ -1098,18 +1089,18 @@ export default function SignPage() {
           <VerificationSuccess
             key="auto_success"
             title={
-              autoSuccessStage === 'terms' ? 'Terms Accepted' :
-              autoSuccessStage === 'email' ? 'Email Code Verified' :
-              autoSuccessStage === 'national_id' ? 'National ID Verified' :
-              autoSuccessStage === 'face' ? 'Identity Verified' : 'Stage Completed'
+              autoSuccessStage === 'terms' ? t('verification.stage_terms_title') :
+              autoSuccessStage === 'email' ? t('verification.stage_email_title') :
+              autoSuccessStage === 'national_id' ? t('verification.stage_id_title') :
+              autoSuccessStage === 'face' ? t('verification.stage_face_title') : t('success.step_complete')
             }
-            subtitle="Verification requirement satisfied successfully."
+            subtitle={t('sign.auth_complete_desc')}
             items={
               autoSuccessStage === 'national_id' && authStatus?.identity_summary ? [
-                { label: 'English Name', value: authStatus.identity_summary.full_name_en },
-                { label: 'Arabic Name', value: authStatus.identity_summary.full_name_ar, dir: 'rtl' },
-                { label: 'National ID', value: authStatus.identity_summary.national_id, isMono: true },
-                { label: 'Country', value: authStatus.identity_summary.country },
+                { label: t('contract_analysis.name_en'), value: authStatus.identity_summary.full_name_en },
+                { label: t('contract_analysis.name_ar'), value: authStatus.identity_summary.full_name_ar, dir: 'rtl' },
+                { label: t('sign.id_card_title'), value: authStatus.identity_summary.national_id, isMono: true },
+                { label: t('templates.col_category'), value: authStatus.identity_summary.country },
               ] : []
             }
             autoContinueText="Proceeding to next verification step..."
@@ -1117,11 +1108,10 @@ export default function SignPage() {
         ) : isVerifying ? (
           <VerificationCard
             key="loading"
-            title="Processing Verification"
-            subtitle="Communicating with identity services"
+            title={t('sign.processing_verification')}
+            subtitle={t('sign.communicating_id_services')}
             icon={RefreshCw}
-            estimatedTime="10–20 seconds"
-            stepProgress="Processing..."
+            stepProgress={t('common.loading')}
           >
             <VerificationLoading stageId={currentStep} />
           </VerificationCard>
@@ -1130,17 +1120,16 @@ export default function SignPage() {
           currentStep === 'terms' ? (
             <VerificationCard
               key="step_terms"
-              title="Terms & Conditions"
-              subtitle="Review and accept electronic disclosure terms"
+              title={t('sign.terms_card_title')}
+              subtitle={t('sign.terms_card_subtitle')}
               icon={FileText}
-              badgeText="Step 1 of 5"
-              estimatedTime="Approx. 1 min"
-              stepProgress="Step 1 of 5"
+              badgeText={t('common.step_of', { current: 1, total: 5 })}
+              stepProgress={t('common.step_of', { current: 1, total: 5 })}
             >
               <div className="p-4 rounded-2xl border border-border-color bg-bg-primary/5 text-xs text-text-secondary max-h-48 overflow-y-auto space-y-2 custom-scrollbar">
-                <p className="font-semibold text-text-primary">Electronic Record and Disclosure</p>
-                <p>By accepting these terms, you agree to conduct this transaction electronically and consent to the legally binding nature of your digital signature.</p>
-                <p>All activities under this session are logged for verification and audit trail purposes.</p>
+                <p className="font-semibold text-text-primary">{t('sign.terms_record_disclosure')}</p>
+                <p>{t('sign.terms_p1')}</p>
+                <p>{t('sign.terms_p2')}</p>
               </div>
 
               {verifyingError && (
@@ -1155,29 +1144,28 @@ export default function SignPage() {
                 <button
                   onClick={handleAcceptTerms}
                   disabled={isVerifying}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50 focus:ring-2 focus:ring-cyan-500/30 outline-none"
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50 focus:ring-2 focus:ring-cyan-500/30 outline-none cursor-pointer"
                 >
-                  {t('sign.accept_terms')} <ChevronRight className="h-4 w-4" />
+                  {t('sign.accept_terms')} <ChevronRight className="h-4 w-4 rtl:rotate-180" />
                 </button>
               )}
             </VerificationCard>
           ) : currentStep === 'email' ? (
             <VerificationCard
               key="step_email"
-              title="Email Verification"
-              subtitle="Authenticate your identity via 6-digit OTP code"
+              title={t('sign.email_card_title')}
+              subtitle={t('sign.email_card_subtitle')}
               icon={Mail}
-              badgeText="Step 2 of 5"
-              estimatedTime="Approx. 1 min"
-              stepProgress="Step 2 of 5"
+              badgeText={t('common.step_of', { current: 2, total: 5 })}
+              stepProgress={t('common.step_of', { current: 2, total: 5 })}
             >
               {!emailOtpSent ? (
                 <>
                   <p className="text-xs text-text-secondary leading-relaxed">
-                    To secure your signing session, we must verify your email address. A one-time verification code (OTP) will be sent to:
+                    {t('sign.email_prompt_prefix')}
                   </p>
                   <div className="p-4 rounded-2xl border border-border-color bg-bg-primary/5 text-center">
-                    <span className="text-sm font-semibold text-text-primary font-mono">{maskEmail(session?.signer_email)}</span>
+                    <span className="text-sm font-semibold text-text-primary font-mono" dir="ltr">{maskEmail(session?.signer_email)}</span>
                   </div>
 
                   {verifyingError && (
@@ -1192,21 +1180,22 @@ export default function SignPage() {
                     <button
                       onClick={handleSendEmailOTP}
                       disabled={isVerifying}
-                      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50 focus:ring-2 focus:ring-cyan-500/30 outline-none"
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50 focus:ring-2 focus:ring-cyan-500/30 outline-none cursor-pointer"
                     >
-                      Send Verification Code <Mail className="h-4 w-4" />
+                      {t('sign.send_code_btn')} <Mail className="h-4 w-4" />
                     </button>
                   )}
                 </>
               ) : (
                 <>
                   <p className="text-xs text-text-secondary leading-relaxed">
-                    Please enter the verification code sent to <strong className="text-text-primary">{maskEmail(session?.signer_email)}</strong>.
+                    {t('sign.email_prompt_code_sent', { email: maskEmail(session?.signer_email) })}
                   </p>
 
                   <div>
                     <input
                       type="text"
+                      dir="ltr"
                       value={emailOtpCode}
                       onChange={(e) => setEmailOtpCode(e.target.value)}
                       placeholder={t('sign.otp_placeholder')}
@@ -1232,17 +1221,17 @@ export default function SignPage() {
                       <button
                         onClick={handleVerifyEmailOTP}
                         disabled={isVerifying}
-                        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50 focus:ring-2 focus:ring-cyan-500/30 outline-none"
+                        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50 focus:ring-2 focus:ring-cyan-500/30 outline-none cursor-pointer"
                       >
-                        Verify Code <ChevronRight className="h-4 w-4" />
+                        {t('sign.verify_code_btn')} <ChevronRight className="h-4 w-4 rtl:rotate-180" />
                       </button>
 
                       <button
                         onClick={handleSendEmailOTP}
                         disabled={isVerifying}
-                        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3.5 text-xs font-semibold uppercase tracking-wider transition-all duration-300 disabled:opacity-50"
+                        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3.5 text-xs font-semibold uppercase tracking-wider transition-all duration-300 disabled:opacity-50 cursor-pointer"
                       >
-                        Resend OTP Code
+                        {t('sign.resend_code_btn')}
                       </button>
                     </div>
                   )}
@@ -1252,23 +1241,22 @@ export default function SignPage() {
           ) : currentStep === 'national_id' ? (
             <VerificationCard
               key="step_id"
-              title="Verify National ID"
-              subtitle="Upload National ID or Iqama document for OCR extraction"
+              title={t('sign.id_card_title')}
+              subtitle={t('sign.id_card_subtitle')}
               icon={CreditCard}
-              badgeText="Step 3 of 5"
-              estimatedTime="Approx. 1–2 min"
-              stepProgress="Step 3 of 5"
+              badgeText={t('common.step_of', { current: 3, total: 5 })}
+              stepProgress={t('common.step_of', { current: 3, total: 5 })}
             >
               {!idPreview ? (
                 <>
                   <p className="text-xs text-text-secondary leading-relaxed">
-                    Upload a clear photo of your National ID or Iqama document. The OCR system will extract details and register your reference face.
+                    {t('sign.id_upload_desc')}
                   </p>
                   <label className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border-color bg-card-bg p-8 cursor-pointer transition-all hover:border-cyan-500/30 hover:bg-cyan-500/5">
                     <Upload className="h-8 w-8 text-accent/60 animate-bounce" />
                     <div className="text-center">
-                      <p className="text-sm text-text-primary font-medium">Select ID Image</p>
-                      <p className="text-xs text-text-secondary mt-1">PNG or JPG formats supported (max 10MB)</p>
+                      <p className="text-sm text-text-primary font-medium">{t('sign.select_id_img')}</p>
+                      <p className="text-xs text-text-secondary mt-1">{t('sign.id_format_hint')}</p>
                     </div>
                     <input
                       type="file"
@@ -1280,15 +1268,15 @@ export default function SignPage() {
                   </label>
 
                   {/* Upload Recommendation Tips */}
-                  <div className="p-3.5 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 text-xs text-text-secondary space-y-1 text-left">
+                  <div className="p-3.5 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 text-xs text-text-secondary space-y-1 text-left rtl:text-right">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-accent flex items-center gap-1">
-                      <Info className="h-3 w-3" /> Upload Recommendations
+                      <Info className="h-3 w-3" /> {t('sign.upload_recommendations')}
                     </span>
                     <ul className="list-disc list-inside space-y-0.5 text-[11px] text-text-secondary">
-                      <li>Ensure entire document boundary is visible</li>
-                      <li>Good lighting without harsh shadows</li>
-                      <li>Avoid camera glare or surface reflections</li>
-                      <li>PNG or JPG format supported (up to 10MB)</li>
+                      <li>{t('sign.rec_boundary')}</li>
+                      <li>{t('sign.rec_lighting')}</li>
+                      <li>{t('sign.rec_glare')}</li>
+                      <li>{t('sign.rec_formats')}</li>
                     </ul>
                   </div>
                 </>
@@ -1297,7 +1285,7 @@ export default function SignPage() {
                   <img src={idPreview} alt="ID preview" className="rounded-xl max-h-48 object-cover shadow-md border border-cyan-500/20" />
                   <button
                     onClick={handleRemoveId}
-                    className="absolute top-2 right-2 p-1.5 rounded-full bg-red-500/20 text-red-400 hover:bg-red-500/40 transition-colors"
+                    className="absolute top-2 right-2 rtl:left-2 rtl:right-auto p-1.5 rounded-full bg-red-500/20 text-red-400 hover:bg-red-500/40 transition-colors cursor-pointer"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -1332,17 +1320,17 @@ export default function SignPage() {
                   <button
                     onClick={handleVerifyId}
                     disabled={isVerifying}
-                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50 focus:ring-2 focus:ring-cyan-500/30 outline-none"
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50 focus:ring-2 focus:ring-cyan-500/30 outline-none cursor-pointer"
                   >
-                    Verify National ID <ChevronRight className="h-4 w-4" />
+                    {t('sign.verify_id_btn')} <ChevronRight className="h-4 w-4 rtl:rotate-180" />
                   </button>
 
                   <button
                     onClick={handleRemoveId}
                     disabled={isVerifying}
-                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3.5 text-xs font-semibold uppercase tracking-wider transition-all duration-300 disabled:opacity-50"
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3.5 text-xs font-semibold uppercase tracking-wider transition-all duration-300 disabled:opacity-50 cursor-pointer"
                   >
-                    Choose Different Photo
+                    {t('sign.choose_different_photo')}
                   </button>
                 </div>
               )}
@@ -1350,48 +1338,47 @@ export default function SignPage() {
           ) : currentStep === 'identity_summary_preview' ? (
             <VerificationCard
               key="step_summary_preview"
-              title="Extracted Identity Details"
-              subtitle="Confirm extracted National ID details"
+              title={t('sign.extracted_id_details')}
+              subtitle={t('sign.confirm_id_details_sub')}
               icon={CreditCard}
               badgeText="Confirmation"
-              estimatedTime="Approx. 30 sec"
               stepProgress="Confirmation"
             >
               <p className="text-xs text-text-secondary leading-relaxed">
-                Below are the identity details extracted from your uploaded National ID. Please review them before proceeding to facial verification.
+                {t('sign.extracted_id_intro')}
               </p>
 
               <div className="space-y-3 p-4 rounded-2xl border border-border-color bg-bg-primary/5 text-xs">
                 <div className="flex items-center justify-between gap-4">
-                  <span className="text-text-secondary shrink-0">English Name</span>
-                  <span className="font-semibold text-text-primary text-right truncate" title={authStatus?.identity_summary?.full_name_en}>
+                  <span className="text-text-secondary shrink-0">{t('contract_analysis.name_en')}</span>
+                  <span className="font-semibold text-text-primary text-right rtl:text-left truncate" title={authStatus?.identity_summary?.full_name_en}>
                     {authStatus?.identity_summary?.full_name_en || '—'}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between gap-4">
-                  <span className="text-text-secondary shrink-0">Arabic Name</span>
-                  <span className="font-semibold text-text-primary text-right font-sans truncate" dir="rtl" title={authStatus?.identity_summary?.full_name_ar}>
+                  <span className="text-text-secondary shrink-0">{t('contract_analysis.name_ar')}</span>
+                  <span className="font-semibold text-text-primary text-right rtl:text-left font-sans truncate" dir="rtl" title={authStatus?.identity_summary?.full_name_ar}>
                     {authStatus?.identity_summary?.full_name_ar || '—'}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <span className="text-text-secondary">National ID</span>
-                  <span className="font-semibold text-text-primary font-mono">
+                  <span className="text-text-secondary">{t('sign.id_card_title')}</span>
+                  <span className="font-semibold text-text-primary font-mono" dir="ltr">
                     {authStatus?.identity_summary?.national_id || '—'}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <span className="text-text-secondary">Country</span>
+                  <span className="text-text-secondary">{t('templates.col_category')}</span>
                   <span className="font-semibold text-text-primary capitalize">
                     {authStatus?.identity_summary?.country || '—'}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <span className="text-text-secondary">Document Type</span>
+                  <span className="text-text-secondary">{t('templates.label_description')}</span>
                   <span className="font-semibold text-text-primary capitalize font-mono">
                     {authStatus?.identity_summary?.document_type || '—'}
                   </span>
@@ -1400,20 +1387,19 @@ export default function SignPage() {
 
               <button
                 onClick={() => setUserAcknowledgedIdentity(true)}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] focus:ring-2 focus:ring-cyan-500/30 outline-none"
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] focus:ring-2 focus:ring-cyan-500/30 outline-none cursor-pointer"
               >
-                Proceed to Verify Your Identity <ChevronRight className="h-4 w-4" />
+                {t('sign.proceed_to_face')} <ChevronRight className="h-4 w-4 rtl:rotate-180" />
               </button>
             </VerificationCard>
           ) : currentStep === 'face' ? (
             <VerificationCard
               key="step_face"
-              title="Verify Your Identity"
-              subtitle="Match facial features against reference identity photo"
+              title={t('sign.face_card_title')}
+              subtitle={t('sign.face_card_subtitle')}
               icon={Camera}
-              badgeText="Step 4 of 5"
-              estimatedTime="Approx. 1 min"
-              stepProgress="Step 4 of 5"
+              badgeText={t('common.step_of', { current: 4, total: 5 })}
+              stepProgress={t('common.step_of', { current: 4, total: 5 })}
             >
               <style>{`
                 @keyframes scan {
@@ -1431,7 +1417,7 @@ export default function SignPage() {
                     <img src={selfiePreview} alt="Selfie preview" className="rounded-xl max-h-48 object-cover aspect-square shadow-md border border-cyan-500/20" />
                   </div>
                   <p className="text-[10px] text-text-secondary text-center leading-normal">
-                    Ensure your face is well-lit and not covered by hats, glasses, or masks.
+                    {t('sign.face_instructions')}
                   </p>
                 </>
               ) : (
@@ -1444,13 +1430,13 @@ export default function SignPage() {
                         </div>
                       )}
                       <p className="text-xs text-text-secondary leading-relaxed">
-                        Upload a clear selfie. The matching engine will compare your facial features with the reference identity photo.
+                        {t('sign.face_card_subtitle')}
                       </p>
                       <label className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border-color bg-card-bg p-8 cursor-pointer transition-all hover:border-cyan-500/30 hover:bg-cyan-500/5">
                         <Upload className="h-8 w-8 text-accent/60 animate-bounce" />
                         <div className="text-center">
-                          <p className="text-sm text-text-primary font-medium">Select Selfie Image</p>
-                          <p className="text-xs text-text-secondary mt-1">PNG or JPG formats supported</p>
+                          <p className="text-sm text-text-primary font-medium">{t('sign.select_sig_file')}</p>
+                          <p className="text-xs text-text-secondary mt-1">{t('sign.id_format_hint')}</p>
                         </div>
                         <input
                           type="file"
@@ -1463,9 +1449,9 @@ export default function SignPage() {
                       {!cameraError && (
                         <button
                           onClick={startCamera}
-                          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3 text-xs font-semibold uppercase tracking-wider transition-all duration-300"
+                          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3 text-xs font-semibold uppercase tracking-wider transition-all duration-300 cursor-pointer"
                         >
-                          <Camera className="h-4 w-4" /> Use Live Camera
+                          <Camera className="h-4 w-4" /> {t('sign.start_camera_btn')}
                         </button>
                       )}
                     </div>
@@ -1487,20 +1473,20 @@ export default function SignPage() {
                         </div>
                       </div>
                       <p className="text-xs text-text-secondary text-center leading-normal animate-pulse">
-                        Position your face inside the circle guide.
+                        {t('sign.position_face_guide')}
                       </p>
                       <div className="flex gap-2">
                         <button
                           onClick={capturePhoto}
-                          className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-3.5 text-xs font-bold uppercase tracking-wider transition-all duration-300"
+                          className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-3.5 text-xs font-bold uppercase tracking-wider transition-all duration-300 cursor-pointer"
                         >
-                          <Camera className="h-4 w-4" /> Capture Photo
+                          <Camera className="h-4 w-4" /> {t('sign.capture_photo_btn')}
                         </button>
                         <button
                           onClick={() => { stopCamera(); setUseUploadFallback(true); }}
-                          className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3.5 text-xs font-semibold uppercase tracking-wider transition-all duration-300"
+                          className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3.5 text-xs font-semibold uppercase tracking-wider transition-all duration-300 cursor-pointer"
                         >
-                          Upload Photo
+                          {t('sign.upload_photo_file_btn')}
                         </button>
                       </div>
                     </div>
@@ -1510,35 +1496,35 @@ export default function SignPage() {
                         <Video className="h-8 w-8" />
                       </div>
                       <div className="space-y-1">
-                        <p className="text-sm font-medium text-text-primary">Camera Access Required</p>
-                        <p className="text-xs text-text-secondary px-4">We will use your camera to take a live selfie for biometric matching.</p>
+                        <p className="text-sm font-medium text-text-primary">{t('sign.camera_access_needed')}</p>
+                        <p className="text-xs text-text-secondary px-4">{t('sign.camera_access_desc')}</p>
                       </div>
 
                       {/* Selfie Recommendations */}
-                      <div className="p-3.5 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 text-xs text-text-secondary space-y-1 text-left">
+                      <div className="p-3.5 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 text-xs text-text-secondary space-y-1 text-left rtl:text-right">
                         <span className="text-[10px] font-bold uppercase tracking-wider text-accent flex items-center gap-1">
-                          <Info className="h-3 w-3" /> Selfie Recommendations
+                          <Info className="h-3 w-3" /> {t('sign.upload_recommendations')}
                         </span>
                         <ul className="list-disc list-inside space-y-0.5 text-[11px] text-text-secondary">
-                          <li>Position face centered in frame</li>
-                          <li>Remove sunglasses, hats, or face coverings</li>
-                          <li>Maintain neutral expression & good lighting</li>
-                          <li>Ensure head is facing straight toward camera</li>
+                          <li>{t('sign.selfie_rec_centered')}</li>
+                          <li>{t('sign.selfie_rec_glasses')}</li>
+                          <li>{t('sign.selfie_rec_neutral')}</li>
+                          <li>{t('sign.selfie_rec_facing')}</li>
                         </ul>
                       </div>
 
                       <div className="space-y-3 pt-2">
                         <button
                           onClick={startCamera}
-                          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-xs font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] focus:ring-2 focus:ring-cyan-500/30 outline-none"
+                          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-xs font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] focus:ring-2 focus:ring-cyan-500/30 outline-none cursor-pointer"
                         >
-                          Start Camera
+                          {t('sign.start_camera_btn')}
                         </button>
                         <button
                           onClick={() => setUseUploadFallback(true)}
-                          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3 text-xs font-semibold uppercase tracking-wider transition-all duration-300"
+                          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3 text-xs font-semibold uppercase tracking-wider transition-all duration-300 cursor-pointer"
                         >
-                          Upload Photo File
+                          {t('sign.upload_photo_file_btn')}
                         </button>
                       </div>
                     </div>
@@ -1574,18 +1560,18 @@ export default function SignPage() {
                   <button
                     onClick={handleVerifyFace}
                     disabled={isVerifying || !selfiePreview}
-                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400 disabled:shadow-none focus:ring-2 focus:ring-cyan-500/30 outline-none"
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400 disabled:shadow-none focus:ring-2 focus:ring-cyan-500/30 outline-none cursor-pointer"
                   >
-                    Verify Your Identity <ChevronRight className="h-4 w-4" />
+                    {t('sign.proceed_to_face')} <ChevronRight className="h-4 w-4 rtl:rotate-180" />
                   </button>
 
                   {selfiePreview && (
                     <button
                       onClick={useUploadFallback ? handleRemoveSelfie : handleRetake}
                       disabled={isVerifying}
-                      className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3.5 text-xs font-semibold uppercase tracking-wider transition-all duration-300 disabled:opacity-50"
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border-color bg-bg-primary/5 text-text-secondary hover:text-text-primary px-4 py-3.5 text-xs font-semibold uppercase tracking-wider transition-all duration-300 disabled:opacity-50 cursor-pointer"
                     >
-                      {useUploadFallback ? 'Choose Different Photo' : 'Retake'}
+                      {useUploadFallback ? t('sign.choose_different_photo') : t('sign.retake_btn')}
                     </button>
                   )}
                 </div>
@@ -1595,15 +1581,14 @@ export default function SignPage() {
         ) : !authStatus?.authorized && currentStep === 'authorization' ? (
           <VerificationCard
             key="step_auth"
-            title="Representative Authorization"
-            subtitle="Evaluating identity against contract representatives"
+            title={t('sign.rep_auth_title')}
+            subtitle={t('sign.rep_auth_sub')}
             icon={UserCheck}
-            badgeText="Step 5 of 5"
-            estimatedTime="Approx. 30 sec"
-            stepProgress="Step 5 of 5"
+            badgeText={t('common.step_of', { current: 5, total: 5 })}
+            stepProgress={t('common.step_of', { current: 5, total: 5 })}
           >
             <VerificationError
-              title="Authorization Denied"
+              title={t('sign.auth_denied_title')}
               message={authStatus?.reason || 'Verified identity is not listed as an authorized representative for this contract.'}
               reasons={[
                 'Verified National ID name does not match authorized contract representatives',
@@ -1617,43 +1602,43 @@ export default function SignPage() {
           <motion.div key="role_cc" className="glass-panel rounded-3xl p-8 text-center relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-30" />
             <User className="h-16 w-16 text-accent mx-auto mb-4" />
-            <h3 className="text-xl font-light text-accent mb-2">View-Only Access</h3>
+            <h3 className="text-xl font-light text-accent mb-2">{t('sign.view_only_title')}</h3>
             <p className="text-sm text-text-secondary mb-6">
-              You are a CC recipient on this workflow step. You have view-only authorization.
+              {t('sign.view_only_desc')}
             </p>
             <button
               onClick={() => handleAction('acknowledge')}
               disabled={isSigning}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50 focus:ring-2 focus:ring-cyan-500/30 outline-none"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] disabled:opacity-50 focus:ring-2 focus:ring-cyan-500/30 outline-none cursor-pointer"
             >
-              {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Acknowledge & Finish'}
+              {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : t('sign.acknowledge_btn')}
             </button>
           </motion.div>
         ) : session?.participant_role === 'reviewer' ? (
           <motion.div key="role_reviewer" className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8 space-y-6">
             <h3 className="text-lg font-light text-text-primary mb-2 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-              Reviewer Decisions
+              {t('sign.reviewer_decisions')}
             </h3>
             <p className="text-xs text-text-secondary">
-              Please review the document in the viewport and select an action.
+              {t('sign.reviewer_desc')}
             </p>
 
             <div className="space-y-4 pt-2">
               <button
                 onClick={() => handleAction('approve')}
                 disabled={isSigning}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(16,185,129,0.2)] disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(16,185,129,0.2)] disabled:opacity-50 cursor-pointer"
               >
-                {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Approve Document'}
+                {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : t('sign.approve_doc_btn')}
               </button>
 
               <button
                 onClick={() => handleAction('return')}
                 disabled={isSigning}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 hover:shadow-[0_0_20px_rgba(245,158,11,0.1)] px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 hover:shadow-[0_0_20px_rgba(245,158,11,0.1)] px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 disabled:opacity-50 cursor-pointer"
               >
-                {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Return Document'}
+                {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : t('sign.return_doc_btn')}
               </button>
             </div>
           </motion.div>
@@ -1661,27 +1646,27 @@ export default function SignPage() {
           <motion.div key="role_approver" className="glass-panel rounded-3xl p-6 sm:p-8 sticky top-8 space-y-6">
             <h3 className="text-lg font-light text-text-primary mb-2 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-              Approver Decisions
+              {t('sign.approver_decisions')}
             </h3>
             <p className="text-xs text-text-secondary">
-              Please review the document in the viewport and select an action.
+              {t('sign.approver_desc')}
             </p>
 
             <div className="space-y-4 pt-2">
               <button
                 onClick={() => handleAction('approve')}
                 disabled={isSigning}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(16,185,129,0.2)] disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(16,185,129,0.2)] disabled:opacity-50 cursor-pointer"
               >
-                {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Approve Document'}
+                {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : t('sign.approve_doc_btn')}
               </button>
 
               <button
                 onClick={() => handleAction('reject')}
                 disabled={isSigning}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-500/30 bg-red-500/10 text-red-500 hover:bg-red-500/20 hover:shadow-[0_0_20px_rgba(239,68,68,0.1)] px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-500/30 bg-red-500/10 text-red-500 hover:bg-red-500/20 hover:shadow-[0_0_20px_rgba(239,68,68,0.1)] px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 disabled:opacity-50 cursor-pointer"
               >
-                {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Reject Document'}
+                {isSigning ? <RefreshCw className="h-4 w-4 animate-spin" /> : t('sign.reject_doc_btn')}
               </button>
             </div>
           </motion.div>
@@ -1699,16 +1684,16 @@ export default function SignPage() {
               <div className="p-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-center space-y-1 mb-6 shadow-[0_0_20px_rgba(16,185,129,0.1)]">
                 <div className="flex items-center justify-center gap-2 font-bold uppercase tracking-wider text-xs">
                   <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                  Verification Complete — Electronic Signing Enabled
+                  {t('sign.signing_enabled_banner')}
                 </div>
                 <p className="text-[11px] text-emerald-300/80">
-                  All identity and authorization requirements are satisfied. Please apply your electronic signature below.
+                  {t('sign.signing_enabled_desc')}
                 </p>
               </div>
 
               <h3 className="text-lg font-light text-text-primary mb-6 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-                Input Electronic Signature
+                {t('sign.input_sig_title')}
               </h3>
 
               {/* Signature Method Tabs */}
@@ -1717,7 +1702,7 @@ export default function SignPage() {
                   <button
                     key={id}
                     onClick={() => setSignatureMethod(id)}
-                    className={`relative flex-1 flex flex-col items-center justify-center gap-2 py-3 rounded-xl text-xs font-medium transition-all duration-300 ${signatureMethod === id
+                    className={`relative flex-1 flex flex-col items-center justify-center gap-2 py-3 rounded-xl text-xs font-medium transition-all duration-300 cursor-pointer ${signatureMethod === id
                         ? 'text-accent bg-cyan-500/10'
                         : 'text-text-secondary hover:text-text-primary hover:bg-bg-primary/20'
                       }`}
@@ -1726,7 +1711,7 @@ export default function SignPage() {
                       <motion.div layoutId="activeTab" className="absolute inset-0 rounded-xl border border-cyan-500/30 pointer-events-none" />
                     )}
                     <Icon className="h-5 w-5" />
-                    {label}
+                    {id === 'typed' ? t('sign.tab_keyboard_label') : id === 'upload' ? t('sign.tab_upload_label') : t('sign.tab_draw_label')}
                   </button>
                 ))}
               </div>
@@ -1747,7 +1732,7 @@ export default function SignPage() {
                         type="text"
                         value={typedSignature}
                         onChange={(e) => setTypedSignature(e.target.value)}
-                        placeholder="Type your full name"
+                        placeholder={t('sign.placeholder_type_name')}
                         disabled={isSigning}
                         className={inputClass}
                       />
@@ -1769,8 +1754,8 @@ export default function SignPage() {
                       <label className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border-color bg-card-bg p-8 cursor-pointer transition-all hover:border-cyan-500/30 hover:bg-cyan-500/5">
                         <Upload className="h-8 w-8 text-accent/60" />
                         <div className="text-center">
-                          <p className="text-sm text-text-primary">Select Image File</p>
-                          <p className="text-xs text-text-secondary mt-1">PNG or JPG formats supported</p>
+                          <p className="text-sm text-text-primary font-medium">{t('sign.select_sig_file')}</p>
+                          <p className="text-xs text-text-secondary mt-1">{t('sign.id_format_hint')}</p>
                         </div>
                         <input
                           type="file"
@@ -1785,7 +1770,7 @@ export default function SignPage() {
                         <img src={uploadPreview} alt="Signature preview" className="mx-auto max-h-32 object-contain" />
                         <button
                           onClick={handleRemoveUpload}
-                          className="absolute top-2 right-2 p-1.5 rounded-full bg-red-500/20 text-red-400 hover:bg-red-500/40 transition-colors"
+                          className="absolute top-2 right-2 rtl:left-2 rtl:right-auto p-1.5 rounded-full bg-red-500/20 text-red-400 hover:bg-red-500/40 transition-colors cursor-pointer"
                         >
                           <X className="h-4 w-4" />
                         </button>
@@ -1819,13 +1804,13 @@ export default function SignPage() {
                       />
                     </div>
                     <div className="flex justify-between items-center px-1">
-                      <span className="text-xs text-text-secondary">Trace within the bounds</span>
+                      <span className="text-xs text-text-secondary">{t('sign.trace_bounds')}</span>
                       <button
                         onClick={handleClearCanvas}
                         disabled={isSigning || isDrawEmpty}
-                        className="text-xs font-medium text-text-secondary hover:text-text-primary disabled:opacity-50"
+                        className="text-xs font-medium text-text-secondary hover:text-text-primary disabled:opacity-50 cursor-pointer"
                       >
-                        Clear Traces
+                        {t('sign.clear_traces')}
                       </button>
                     </div>
                   </motion.div>
@@ -1837,13 +1822,13 @@ export default function SignPage() {
                 whileTap={{ scale: 0.99 }}
                 onClick={handleSign}
                 disabled={isSigning}
-                className="group relative mt-8 flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-cyan-500 px-4 py-4 text-sm font-bold text-black transition-all hover:bg-cyan-400 hover:shadow-[0_0_30px_rgba(34,211,238,0.4)] disabled:cursor-not-allowed disabled:opacity-50 uppercase tracking-widest focus:ring-2 focus:ring-cyan-500/30 outline-none"
+                className="group relative mt-8 flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-cyan-500 px-4 py-4 text-sm font-bold text-black transition-all hover:bg-cyan-400 hover:shadow-[0_0_30px_rgba(34,211,238,0.4)] disabled:cursor-not-allowed disabled:opacity-50 uppercase tracking-widest focus:ring-2 focus:ring-cyan-500/30 outline-none cursor-pointer"
               >
                 <span className="relative z-10 flex items-center gap-2">
                   {isSigning ? (
                     <>
                       <RefreshCw className="h-4 w-4 animate-spin" />
-                      Signing Document...
+                      {t('sign.applying_signature')}
                     </>
                   ) : (
                     <>
@@ -1873,19 +1858,19 @@ export default function SignPage() {
       >
         <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-medium uppercase tracking-widest text-cyan-400 mb-4 backdrop-blur-md">
           <ShieldCheck className="h-4 w-4" />
-          Guided Verification Wizard
+          {t('sign.guided_wizard')}
         </div>
         <h1 className="text-3xl sm:text-5xl font-light text-white neon-text-glow tracking-tight">
-          Authorize Payload
+          {t('sign.portal_title')}
         </h1>
-        <p className="mt-3 text-zinc-400">Complete identity verification steps to unlock digital signature authorization.</p>
+        <p className="mt-3 text-zinc-400">{t('sign.portal_desc')}</p>
       </motion.div>
 
       {/* Loading Session */}
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-20 text-cyan-500">
           <RefreshCw className="h-10 w-10 animate-spin" />
-          <span className="mt-4 text-sm font-medium tracking-widest uppercase animate-pulse">Decrypting Session…</span>
+          <span className="mt-4 text-sm font-medium tracking-widest uppercase animate-pulse">{t('sign.decrypting_session')}</span>
         </div>
       ) : null}
 
@@ -1921,3 +1906,4 @@ export default function SignPage() {
     </div>
   )
 }
+

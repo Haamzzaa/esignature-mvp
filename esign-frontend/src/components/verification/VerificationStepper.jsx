@@ -1,16 +1,18 @@
 import React from 'react'
 import { Check, Lock, AlertTriangle, ShieldCheck, FileText, Mail, CreditCard, Camera, UserCheck, PenTool } from 'lucide-react'
+import { useLocale } from '../../context/LocaleContext'
 
 export const VERIFICATION_STAGES = [
-  { id: 'terms', label: 'Terms', icon: FileText, title: 'Terms & Conditions' },
-  { id: 'email', label: 'Email', icon: Mail, title: 'Email Verification' },
-  { id: 'national_id', label: 'Identity', icon: CreditCard, title: 'National ID Verification' },
-  { id: 'face', label: 'Face', icon: Camera, title: 'Face Verification' },
-  { id: 'authorization', label: 'Auth', icon: UserCheck, title: 'Representative Match' },
-  { id: 'sign', label: 'Sign', icon: PenTool, title: 'Electronic Signature' },
+  { id: 'terms', labelKey: 'verification.stage_terms', icon: FileText, titleKey: 'verification.stage_terms_title' },
+  { id: 'email', labelKey: 'verification.stage_email', icon: Mail, titleKey: 'verification.stage_email_title' },
+  { id: 'national_id', labelKey: 'verification.stage_id', icon: CreditCard, titleKey: 'verification.stage_id_title' },
+  { id: 'face', labelKey: 'verification.stage_face', icon: Camera, titleKey: 'verification.stage_face_title' },
+  { id: 'authorization', labelKey: 'verification.stage_auth', icon: UserCheck, titleKey: 'verification.stage_auth_title' },
+  { id: 'sign', labelKey: 'verification.stage_sign', icon: PenTool, titleKey: 'verification.stage_sign_title' },
 ]
 
 export default function VerificationStepper({ currentStageId, completedStages = [], failedStageId = null, onSelectStage }) {
+  const { t } = useLocale()
   const currentIndex = VERIFICATION_STAGES.findIndex(s => s.id === currentStageId)
 
   return (
@@ -18,10 +20,10 @@ export default function VerificationStepper({ currentStageId, completedStages = 
       <div className="flex items-center justify-between border-b border-border-color pb-3">
         <div className="flex items-center gap-2 text-text-primary">
           <ShieldCheck className="h-4 w-4 text-accent animate-pulse" />
-          <span className="text-xs font-semibold uppercase tracking-wider">Verification Workflow</span>
+          <span className="text-xs font-semibold uppercase tracking-wider">{t('verification.workflow_title')}</span>
         </div>
-        <span className="text-[10px] font-mono text-text-secondary">
-          Step {Math.max(1, currentIndex + 1)} of {VERIFICATION_STAGES.length}
+        <span className="text-[10px] font-mono text-text-secondary" dir="ltr">
+          {t('verification.step_indicator', { current: Math.max(1, currentIndex + 1), total: VERIFICATION_STAGES.length })}
         </span>
       </div>
 
@@ -30,7 +32,7 @@ export default function VerificationStepper({ currentStageId, completedStages = 
         {/* Connection Line */}
         <div className="absolute top-4 left-4 right-4 h-0.5 bg-border-color -z-0" />
         <div
-          className="absolute top-4 left-4 h-0.5 bg-cyan-500/50 transition-all duration-500 -z-0"
+          className="absolute top-4 left-4 rtl:right-4 rtl:left-auto h-0.5 bg-cyan-500/50 transition-all duration-500 -z-0"
           style={{ width: `${Math.max(0, (currentIndex / (VERIFICATION_STAGES.length - 1)) * 100)}%` }}
         />
 
@@ -52,7 +54,7 @@ export default function VerificationStepper({ currentStageId, completedStages = 
                 type="button"
                 onClick={() => isPast && onSelectStage && onSelectStage(stage.id)}
                 disabled={!isPast}
-                className={`relative flex h-8 w-8 items-center justify-center rounded-xl border text-xs font-bold transition-all duration-300 ${
+                className={`relative flex h-8 w-8 items-center justify-center rounded-xl border text-xs font-bold transition-all duration-300 cursor-pointer ${
                   state === 'completed'
                     ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
                     : state === 'current'
@@ -61,7 +63,7 @@ export default function VerificationStepper({ currentStageId, completedStages = 
                     ? 'border-red-500/50 bg-red-500/10 text-red-400 shadow-[0_0_15px_rgba(239,68,68,0.2)]'
                     : 'border-border-color bg-card-bg text-text-secondary/40'
                 }`}
-                title={stage.title}
+                title={t(stage.titleKey)}
               >
                 {state === 'completed' ? (
                   <Check className="h-4 w-4 stroke-[3]" />
@@ -77,7 +79,7 @@ export default function VerificationStepper({ currentStageId, completedStages = 
               <span className={`mt-1.5 text-[10px] font-medium tracking-tight truncate max-w-[55px] text-center ${
                 isCurrent ? 'text-accent font-bold' : isCompleted ? 'text-emerald-400' : isFailed ? 'text-red-400' : 'text-text-secondary/60'
               }`}>
-                {stage.label}
+                {t(stage.labelKey)}
               </span>
             </div>
           )

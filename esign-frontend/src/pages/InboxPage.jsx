@@ -30,7 +30,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { PdfPreviewModal } from './SuccessPage.jsx'
 
 // Simple time-ago formatter helper
-function formatTimeAgo(dateString) {
+function formatTimeAgo(dateString, t) {
   try {
     const now = new Date()
     const past = new Date(dateString)
@@ -39,13 +39,13 @@ function formatTimeAgo(dateString) {
     const diffHours = Math.floor(diffMins / 60)
     const diffDays = Math.floor(diffHours / 24)
 
-    if (diffMins < 1) return 'Just now'
+    if (diffMins < 1) return t ? t('common.just_now') : 'Just now'
     if (diffMins < 60) return `${diffMins}m ago`
     if (diffHours < 24) return `${diffHours}h ago`
-    if (diffDays === 1) return 'Yesterday'
+    if (diffDays === 1) return t ? t('common.yesterday') : 'Yesterday'
     return past.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
   } catch (e) {
-    return 'Recently'
+    return t ? t('common.recently') : 'Recently'
   }
 }
 
@@ -79,7 +79,7 @@ export default function InboxPage() {
       setError(
         err?.response?.data?.detail ||
         err?.message ||
-        'Unable to synchronize inbox requests.'
+        t('inbox.sync_error_title')
       )
     } finally {
       setIsLoading(false)
@@ -179,13 +179,13 @@ export default function InboxPage() {
   }, [packages, categoryParam, searchTerm, statusFilter, roleFilter, sortField])
 
   const currentCategoryLabel = useMemo(() => {
-    if (categoryParam === 'awaiting-me') return 'Awaiting Me'
-    if (categoryParam === 'awaiting-others') return 'Awaiting Others'
-    if (categoryParam === 'in-progress') return 'In Progress'
-    if (categoryParam === 'completed') return 'Completed'
-    if (categoryParam === 'drafts') return 'Drafts'
-    return 'All Requests'
-  }, [categoryParam])
+    if (categoryParam === 'awaiting-me') return t('inbox.queue_awaiting_me')
+    if (categoryParam === 'awaiting-others') return t('inbox.queue_awaiting_others')
+    if (categoryParam === 'in-progress') return t('inbox.queue_in_progress')
+    if (categoryParam === 'completed') return t('inbox.queue_completed')
+    if (categoryParam === 'drafts') return t('inbox.queue_drafts')
+    return t('inbox.queue_all')
+  }, [categoryParam, t])
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:py-16 relative z-10 space-y-8 font-sans">
@@ -196,8 +196,8 @@ export default function InboxPage() {
           to="/"
           className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-400 hover:text-cyan-400 transition-colors"
         >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Dashboard
+          <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
+          {t('nav.back_to_dashboard')}
         </Link>
       </motion.div>
 
@@ -206,10 +206,10 @@ export default function InboxPage() {
         <div className="space-y-2">
           <h1 className="text-3xl font-light tracking-tight text-text-primary sm:text-5xl neon-text-glow flex items-center gap-3">
             <Inbox className="h-10 w-10 text-cyan-400 stroke-[1.5]" />
-            Inbox Command Center
+            {t('inbox.title')}
           </h1>
           <p className="text-sm font-medium text-text-secondary">
-            Monitor pending approvals, track routing status, check audit logs, and manage drafts from your work queue.
+            {t('inbox.subtitle')}
           </p>
         </div>
 
@@ -220,7 +220,7 @@ export default function InboxPage() {
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-6 py-3.5 text-xs font-bold transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.4)] uppercase tracking-wider cursor-pointer"
           >
             <Plus className="h-4 w-4 stroke-[3]" />
-            Create New Request
+            {t('nav.create_request')}
           </Link>
         </div>
       </div>
@@ -230,15 +230,15 @@ export default function InboxPage() {
         {/* Category Sidebar Navigation */}
         <div className="glass-panel rounded-3xl p-4 space-y-1 lg:col-span-1">
           <span className="block text-[10px] font-bold uppercase tracking-wider text-text-secondary px-3 pb-3 border-b border-border-color mb-2">
-            Work Queues
+            {t('inbox.work_queues')}
           </span>
           {[
-            { id: 'awaiting-me', label: 'Awaiting Me', desc: 'Needs your immediate action' },
-            { id: 'awaiting-others', label: 'Awaiting Others', desc: 'Waiting for subsequent roles' },
-            { id: 'in-progress', label: 'In Progress', desc: 'Actively routing payloads' },
-            { id: 'completed', label: 'Completed', desc: 'Successfully executed & archived' },
-            { id: 'drafts', label: 'Drafts', desc: 'Awaiting configuration presets' },
-            { id: 'all', label: 'All Requests', desc: 'Complete historical logs view' }
+            { id: 'awaiting-me', label: t('inbox.queue_awaiting_me'), desc: t('inbox.queue_awaiting_me_desc') },
+            { id: 'awaiting-others', label: t('inbox.queue_awaiting_others'), desc: t('inbox.queue_awaiting_others_desc') },
+            { id: 'in-progress', label: t('inbox.queue_in_progress'), desc: t('inbox.queue_in_progress_desc') },
+            { id: 'completed', label: t('inbox.queue_completed'), desc: t('inbox.queue_completed_desc') },
+            { id: 'drafts', label: t('inbox.queue_drafts'), desc: t('inbox.queue_drafts_desc') },
+            { id: 'all', label: t('inbox.queue_all'), desc: t('inbox.queue_all_desc') }
           ].map(cat => {
             const isActive = categoryParam === cat.id
             const count = counts[cat.id]
@@ -248,7 +248,7 @@ export default function InboxPage() {
                 key={cat.id}
                 type="button"
                 onClick={() => setSearchParams({ category: cat.id })}
-                className={`w-full flex items-center justify-between px-3 py-3 rounded-2xl text-left transition-all duration-200 cursor-pointer border ${
+                className={`w-full flex items-center justify-between px-3 py-3 rounded-2xl text-left rtl:text-right transition-all duration-200 cursor-pointer border ${
                   isActive 
                     ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.05)]' 
                     : 'text-text-secondary hover:text-text-primary hover:bg-text-primary/5 border-transparent'
@@ -281,19 +281,19 @@ export default function InboxPage() {
             
             {/* Search Box */}
             <div className="relative flex-1 max-w-md w-full">
-              <Search className="absolute left-3.5 h-4 w-4 text-text-secondary top-1/2 -translate-y-1/2" />
+              <Search className="absolute left-3.5 rtl:left-auto rtl:right-3.5 h-4 w-4 text-text-secondary top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search by package name, signer, approver name or email..."
+                placeholder={t('inbox.search_placeholder')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full rounded-2xl border border-border-color bg-card-bg px-4 py-3.5 pl-11 text-xs text-text-primary placeholder:text-text-secondary/60 outline-none transition-all focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20"
+                className="w-full rounded-2xl border border-border-color bg-card-bg px-4 py-3.5 pl-11 rtl:pl-4 rtl:pr-11 text-xs text-text-primary placeholder:text-text-secondary/60 outline-none transition-all focus:border-cyan-500/40 focus:ring-1 focus:ring-cyan-500/20"
               />
               {searchTerm && (
                 <button
                   type="button"
                   onClick={() => setSearchTerm('')}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary"
+                  className="absolute right-3.5 rtl:right-auto rtl:left-3.5 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -310,12 +310,12 @@ export default function InboxPage() {
                   onChange={(e) => setStatusFilter(e.target.value)}
                   className="rounded-xl border border-border-color bg-card-bg px-3 py-2 text-xs text-text-primary outline-none cursor-pointer focus:border-cyan-500/40 transition-all"
                 >
-                  <option value="all">All Statuses</option>
-                  <option value="draft">Draft</option>
-                  <option value="sent">Sent</option>
-                  <option value="viewed">Viewed</option>
-                  <option value="completed">Completed</option>
-                  <option value="declined">Declined</option>
+                  <option value="all">{t('inbox.filter_status_all')}</option>
+                  <option value="draft">{t('inbox.filter_status_draft')}</option>
+                  <option value="sent">{t('inbox.filter_status_sent')}</option>
+                  <option value="viewed">{t('inbox.filter_status_viewed')}</option>
+                  <option value="completed">{t('inbox.filter_status_completed')}</option>
+                  <option value="declined">{t('inbox.filter_status_declined')}</option>
                 </select>
               </div>
 
@@ -326,11 +326,11 @@ export default function InboxPage() {
                   onChange={(e) => setRoleFilter(e.target.value)}
                   className="rounded-xl border border-border-color bg-card-bg px-3 py-2 text-xs text-text-primary outline-none cursor-pointer focus:border-cyan-500/40 transition-all"
                 >
-                  <option value="all">All Roles</option>
-                  <option value="signer">Signers Only</option>
-                  <option value="approver">Approvers Only</option>
-                  <option value="reviewer">Reviewers Only</option>
-                  <option value="cc">CC Only</option>
+                  <option value="all">{t('inbox.filter_role_all')}</option>
+                  <option value="signer">{t('inbox.filter_role_signer')}</option>
+                  <option value="approver">{t('inbox.filter_role_approver')}</option>
+                  <option value="reviewer">{t('inbox.filter_role_reviewer')}</option>
+                  <option value="cc">{t('inbox.filter_role_cc')}</option>
                 </select>
               </div>
 
@@ -341,9 +341,9 @@ export default function InboxPage() {
                   onChange={(e) => setSortField(e.target.value)}
                   className="rounded-xl border border-border-color bg-card-bg px-3 py-2 text-xs text-text-primary outline-none cursor-pointer focus:border-cyan-500/40 transition-all"
                 >
-                  <option value="newest">Newest Created</option>
-                  <option value="oldest">Oldest Created</option>
-                  <option value="activity">Last Active</option>
+                  <option value="newest">{t('inbox.sort_newest')}</option>
+                  <option value="oldest">{t('inbox.sort_oldest')}</option>
+                  <option value="activity">{t('inbox.sort_activity')}</option>
                 </select>
               </div>
 
@@ -362,7 +362,7 @@ export default function InboxPage() {
                 className="flex flex-col items-center justify-center py-32 text-cyan-500 bg-card-bg border border-border-color rounded-3xl"
               >
                 <RefreshCw className="h-8 w-8 animate-spin" />
-                <span className="mt-4 text-xs font-semibold tracking-widest uppercase animate-pulse">Syncing Work Queue...</span>
+                <span className="mt-4 text-xs font-semibold tracking-widest uppercase animate-pulse">{t('inbox.syncing')}</span>
               </motion.div>
             ) : error ? (
               <motion.div
@@ -374,9 +374,9 @@ export default function InboxPage() {
               >
                 <AlertCircle className="h-6 w-6 text-red-400 shrink-0" />
                 <div>
-                  <h3 className="font-semibold text-lg text-text-primary">Failed to Synchronize Inbox</h3>
+                  <h3 className="font-semibold text-lg text-text-primary">{t('inbox.sync_error_title')}</h3>
                   <p className="text-text-secondary mt-1">{error}</p>
-                  <button onClick={loadInboxPackages} className="mt-3 text-xs font-semibold uppercase tracking-wider text-red-400 hover:text-red-300">Retry Fetch</button>
+                  <button onClick={loadInboxPackages} className="mt-3 text-xs font-semibold uppercase tracking-wider text-red-400 hover:text-red-300">{t('inbox.retry_fetch')}</button>
                 </div>
               </motion.div>
             ) : processedPackages.length > 0 ? (
@@ -388,16 +388,16 @@ export default function InboxPage() {
                 className="glass-panel rounded-3xl overflow-hidden"
               >
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-sm">
+                  <table className="w-full text-left rtl:text-right border-collapse text-sm">
                     <thead>
                       <tr className="border-b border-border-color text-text-secondary uppercase text-[9px] font-bold tracking-wider bg-bg-primary/10">
-                        <th className="px-6 py-4 min-w-[200px]">Package Name</th>
-                        <th className="px-6 py-4">Status</th>
-                        <th className="px-6 py-4 text-center">Progress</th>
-                        <th className="px-6 py-4">Active Participant</th>
-                        <th className="px-6 py-4">Created</th>
-                        <th className="px-6 py-4">Last Activity</th>
-                        <th className="px-6 py-4 text-right">Actions</th>
+                        <th className="px-6 py-4 min-w-[200px]">{t('inbox.col_package')}</th>
+                        <th className="px-6 py-4">{t('inbox.col_status')}</th>
+                        <th className="px-6 py-4 text-center">{t('inbox.col_progress')}</th>
+                        <th className="px-6 py-4">{t('inbox.col_active_participant')}</th>
+                        <th className="px-6 py-4">{t('inbox.col_created')}</th>
+                        <th className="px-6 py-4">{t('inbox.col_last_activity')}</th>
+                        <th className="px-6 py-4 text-right rtl:text-left">{t('inbox.col_actions')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border-color">
@@ -486,13 +486,13 @@ export default function InboxPage() {
                             <td className="px-6 py-4 text-text-secondary text-xs font-medium align-middle">
                               <div className="flex items-center gap-1.5">
                                 <Clock className="h-3.5 w-3.5 text-text-secondary" />
-                                <span>{formatTimeAgo(pkg.last_activity)}</span>
+                                <span>{formatTimeAgo(pkg.last_activity, t)}</span>
                               </div>
                             </td>
 
                             {/* Action Links */}
-                            <td className="px-6 py-4 text-right align-middle" onClick={e => e.stopPropagation()}>
-                              <div className="flex items-center justify-end gap-1.5">
+                            <td className="px-6 py-4 text-right rtl:text-left align-middle" onClick={e => e.stopPropagation()}>
+                              <div className="flex items-center justify-end rtl:justify-start gap-1.5">
                                 {pkg.status === 'completed' && pkg.signed_document ? (
                                   <>
                                     <button 
@@ -502,19 +502,19 @@ export default function InboxPage() {
                                         setIsPreviewOpen(true)
                                       }}
                                       className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500 hover:text-black border border-emerald-500/20 px-2.5 py-1.5 text-[11px] font-bold text-emerald-400 transition-all cursor-pointer shrink-0"
-                                      title="Preview signed document"
+                                      title={t('inbox.btn_view')}
                                     >
                                       <Eye className="h-3.5 w-3.5" />
-                                      View
+                                      {t('inbox.btn_view')}
                                     </button>
                                     <a 
                                       href={pkg.signed_document.download_url}
                                       download
                                       className="inline-flex items-center gap-1 rounded-lg bg-bg-primary hover:bg-text-primary/10 border border-border-color px-2.5 py-1.5 text-[11px] font-bold text-text-primary transition-all cursor-pointer shrink-0"
-                                      title="Download signed document"
+                                      title={t('inbox.btn_download')}
                                     >
                                       <Download className="h-3.5 w-3.5" />
-                                      Download
+                                      {t('inbox.btn_download')}
                                     </a>
                                   </>
                                 ) : null}
@@ -522,8 +522,8 @@ export default function InboxPage() {
                                   to={isDraft ? `/create-request?draftId=${pkg.id}` : `/packages/${pkg.id}`}
                                   className="inline-flex items-center gap-1 rounded-lg bg-bg-primary hover:bg-cyan-500 hover:text-black border border-border-color hover:border-cyan-400 px-3 py-1.5 text-[11px] font-bold text-text-primary transition-all cursor-pointer shrink-0"
                                 >
-                                  {isDraft ? 'Resume' : 'Details'}
-                                  <ArrowUpRight className="h-3 w-3" />
+                                  {isDraft ? t('inbox.btn_resume') : t('inbox.btn_details')}
+                                  <ArrowUpRight className="h-3 w-3 rtl:rotate-[-90deg]" />
                                 </Link>
                               </div>
                             </td>
@@ -548,14 +548,14 @@ export default function InboxPage() {
                 </div>
                 <div className="space-y-1 max-w-sm">
                   <h3 className="text-base font-semibold text-text-primary">
-                    {searchTerm ? 'No Search Results Match' : `No ${currentCategoryLabel} Requests Found`}
+                    {searchTerm ? t('inbox.no_search_results') : t('inbox.no_requests_found', { category: currentCategoryLabel })}
                   </h3>
                   <p className="text-xs text-text-secondary">
                     {searchTerm 
-                      ? 'Adjust your query, names, or email parameters and try searching again.' 
+                      ? t('inbox.no_search_results_desc')
                       : categoryParam === 'completed' 
-                        ? 'No completed packages yet. Workflows will archive here once fully executed.' 
-                        : `Your queue is currently clear of any ${currentCategoryLabel.toLowerCase()} envelopes.`}
+                        ? t('inbox.empty_completed_desc')
+                        : t('inbox.empty_queue_desc', { category: currentCategoryLabel.toLowerCase() })}
                   </p>
                 </div>
                 
@@ -565,13 +565,13 @@ export default function InboxPage() {
                     className="inline-flex items-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-5 py-3 text-xs font-bold transition-all shadow-[0_0_15px_rgba(34,211,238,0.2)]"
                   >
                     <Plus className="h-3.5 w-3.5 stroke-[3]" />
-                    Create Request
+                    {t('inbox.btn_create_request')}
                   </Link>
                   <Link 
                     to="/"
                     className="inline-flex items-center gap-2 rounded-xl bg-bg-primary hover:bg-text-primary/10 border border-border-color text-text-primary px-5 py-3 text-xs font-bold transition-all"
                   >
-                    Dashboard Home
+                    {t('inbox.btn_dashboard_home')}
                   </Link>
                 </div>
               </motion.div>

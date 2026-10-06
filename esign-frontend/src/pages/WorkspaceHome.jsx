@@ -204,7 +204,7 @@ export default function WorkspaceHome() {
                 </div>
                 <div className="mt-4">
                   <span className="text-4xl font-semibold text-text-primary tracking-tight">{data?.stats?.awaiting_me ?? 0}</span>
-                  <p className="text-[9px] text-text-secondary mt-1">Needs your action</p>
+                  <p className="text-[9px] text-text-secondary mt-1">{t('workspace.stat_awaiting_me_desc')}</p>
                 </div>
               </motion.div>
 
@@ -220,7 +220,7 @@ export default function WorkspaceHome() {
                 </div>
                 <div className="mt-4">
                   <span className="text-4xl font-semibold text-text-primary tracking-tight">{data?.stats?.awaiting_others ?? 0}</span>
-                  <p className="text-[9px] text-text-secondary mt-1">Pending subsequent steps</p>
+                  <p className="text-[9px] text-text-secondary mt-1">{t('workspace.stat_awaiting_others_desc')}</p>
                 </div>
               </motion.div>
 
@@ -236,7 +236,7 @@ export default function WorkspaceHome() {
                 </div>
                 <div className="mt-4">
                   <span className="text-4xl font-semibold text-text-primary tracking-tight">{data?.stats?.in_progress ?? 0}</span>
-                  <p className="text-[9px] text-text-secondary mt-1">Actively routing</p>
+                  <p className="text-[9px] text-text-secondary mt-1">{t('workspace.stat_in_progress_desc')}</p>
                 </div>
               </motion.div>
 
@@ -252,7 +252,7 @@ export default function WorkspaceHome() {
                 </div>
                 <div className="mt-4">
                   <span className="text-4xl font-semibold text-text-primary tracking-tight">{data?.stats?.completed ?? 0}</span>
-                  <p className="text-[9px] text-text-secondary mt-1">Signed & archived</p>
+                  <p className="text-[9px] text-text-secondary mt-1">{t('workspace.stat_completed_desc')}</p>
                 </div>
               </motion.div>
 
@@ -268,7 +268,7 @@ export default function WorkspaceHome() {
                 </div>
                 <div className="mt-4">
                   <span className="text-4xl font-semibold text-text-primary tracking-tight">{data?.stats?.draft ?? 0}</span>
-                  <p className="text-[9px] text-text-secondary mt-1">Awaiting configuration</p>
+                  <p className="text-[9px] text-text-secondary mt-1">{t('workspace.stat_drafts_desc')}</p>
                 </div>
               </motion.div>
 
@@ -298,9 +298,9 @@ export default function WorkspaceHome() {
                       </div>
                       <div className="space-y-1">
                         <h4 className="text-sm font-bold text-text-primary group-hover:text-cyan-400 transition-colors">{t('workspace.card_create_request')}</h4>
-                        <p className="text-xs text-text-secondary">Design sequential steps, upload payloads, and securely route copy.</p>
+                        <p className="text-xs text-text-secondary">{t('workspace.card_create_request_desc')}</p>
                       </div>
-                      <ChevronRight className="h-4 w-4 text-zinc-700 group-hover:text-cyan-400 transition-colors absolute right-4 top-1/2 -translate-y-1/2" />
+                      <ChevronRight className="h-4 w-4 text-zinc-700 group-hover:text-cyan-400 transition-colors absolute right-4 rtl:right-auto rtl:left-4 top-1/2 -translate-y-1/2 rtl:rotate-180" />
                     </div>
 
                     {/* Shortcut 2 */}
@@ -313,9 +313,9 @@ export default function WorkspaceHome() {
                       </div>
                       <div className="space-y-1">
                         <h4 className="text-sm font-bold text-text-primary group-hover:text-violet-400 transition-colors">{t('workspace.card_upload_doc')}</h4>
-                        <p className="text-xs text-text-secondary">Instantly parse PDF file elements and define target coordinates.</p>
+                        <p className="text-xs text-text-secondary">{t('workspace.card_upload_doc_desc')}</p>
                       </div>
-                      <ChevronRight className="h-4 w-4 text-zinc-700 group-hover:text-violet-400 transition-colors absolute right-4 top-1/2 -translate-y-1/2" />
+                      <ChevronRight className="h-4 w-4 text-zinc-700 group-hover:text-violet-400 transition-colors absolute right-4 rtl:right-auto rtl:left-4 top-1/2 -translate-y-1/2 rtl:rotate-180" />
                     </div>
 
                     {/* Shortcut 3: Use Template */}
@@ -328,9 +328,9 @@ export default function WorkspaceHome() {
                       </div>
                       <div className="space-y-1">
                         <h4 className="text-sm font-bold text-text-primary group-hover:text-emerald-400 transition-colors">{t('workspace.card_use_template')}</h4>
-                        <p className="text-xs text-text-secondary">Deploy standard business workflows and prepopulate parameters instantly.</p>
+                        <p className="text-xs text-text-secondary">{t('workspace.card_use_template_desc')}</p>
                       </div>
-                      <ChevronRight className="h-4 w-4 text-zinc-700 group-hover:text-emerald-400 transition-colors absolute right-4 top-1/2 -translate-y-1/2" />
+                      <ChevronRight className="h-4 w-4 text-zinc-700 group-hover:text-emerald-400 transition-colors absolute right-4 rtl:right-auto rtl:left-4 top-1/2 -translate-y-1/2 rtl:rotate-180" />
                     </div>
 
                     {/* Shortcut 4 */}
@@ -343,9 +343,9 @@ export default function WorkspaceHome() {
                       </div>
                       <div className="space-y-1">
                         <h4 className="text-sm font-bold text-text-primary group-hover:text-cyan-400 transition-colors">{t('workspace.card_view_inbox')}</h4>
-                        <p className="text-xs text-text-secondary">Inspect outstanding incoming actions and monitor active routing steps.</p>
+                        <p className="text-xs text-text-secondary">{t('workspace.card_view_inbox_desc')}</p>
                       </div>
-                      <ChevronRight className="h-4 w-4 text-zinc-700 group-hover:text-cyan-400 transition-colors absolute right-4 top-1/2 -translate-y-1/2" />
+                      <ChevronRight className="h-4 w-4 text-zinc-700 group-hover:text-cyan-400 transition-colors absolute right-4 rtl:right-auto rtl:left-4 top-1/2 -translate-y-1/2 rtl:rotate-180" />
                     </div>
                   </div>
                 </motion.div>
@@ -357,19 +357,19 @@ export default function WorkspaceHome() {
                       <Folder className="h-4 w-4 text-cyan-400" />
                       {t('workspace.recent_requests_title')}
                     </h2>
-                    <span className="text-[10px] text-text-secondary font-mono uppercase">Transaction Monitor</span>
+                    <span className="text-[10px] text-text-secondary font-mono uppercase">{t('workspace.transaction_monitor')}</span>
                   </div>
 
                   <div className="overflow-x-auto min-h-[280px]">
                     {data?.recent_packages?.length > 0 ? (
-                      <table className="w-full text-left border-collapse text-sm">
+                      <table className="w-full text-left rtl:text-right border-collapse text-sm">
                         <thead>
                           <tr className="border-b border-border-color text-text-secondary uppercase text-[9px] font-bold tracking-wider bg-table-header-bg">
                             <th className="px-6 py-4">{t('workspace.col_package_name')}</th>
                             <th className="px-6 py-4">{t('workspace.col_status')}</th>
                             <th className="px-6 py-4 text-center">{t('workspace.col_participants')}</th>
                             <th className="px-6 py-4">{t('workspace.col_created_date')}</th>
-                            <th className="px-6 py-4 text-right">{t('workspace.col_actions')}</th>
+                            <th className="px-6 py-4 text-right rtl:text-left">{t('workspace.col_actions')}</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border-color">
@@ -418,14 +418,14 @@ export default function WorkspaceHome() {
                                     minute: '2-digit'
                                   })}
                                 </td>
-                                <td className="px-6 py-4 text-right align-middle" onClick={(e) => e.stopPropagation()}>
-                                  <div className="flex items-center justify-end gap-2">
+                                <td className="px-6 py-4 text-right rtl:text-left align-middle" onClick={(e) => e.stopPropagation()}>
+                                  <div className="flex items-center justify-end rtl:justify-start gap-2">
                                     <Link 
                                       to={`/packages/${pkg.id}`}
                                       className="inline-flex items-center gap-1 rounded-lg bg-bg-primary border border-border-color hover:border-cyan-400 px-3 py-1.5 text-[11px] font-bold text-text-primary hover:bg-cyan-500 hover:text-black transition-all"
                                     >
                                       {t('workspace.btn_open_package')}
-                                      <ArrowUpRight className="h-3 w-3" />
+                                      <ArrowUpRight className="h-3 w-3 rtl:rotate-[-90deg]" />
                                     </Link>
                                   </div>
                                 </td>
@@ -441,7 +441,7 @@ export default function WorkspaceHome() {
                           <Folder className="h-10 w-10" />
                         </div>
                         <div className="space-y-1 max-w-sm">
-                          <h3 className="text-base font-semibold text-text-primary">Welcome to E-Sign Workspace</h3>
+                          <h3 className="text-base font-semibold text-text-primary">{t('workspace.welcome_empty_title')}</h3>
                           <p className="text-xs text-text-secondary">{t('workspace.welcome_empty_desc')}</p>
                         </div>
                         <Link 
@@ -449,7 +449,7 @@ export default function WorkspaceHome() {
                           className="inline-flex items-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-5 py-3 text-xs font-bold transition-all shadow-[0_0_15px_rgba(34,211,238,0.2)]"
                         >
                           <Plus className="h-3.5 w-3.5 stroke-[3]" />
-                          Create New Request
+                          {t('workspace.btn_create_request')}
                         </Link>
                       </div>
                     )}
@@ -473,7 +473,7 @@ export default function WorkspaceHome() {
                     <div className="flex items-center justify-between bg-card-bg border border-border-color rounded-2xl p-4 shadow-sm">
                       <div className="space-y-0.5">
                         <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">{t('workspace.insight_pending_approvals')}</span>
-                        <h4 className="text-xs font-bold text-text-primary">Review & Approve Stages</h4>
+                        <h4 className="text-xs font-bold text-text-primary">{t('workspace.insight_pending_approvals_desc')}</h4>
                       </div>
                       <span className="text-2xl font-light text-cyan-400 font-mono">
                         {data?.recent_packages?.filter(p => p.status === 'viewed').length ?? 0}
@@ -484,7 +484,7 @@ export default function WorkspaceHome() {
                     <div className="flex items-center justify-between bg-card-bg border border-border-color rounded-2xl p-4 shadow-sm">
                       <div className="space-y-0.5">
                         <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">{t('workspace.insight_awaiting_signature')}</span>
-                        <h4 className="text-xs font-bold text-text-primary">Active Signing Steps</h4>
+                        <h4 className="text-xs font-bold text-text-primary">{t('workspace.insight_awaiting_signature_desc')}</h4>
                       </div>
                       <span className="text-2xl font-light text-violet-400 font-mono">
                         {data?.recent_packages?.filter(p => p.status === 'sent').length ?? 0}
@@ -495,7 +495,7 @@ export default function WorkspaceHome() {
                     <div className="flex items-center justify-between bg-card-bg border border-border-color rounded-2xl p-4 shadow-sm">
                       <div className="space-y-0.5">
                         <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">{t('workspace.insight_recently_completed')}</span>
-                        <h4 className="text-xs font-bold text-text-primary">Fully Executed Packages</h4>
+                        <h4 className="text-xs font-bold text-text-primary">{t('workspace.insight_recently_completed_desc')}</h4>
                       </div>
                       <span className="text-2xl font-light text-emerald-400 font-mono">
                         {data?.recent_packages?.filter(p => p.status === 'completed').length ?? 0}
@@ -514,16 +514,16 @@ export default function WorkspaceHome() {
                       <Clock className="h-4 w-4 text-cyan-400" />
                       {t('dashboard.recent_activity')}
                     </h2>
-                    <span className="text-[10px] text-zinc-500 font-mono uppercase">Audit Trail</span>
+                    <span className="text-[10px] text-zinc-500 font-mono uppercase">{t('workspace.audit_trail')}</span>
                   </div>
 
                   <div className="p-6 overflow-y-auto max-h-[400px] custom-scrollbar">
                     {data?.recent_activity?.length > 0 ? (
-                      <div className="relative pl-6 border-l border-border-color space-y-6">
+                      <div className="relative pl-6 rtl:pl-0 rtl:pr-6 border-l rtl:border-l-0 rtl:border-r border-border-color space-y-6">
                         {data.recent_activity.map((activity, idx) => (
                           <div key={idx} className="relative group">
                             {/* Timeline dot */}
-                            <div className="absolute -left-[30px] top-1 h-2 w-2 rounded-full bg-cyan-500 group-hover:bg-cyan-400 transition-colors shadow-[0_0_6px_rgba(34,211,238,0.4)] border border-black z-10" />
+                            <div className="absolute -left-[30px] rtl:-left-auto rtl:-right-[30px] top-1 h-2 w-2 rounded-full bg-cyan-500 group-hover:bg-cyan-400 transition-colors shadow-[0_0_6px_rgba(34,211,238,0.4)] border border-black z-10" />
                             
                             <p className="text-xs font-semibold text-text-primary leading-relaxed">
                               {activity.event}
@@ -543,7 +543,7 @@ export default function WorkspaceHome() {
                     ) : (
                       <div className="flex flex-col items-center justify-center py-20 text-zinc-600">
                         <Clock className="h-8 w-8 mb-2 opacity-30 animate-pulse" />
-                        <p className="text-xs font-semibold">No activity logs recorded.</p>
+                        <p className="text-xs font-semibold">{t('workspace.no_activity_logs')}</p>
                       </div>
                     )}
                   </div>

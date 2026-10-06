@@ -16,7 +16,6 @@ export function AuthProvider({ children }) {
           const userData = await getUserMe()
           setUser(userData)
         } catch (err) {
-          console.error('Failed to load user with current token', err)
           localStorage.removeItem('token')
           delete apiClient.defaults.headers.common['Authorization']
           setToken(null)
@@ -52,7 +51,7 @@ export function AuthProvider({ children }) {
     try {
       await logoutUser()
     } catch (err) {
-      console.error('Logout error on server', err)
+      // Suppress server logout error in browser console
     } finally {
       localStorage.removeItem('token')
       delete apiClient.defaults.headers.common['Authorization']

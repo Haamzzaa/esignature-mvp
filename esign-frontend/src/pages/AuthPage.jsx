@@ -27,15 +27,15 @@ export default function AuthPage() {
     try {
       if (activeTab === 'login') {
         if (!username || !password) {
-          throw new Error('All fields are required.')
+          throw new Error(t('auth.error_all_fields'))
         }
         await login(username, password)
       } else {
         if (!username || !password || !email) {
-          throw new Error('All fields are required.')
+          throw new Error(t('auth.error_all_fields'))
         }
         if (password !== confirmPassword) {
-          throw new Error('Passwords do not match.')
+          throw new Error(t('auth.error_password_mismatch'))
         }
         await register(username, email, password)
       }
@@ -44,7 +44,7 @@ export default function AuthPage() {
       setError(
         err?.response?.data?.detail ||
         err?.message ||
-        'Authentication failed. Please verify inputs.'
+        t('auth.error_auth_failed')
       )
     } finally {
       setIsSubmitting(false)
@@ -58,7 +58,7 @@ export default function AuthPage() {
           type="button"
           onClick={toggleLanguage}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl glass-panel text-xs text-text-secondary hover:text-cyan-400 transition-colors cursor-pointer"
-          title={`Switch to ${language === 'en' ? 'العربية' : 'English'}`}
+          title={t('nav.switch_language')}
         >
           <Globe className="h-3.5 w-3.5" />
           <span>{language === 'en' ? 'العربية' : 'English'}</span>
@@ -134,13 +134,13 @@ export default function AuthPage() {
             <div className="space-y-1.5">
               <label className="block text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">{t('auth.label_username')}</label>
               <div className="relative">
-                <User className="absolute left-3.5 h-4 w-4 text-zinc-500 top-1/2 -translate-y-1/2" />
+                <User className="absolute left-3.5 rtl:left-auto rtl:right-3.5 h-4 w-4 text-zinc-500 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="enter username"
-                  className="w-full rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3.5 pl-11 text-xs text-zinc-200 placeholder:text-zinc-600 outline-none backdrop-blur-xl transition-all duration-300 focus:border-cyan-500/50 focus:bg-cyan-950/10 focus:ring-1 focus:ring-cyan-500/20"
+                  placeholder={t('auth.placeholder_username')}
+                  className="w-full rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3.5 pl-11 rtl:pl-4 rtl:pr-11 text-xs text-zinc-200 placeholder:text-zinc-600 outline-none backdrop-blur-xl transition-all duration-300 focus:border-cyan-500/50 focus:bg-cyan-950/10 focus:ring-1 focus:ring-cyan-500/20"
                   required
                 />
               </div>
@@ -151,13 +151,14 @@ export default function AuthPage() {
               <div className="space-y-1.5">
                 <label className="block text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">{t('auth.label_email')}</label>
                 <div className="relative">
-                  <Mail className="absolute left-3.5 h-4 w-4 text-zinc-500 top-1/2 -translate-y-1/2" />
+                  <Mail className="absolute left-3.5 rtl:left-auto rtl:right-3.5 h-4 w-4 text-zinc-500 top-1/2 -translate-y-1/2" />
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="enter email address"
-                    className="w-full rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3.5 pl-11 text-xs text-zinc-200 placeholder:text-zinc-600 outline-none backdrop-blur-xl transition-all duration-300 focus:border-cyan-500/50 focus:bg-cyan-950/10 focus:ring-1 focus:ring-cyan-500/20"
+                    placeholder={t('auth.placeholder_email')}
+                    dir="ltr"
+                    className="w-full rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3.5 pl-11 rtl:pl-4 rtl:pr-11 text-xs text-zinc-200 placeholder:text-zinc-600 outline-none backdrop-blur-xl transition-all duration-300 focus:border-cyan-500/50 focus:bg-cyan-950/10 focus:ring-1 focus:ring-cyan-500/20 rtl:text-right"
                     required
                   />
                 </div>
@@ -168,13 +169,14 @@ export default function AuthPage() {
             <div className="space-y-1.5">
               <label className="block text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">{t('auth.label_password')}</label>
               <div className="relative">
-                <Lock className="absolute left-3.5 h-4 w-4 text-zinc-500 top-1/2 -translate-y-1/2" />
+                <Lock className="absolute left-3.5 rtl:left-auto rtl:right-3.5 h-4 w-4 text-zinc-500 top-1/2 -translate-y-1/2" />
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="enter password"
-                  className="w-full rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3.5 pl-11 text-xs text-zinc-200 placeholder:text-zinc-600 outline-none backdrop-blur-xl transition-all duration-300 focus:border-cyan-500/50 focus:bg-cyan-950/10 focus:ring-1 focus:ring-cyan-500/20"
+                  placeholder={t('auth.placeholder_password')}
+                  dir="ltr"
+                  className="w-full rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3.5 pl-11 rtl:pl-4 rtl:pr-11 text-xs text-zinc-200 placeholder:text-zinc-600 outline-none backdrop-blur-xl transition-all duration-300 focus:border-cyan-500/50 focus:bg-cyan-950/10 focus:ring-1 focus:ring-cyan-500/20 rtl:text-right"
                   required
                 />
               </div>
@@ -185,13 +187,14 @@ export default function AuthPage() {
               <div className="space-y-1.5">
                 <label className="block text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">{t('auth.label_confirm_password')}</label>
                 <div className="relative">
-                  <Lock className="absolute left-3.5 h-4 w-4 text-zinc-500 top-1/2 -translate-y-1/2" />
+                  <Lock className="absolute left-3.5 rtl:left-auto rtl:right-3.5 h-4 w-4 text-zinc-500 top-1/2 -translate-y-1/2" />
                   <input
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="re-enter password"
-                    className="w-full rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3.5 pl-11 text-xs text-zinc-200 placeholder:text-zinc-600 outline-none backdrop-blur-xl transition-all duration-300 focus:border-cyan-500/50 focus:bg-cyan-950/10 focus:ring-1 focus:ring-cyan-500/20"
+                    placeholder={t('auth.placeholder_confirm_password')}
+                    dir="ltr"
+                    className="w-full rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3.5 pl-11 rtl:pl-4 rtl:pr-11 text-xs text-zinc-200 placeholder:text-zinc-600 outline-none backdrop-blur-xl transition-all duration-300 focus:border-cyan-500/50 focus:bg-cyan-950/10 focus:ring-1 focus:ring-cyan-500/20 rtl:text-right"
                     required
                   />
                 </div>
@@ -205,7 +208,7 @@ export default function AuthPage() {
               className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black px-6 py-3.5 text-xs font-bold transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.4)] uppercase tracking-wider cursor-pointer mt-4"
             >
               <KeyRound className="h-4 w-4 shrink-0" />
-              <span>{isSubmitting ? 'Authenticating...' : activeTab === 'login' ? t('auth.btn_signin') : t('auth.btn_register')}</span>
+              <span>{isSubmitting ? t('auth.authenticating') : activeTab === 'login' ? t('auth.btn_signin') : t('auth.btn_register')}</span>
             </button>
           </form>
         </div>

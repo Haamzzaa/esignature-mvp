@@ -5,7 +5,6 @@ export default function VerificationCard({
   subtitle,
   icon: Icon,
   badgeText,
-  estimatedTime,
   stepProgress,
   children,
   className = ''
@@ -20,8 +19,8 @@ export default function VerificationCard({
       <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 via-transparent to-transparent opacity-30 pointer-events-none" />
 
       {/* Standardized Verification Header */}
-      {(title || Icon || badgeText || estimatedTime || stepProgress) && (
-        <div className="border-b border-border-color pb-4 space-y-2">
+      {(title || Icon || badgeText || stepProgress) && (
+        <div className="border-b border-border-color pb-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
               {Icon && (
@@ -54,18 +53,6 @@ export default function VerificationCard({
               )}
             </div>
           </div>
-
-          {/* Sub-header Metadata (Estimated Time) */}
-          {estimatedTime && (
-            <div className="flex items-center justify-between pt-1 text-[11px] text-text-secondary/80 font-medium border-t border-border-color/30">
-              <span className="flex items-center gap-1 text-text-secondary/70">
-                ⏱ Est. Time: <strong className="text-text-primary font-normal">{estimatedTime}</strong>
-              </span>
-              <span className="text-[10px] text-accent/80 font-mono uppercase tracking-wider">
-                Automated Verification
-              </span>
-            </div>
-          )}
         </div>
       )}
 

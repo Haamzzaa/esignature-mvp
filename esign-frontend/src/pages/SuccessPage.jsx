@@ -23,9 +23,93 @@ function toAbsoluteUrl(maybeRelativeUrl, origin) {
   return `${origin}${path}`
 }
 
+// ── BlobPdfViewer Component ──────────────────────────────────────────────────
+
+export function BlobPdfViewer({ url, title, className = '' }) {
+  const { t } = useLocale()
+  const [blobUrl, setBlobUrl] = useState(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    if (!url) {
+      setBlobUrl(null)
+      setIsLoading(false)
+      setError(null)
+      return
+    }
+
+    let isSubscribed = true
+    let objectUrl = null
+    setIsLoading(true)
+    setError(null)
+
+    async function loadPdfBlob() {
+      try {
+        const response = await apiClient.get(url, {
+          responseType: 'blob',
+        })
+        if (!isSubscribed) return
+
+        const blob = new Blob([response.data], { type: 'application/pdf' })
+        objectUrl = URL.createObjectURL(blob)
+        setBlobUrl(objectUrl)
+        setIsLoading(false)
+      } catch (err) {
+        if (!isSubscribed) return
+        console.error('Failed to load PDF preview:', err)
+        setError(
+          err?.response?.data?.detail ||
+          err?.message ||
+          t('errors.network_error')
+        )
+        setIsLoading(false)
+      }
+    }
+
+    loadPdfBlob()
+
+    return () => {
+      isSubscribed = false
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl)
+      }
+    }
+  }, [url, t])
+
+  if (isLoading) {
+    return (
+      <div className={`flex flex-col items-center justify-center gap-3 text-cyan-400 p-8 ${className}`}>
+        <RefreshCw className="h-8 w-8 animate-spin" />
+        <p className="text-xs font-medium tracking-wide text-zinc-300">{t('common.loading')}</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className={`flex flex-col items-center justify-center gap-3 text-red-400 p-6 text-center ${className}`}>
+        <AlertCircle className="h-8 w-8 text-red-400" />
+        <p className="text-sm font-medium text-red-200">{error}</p>
+      </div>
+    )
+  }
+
+  if (!blobUrl) return null
+
+  return (
+    <iframe
+      title={title || t('success.doc_preview_title')}
+      src={blobUrl}
+      className={className}
+    />
+  )
+}
+
 // ── PdfPreviewModal Component ──────────────────────────────────────────────────
 
 export function PdfPreviewModal({ isOpen, onClose, previewUrl, title }) {
+  const { t } = useLocale()
   if (!isOpen) return null
 
   return (
@@ -50,22 +134,22 @@ export function PdfPreviewModal({ isOpen, onClose, previewUrl, title }) {
             <div className="flex items-center gap-2.5 text-zinc-300">
               <FileSignature className="h-5 w-5 text-cyan-400" />
               <h2 className="text-sm font-semibold tracking-wide text-white truncate max-w-md">
-                {title || 'Document Preview'}
+                {title || t('success.doc_preview_title')}
               </h2>
             </div>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-full bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
+              className="p-1.5 rounded-full bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
             >
               <X className="h-5 w-5" />
             </button>
           </div>
 
           {/* Body */}
-          <div className="flex-1 bg-black/40 p-2 sm:p-4">
-            <iframe
-              title="Document Preview Viewport"
-              src={previewUrl}
+          <div className="flex-1 bg-black/40 p-2 sm:p-4 flex items-center justify-center">
+            <BlobPdfViewer
+              url={previewUrl}
+              title={title}
               className="w-full h-full rounded-2xl border border-white/5 bg-zinc-950 shadow-inner"
             />
           </div>
@@ -110,7 +194,7 @@ export default function SuccessPage() {
 
     async function loadSignedDocument() {
       if (!token) {
-        setError('Missing access token.')
+        setError(t('errors.unauthorized'))
         setLoading(false)
         return
       }
@@ -126,12 +210,12 @@ export default function SuccessPage() {
           setSignedDocumentUrl('')
           setDownloadUrl('')
         } else {
-          setError('Signed document unavailable.')
+          setError(t('success.verification_failed'))
         }
       } catch (err) {
         setError(
           err?.response?.data?.detail ||
-          'Unable to access signed document.'
+          t('errors.network_error')
         )
       } finally {
         setLoading(false)
@@ -139,7 +223,7 @@ export default function SuccessPage() {
     }
 
     loadSignedDocument()
-  }, [token, isSuccessDirect, stateSession])
+  }, [token, isSuccessDirect, stateSession, t])
 
   const role = session?.participant_role || 'signer'
 
@@ -149,17 +233,17 @@ export default function SuccessPage() {
       const isTokenExpired = error.toLowerCase().includes('expired')
 
       return {
-        badge: isTokenUsed ? 'Token Already Used' : isTokenExpired ? 'Token Expired' : 'Access Denied',
+        badge: isTokenUsed ? t('success.token_already_used') : isTokenExpired ? t('success.token_expired') : t('success.access_denied'),
         badgeColor: 'border-red-500/30 bg-red-500/10 text-red-400',
         iconColor: 'text-red-400 drop-shadow-[0_0_15px_rgba(239,68,68,0.5)]',
         pingColor: 'bg-red-500',
         isError: true,
-        title: isTokenUsed ? 'Token Already Used' : isTokenExpired ? 'Token Expired' : 'Verification Failed',
+        title: isTokenUsed ? t('success.token_already_used') : isTokenExpired ? t('success.token_expired') : t('success.verification_failed'),
         description: (
           <div className="space-y-2 mt-4 text-zinc-400">
             <p>{error}</p>
-            {isTokenUsed && <p className="text-sm">You have already completed this action. If you need to view the final signed document, please check your email or contact the initiator.</p>}
-            <p className="text-zinc-500 text-xs mt-6">This session is no longer active.</p>
+            {isTokenUsed && <p className="text-sm">{t('success.token_used_desc')}</p>}
+            <p className="text-zinc-500 text-xs mt-6">{t('success.session_inactive')}</p>
           </div>
         ),
       }
@@ -168,33 +252,33 @@ export default function SuccessPage() {
     if (role === 'approver') {
       if (successType === 'reject') {
         return {
-          badge: 'Document Rejected',
+          badge: t('success.document_rejected'),
           badgeColor: 'border-red-500/30 bg-red-500/10 text-red-400',
           iconColor: 'text-red-400 drop-shadow-[0_0_15px_rgba(239,68,68,0.5)]',
           pingColor: 'bg-red-500',
           isError: true,
-          title: 'Document Rejected',
+          title: t('success.document_rejected'),
           description: (
             <div className="space-y-2 mt-4 text-zinc-400">
-              <p>Your rejection has been successfully recorded.</p>
-              <p>The workflow has been stopped.</p>
-              <p className="text-zinc-500 text-xs mt-6">You may close this window.</p>
+              <p>{t('success.document_rejected')}</p>
+              <p>{t('success.workflow_stopped')}</p>
+              <p className="text-zinc-500 text-xs mt-6">{t('success.may_close_window')}</p>
             </div>
           ),
         }
       }
       return {
-        badge: 'Approval Recorded',
+        badge: t('success.approval_recorded'),
         badgeColor: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
         iconColor: 'text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)]',
         pingColor: 'bg-emerald-500',
         isError: false,
-        title: 'Approval Submitted',
+        title: t('success.approval_submitted'),
         description: (
           <div className="space-y-2 mt-4 text-zinc-400">
-            <p>Your approval has been successfully recorded.</p>
-            <p>The workflow has advanced to the next participant.</p>
-            <p className="text-zinc-500 text-xs mt-6">You may close this window.</p>
+            <p>{t('success.approval_recorded')}</p>
+            <p>{t('success.workflow_advanced')}</p>
+            <p className="text-zinc-500 text-xs mt-6">{t('success.may_close_window')}</p>
           </div>
         ),
       }
@@ -203,33 +287,33 @@ export default function SuccessPage() {
     if (role === 'reviewer') {
       if (successType === 'return') {
         return {
-          badge: 'Document Returned',
+          badge: t('success.document_returned'),
           badgeColor: 'border-amber-500/30 bg-amber-500/10 text-amber-400',
           iconColor: 'text-amber-400 drop-shadow-[0_0_15px_rgba(245,158,11,0.5)]',
           pingColor: 'bg-amber-500',
           isError: false,
-          title: 'Document Returned',
+          title: t('success.document_returned'),
           description: (
             <div className="space-y-2 mt-4 text-zinc-400">
-              <p>The document has been successfully returned.</p>
-              <p>The workflow has been stopped.</p>
-              <p className="text-zinc-500 text-xs mt-6">You may close this window.</p>
+              <p>{t('success.document_returned')}</p>
+              <p>{t('success.workflow_stopped')}</p>
+              <p className="text-zinc-500 text-xs mt-6">{t('success.may_close_window')}</p>
             </div>
           ),
         }
       }
       return {
-        badge: 'Review Recorded',
+        badge: t('success.review_recorded'),
         badgeColor: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
         iconColor: 'text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)]',
         pingColor: 'bg-emerald-500',
         isError: false,
-        title: 'Review Completed',
+        title: t('success.review_completed'),
         description: (
           <div className="space-y-2 mt-4 text-zinc-400">
-            <p>Your review has been successfully submitted.</p>
-            <p>The workflow has advanced.</p>
-            <p className="text-zinc-500 text-xs mt-6">You may close this window.</p>
+            <p>{t('success.review_recorded')}</p>
+            <p>{t('success.workflow_advanced')}</p>
+            <p className="text-zinc-500 text-xs mt-6">{t('success.may_close_window')}</p>
           </div>
         ),
       }
@@ -237,17 +321,17 @@ export default function SuccessPage() {
 
     if (role === 'cc') {
       return {
-        badge: 'Receipt Acknowledged',
+        badge: t('success.receipt_acknowledged'),
         badgeColor: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
         iconColor: 'text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.5)]',
         pingColor: 'bg-emerald-500',
         isError: false,
-        title: 'Acknowledgment Logged',
+        title: t('success.acknowledgment_logged'),
         description: (
           <div className="space-y-2 mt-4 text-zinc-400">
-            <p>Your acknowledgment has been successfully recorded.</p>
-            <p>The workflow has advanced.</p>
-            <p className="text-zinc-500 text-xs mt-6">You may close this window.</p>
+            <p>{t('success.receipt_acknowledged')}</p>
+            <p>{t('success.workflow_advanced')}</p>
+            <p className="text-zinc-500 text-xs mt-6">{t('success.may_close_window')}</p>
           </div>
         ),
       }
@@ -262,12 +346,12 @@ export default function SuccessPage() {
       title: t('success.document_signed'),
       description: (
         <div className="space-y-2 mt-4 text-zinc-400">
-          <p>Identity verification and electronic signature completed successfully.</p>
-          <p className="text-zinc-500 text-xs mt-6">You may download your signed copy below.</p>
+          <p>{t('success.signed_desc')}</p>
+          <p className="text-zinc-500 text-xs mt-6">{t('success.download_hint')}</p>
         </div>
       ),
     }
-  }, [role, successType, error])
+  }, [role, successType, error, t])
 
   const IconComponent = pageContent.isError ? AlertCircle : CheckCircle2
 
@@ -278,7 +362,7 @@ export default function SuccessPage() {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 text-emerald-500">
             <RefreshCw className="h-10 w-10 animate-spin" />
-            <span className="mt-4 text-sm font-medium tracking-widest uppercase animate-pulse">Loading Signed Document…</span>
+            <span className="mt-4 text-sm font-medium tracking-widest uppercase animate-pulse">{t('success.loading_signed_doc')}</span>
           </div>
         ) : session?.status === 'completed' && !pageContent.isError ? (
           <motion.div
@@ -301,44 +385,44 @@ export default function SuccessPage() {
               {t('success.document_signed')}
             </h1>
             <p className="mt-3 text-zinc-400 text-sm leading-relaxed max-w-md mx-auto">
-              Identity verification and digital signature completion confirmed.
+              {t('success.signed_desc')}
             </p>
 
             {/* Verification Summary */}
-            <div className="w-full mt-8 p-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 text-left space-y-4">
+            <div className="w-full mt-8 p-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 text-left rtl:text-right space-y-4">
               <div className="flex items-center justify-between border-b border-emerald-500/20 pb-3">
                 <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-                  <ShieldCheck className="h-4 w-4" /> Verification Summary
+                  <ShieldCheck className="h-4 w-4" /> {t('success.summary_title')}
                 </span>
                 <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase text-emerald-400 tracking-wider">
-                  ✓ Completed
+                  {t('success.completed_badge')}
                 </span>
               </div>
 
               <div className="space-y-3 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-zinc-400">Email Verification</span>
-                  <span className="font-semibold text-emerald-400">✓ Verified</span>
+                  <span className="text-zinc-400">{t('verification.email_verification')}</span>
+                  <span className="font-semibold text-emerald-400">{t('success.status_verified')}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-zinc-400">National ID Verification</span>
-                  <span className="font-semibold text-emerald-400">✓ Verified</span>
+                  <span className="text-zinc-400">{t('verification.national_id')}</span>
+                  <span className="font-semibold text-emerald-400">{t('success.status_verified')}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-zinc-400">Verify Your Identity</span>
-                  <span className="font-semibold text-emerald-400">✓ Matched</span>
+                  <span className="text-zinc-400">{t('verification.liveness_facial')}</span>
+                  <span className="font-semibold text-emerald-400">{t('success.status_matched')}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-zinc-400">Representative Authorization</span>
-                  <span className="font-semibold text-emerald-400">✓ Authorized</span>
+                  <span className="text-zinc-400">{t('verification.rep_auth')}</span>
+                  <span className="font-semibold text-emerald-400">{t('success.status_authorized')}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-zinc-400">Electronic Signature</span>
-                  <span className="font-semibold text-emerald-400">✓ Applied</span>
+                  <span className="text-zinc-400">{t('verification.elec_sig')}</span>
+                  <span className="font-semibold text-emerald-400">{t('success.status_applied')}</span>
                 </div>
                 {session?.signer_name && (
                   <div className="flex items-center justify-between">
-                    <span className="text-zinc-400">Signer Name</span>
+                    <span className="text-zinc-400">{t('success.signer_name')}</span>
                     <span className="font-semibold text-white">
                       {session.signer_name}
                     </span>
@@ -346,9 +430,9 @@ export default function SuccessPage() {
                 )}
                 <div className="flex items-center justify-between pt-2 border-t border-emerald-500/20">
                   <span className="text-zinc-400 flex items-center gap-1">
-                    <Clock className="h-3.5 w-3.5 text-accent" /> Completion Timestamp
+                    <Clock className="h-3.5 w-3.5 text-accent" /> {t('success.completion_timestamp')}
                   </span>
-                  <span className="font-mono text-zinc-300">
+                  <span className="font-mono text-zinc-300" dir="ltr">
                     {timestamp}
                   </span>
                 </div>
@@ -361,7 +445,7 @@ export default function SuccessPage() {
                 onClick={() => setIsPreviewOpen(true)}
                 className="flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 shadow-[0_0_20px_rgba(34,211,238,0.2)] cursor-pointer"
               >
-                <Eye className="h-4 w-4" /> View Signed Document
+                <Eye className="h-4 w-4" /> {t('success.btn_view_signed')}
               </button>
 
               <a
@@ -369,14 +453,14 @@ export default function SuccessPage() {
                 download
                 className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.02] text-white hover:bg-white/10 px-4 py-4 text-sm font-bold uppercase tracking-widest transition-all duration-300 cursor-pointer"
               >
-                <Download className="h-4 w-4" /> Download Signed Document
+                <Download className="h-4 w-4" /> {t('success.btn_download_signed')}
               </a>
 
               <Link
                 to="/"
                 className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/5 bg-zinc-950 text-zinc-400 hover:text-white px-4 py-3.5 text-xs font-bold uppercase tracking-widest transition-all duration-300"
               >
-                <Home className="h-4 w-4" /> Return to Dashboard
+                <Home className="h-4 w-4" /> {t('success.btn_return_dashboard')}
               </Link>
             </div>
           </motion.div>
@@ -431,9 +515,9 @@ export default function SuccessPage() {
                       <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
                         <FileSignature className="h-5 w-5" />
                       </div>
-                      <div>
-                        <h2 className="text-sm font-semibold tracking-wide text-white">Signed Document</h2>
-                        <p className="text-xs text-zinc-500 mt-0.5">Read-only copy</p>
+                      <div className="text-left rtl:text-right">
+                        <h2 className="text-sm font-semibold tracking-wide text-white">{t('success.btn_view_signed')}</h2>
+                        <p className="text-xs text-zinc-500 mt-0.5">{t('success.read_only_copy')}</p>
                       </div>
                     </div>
 
@@ -443,14 +527,14 @@ export default function SuccessPage() {
                       rel="noreferrer"
                       className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 text-sm font-medium hover:bg-emerald-500/20 transition-colors w-full sm:w-auto justify-center"
                     >
-                      <ExternalLink className="h-4 w-4" /> Open Externally
+                      <ExternalLink className="h-4 w-4" /> {t('success.open_externally')}
                     </a>
                   </div>
 
-                  <div className="p-2 sm:p-6 bg-black/40">
-                    <iframe
-                      title="Signed Document"
-                      src={computedPreviewUrl}
+                  <div className="p-2 sm:p-6 bg-black/40 flex items-center justify-center">
+                    <BlobPdfViewer
+                      title={t('success.btn_view_signed')}
+                      url={computedPreviewUrl}
                       className="h-[min(600px,70vh)] w-full rounded-2xl border border-white/5 bg-zinc-950 shadow-inner"
                     />
                   </div>
@@ -463,7 +547,7 @@ export default function SuccessPage() {
                     >
                       <span className="relative z-10 flex items-center gap-2">
                         <Download className="h-4 w-4" />
-                        Download File
+                        {t('success.download_file')}
                       </span>
                     </a>
                   </div>
@@ -477,19 +561,19 @@ export default function SuccessPage() {
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-50 pointer-events-none" />
                   <h3 className="text-xl font-light text-emerald-300 mb-4 uppercase tracking-wider">
-                    {session.participant_role === 'cc' ? 'Observation Logged' :
-                      session.participant_role === 'reviewer' ? 'Review Completed' :
-                        session.participant_role === 'approver' ? 'Approval Completed' :
-                          'Step Complete'}
+                    {session.participant_role === 'cc' ? t('success.acknowledgment_logged') :
+                      session.participant_role === 'reviewer' ? t('success.review_completed') :
+                        session.participant_role === 'approver' ? t('success.approval_submitted') :
+                          t('success.step_complete')}
                   </h3>
                   <p className="text-sm text-zinc-400 mb-6 max-w-md mx-auto">
-                    {session.participant_role === 'cc' ? 'Your view audit event has been recorded.' :
-                      session.participant_role === 'reviewer' ? 'Thank you! Your review action has been registered, and the workflow has advanced to the next recipient.' :
-                        session.participant_role === 'approver' ? 'Thank you! Your approval decision has been registered, and the workflow has advanced to the next recipient.' :
-                          'Thank you! Your action has been registered, and the sequential routing has successfully advanced.'}
+                    {session.participant_role === 'cc' ? t('success.receipt_acknowledged') :
+                      session.participant_role === 'reviewer' ? t('success.workflow_advanced') :
+                        session.participant_role === 'approver' ? t('success.workflow_advanced') :
+                          t('success.workflow_advanced')}
                   </p>
                   <div className="inline-flex px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    Action Type: {session.participant_role?.toUpperCase()} Complete
+                    {t('common.role')}: {session.participant_role?.toUpperCase()}
                   </div>
                 </motion.div>
               ) : null}
@@ -502,7 +586,7 @@ export default function SuccessPage() {
         isOpen={isPreviewOpen}
         onClose={() => setIsPreviewOpen(false)}
         previewUrl={computedPreviewUrl}
-        title={session?.title || 'Signed Document'}
+        title={session?.title || t('success.doc_preview_title')}
       />
     </div>
   )

@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Sparkles, FileText, UploadCloud, ArrowLeft, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react'
 import { analyzeContract } from '../services/api.js'
+import { useLocale } from '../context/LocaleContext'
 
 export default function ContractAnalysisPage() {
+  const { t } = useLocale()
   const [file, setFile] = useState(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [result, setResult] = useState(null)
@@ -21,7 +23,7 @@ export default function ContractAnalysisPage() {
   const handleAnalyze = async (e) => {
     e.preventDefault()
     if (!file) {
-      setError('Please select a PDF file first.')
+      setError(t('contract_analysis.select_pdf_error'))
       return
     }
     setIsAnalyzing(true)
@@ -33,7 +35,7 @@ export default function ContractAnalysisPage() {
       setError(
         err?.response?.data?.detail ||
         err?.message ||
-        'Failed to analyze contract. Please ensure it is a valid PDF.'
+        t('contract_analysis.analyze_error')
       )
     } finally {
       setIsAnalyzing(false)
@@ -51,8 +53,8 @@ export default function ContractAnalysisPage() {
           to="/"
           className="inline-flex items-center gap-2 rounded-xl glass-panel hover:bg-cyan-500/10 px-4 h-9 text-xs font-semibold text-text-primary hover:text-cyan-400 transition-all cursor-pointer"
         >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back to Workspace
+          <ArrowLeft className="h-3.5 w-3.5 rtl:rotate-180" />
+          {t('nav.back_to_dashboard')}
         </Link>
       </div>
 
@@ -60,13 +62,13 @@ export default function ContractAnalysisPage() {
       <div className="space-y-2 border-b border-border-color pb-8">
         <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-cyan-400 backdrop-blur-md">
           <Sparkles className="h-3.5 w-3.5" />
-          AI Authority Extractor (MVP)
+          {t('contract_analysis.badge')}
         </div>
         <h1 className="text-4xl font-bold tracking-tight text-text-primary sm:text-[50px] sm:leading-none">
-          Contract Analysis
+          {t('contract_analysis.title')}
         </h1>
         <p className="text-sm font-medium text-text-secondary sm:text-base">
-          Upload a bilingual (English + Arabic) PDF contract to extract signing authority representatives, titles, and legal capacity clauses.
+          {t('contract_analysis.subtitle')}
         </p>
       </div>
 
@@ -77,7 +79,7 @@ export default function ContractAnalysisPage() {
           <div className="glass-panel rounded-3xl p-6 space-y-6">
             <h2 className="text-lg font-semibold text-text-primary flex items-center gap-2">
               <FileText className="h-5 w-5 text-cyan-400" />
-              Upload PDF Contract
+              {t('contract_analysis.upload_title')}
             </h2>
 
             <form onSubmit={handleAnalyze} className="space-y-6">
@@ -94,13 +96,13 @@ export default function ContractAnalysisPage() {
                   </div>
                   {file ? (
                     <div>
-                      <p className="text-sm font-bold text-cyan-400">{file.name}</p>
-                      <p className="text-xs text-text-secondary mt-1">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                      <p className="text-sm font-bold text-cyan-400" dir="ltr">{file.name}</p>
+                      <p className="text-xs text-text-secondary mt-1" dir="ltr">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
                     </div>
                   ) : (
                     <div>
-                      <p className="text-sm font-semibold text-text-primary">Click or drag a file to upload</p>
-                      <p className="text-xs text-text-secondary mt-1">PDF contracts up to 10MB</p>
+                      <p className="text-sm font-semibold text-text-primary">{t('contract_analysis.drop_hint')}</p>
+                      <p className="text-xs text-text-secondary mt-1">{t('contract_analysis.size_hint')}</p>
                     </div>
                   )}
                 </div>
@@ -116,17 +118,17 @@ export default function ContractAnalysisPage() {
               <button
                 type="submit"
                 disabled={isAnalyzing || !file}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed text-black h-12 text-sm font-bold transition-all shadow-[0_0_20px_rgba(34,211,238,0.2)]"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed text-black h-12 text-sm font-bold transition-all shadow-[0_0_20px_rgba(34,211,238,0.2)] cursor-pointer"
               >
                 {isAnalyzing ? (
                   <>
                     <RefreshCw className="h-5 w-5 animate-spin" />
-                    Analyzing Document...
+                    {t('contract_analysis.analyzing')}
                   </>
                 ) : (
                   <>
                     <Sparkles className="h-5 w-5" />
-                    Analyze Contract
+                    {t('contract_analysis.btn_analyze')}
                   </>
                 )}
               </button>
@@ -140,7 +142,7 @@ export default function ContractAnalysisPage() {
             <div>
               <div className="flex items-center justify-between border-b border-border-color pb-4 mb-6">
                 <h2 className="text-lg font-semibold text-text-primary">
-                  Extraction Results
+                  {t('contract_analysis.results_title')}
                 </h2>
                 {result && (
                   <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
@@ -149,10 +151,10 @@ export default function ContractAnalysisPage() {
                     {isRepresentativeFound ? (
                       <>
                         <CheckCircle className="h-3.5 w-3.5" />
-                        Representative Found
+                        {t('contract_analysis.candidate_found')}
                       </>
                     ) : (
-                      'No Representative Identified'
+                      t('contract_analysis.no_candidates')
                     )}
                   </span>
                 )}
@@ -172,47 +174,47 @@ export default function ContractAnalysisPage() {
                           <div key={cand.id || idx} className="bg-card-bg border border-border-color rounded-2xl p-5 space-y-4">
                             <div className="flex items-center justify-between border-b border-border-color/50 pb-2">
                               <span className="text-[10px] text-cyan-400 font-bold uppercase tracking-widest font-mono">
-                                Representative Candidate {result.candidates.length > 1 ? `#${idx + 1}` : ''}
+                                {t('contract_analysis.candidate_prefix')} {result.candidates.length > 1 ? `#${idx + 1}` : ''}
                               </span>
                             </div>
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               {/* Name English */}
                               <div className="space-y-1">
-                                <span className="text-[10px] text-text-secondary uppercase tracking-widest font-bold">Name (English)</span>
-                                <p className="text-sm font-bold text-text-primary mt-0.5">
-                                  {cand.name_en || <span className="text-zinc-600 font-normal italic">Not detected</span>}
+                                <span className="text-[10px] text-text-secondary uppercase tracking-widest font-bold">{t('contract_analysis.name_en')}</span>
+                                <p className="text-sm font-bold text-text-primary mt-0.5" dir="ltr">
+                                  {cand.name_en || <span className="text-zinc-600 font-normal italic">{t('contract_analysis.not_detected')}</span>}
                                 </p>
                               </div>
 
                               {/* Name Arabic */}
-                              <div className="space-y-1 text-right">
-                                <span className="text-[10px] text-text-secondary uppercase tracking-widest font-bold block text-left">Name (Arabic)</span>
+                              <div className="space-y-1 text-right rtl:text-right">
+                                <span className="text-[10px] text-text-secondary uppercase tracking-widest font-bold block text-left rtl:text-right">{t('contract_analysis.name_ar')}</span>
                                 <p className="text-sm font-bold text-text-primary mt-0.5" dir="rtl">
-                                  {cand.name_ar || <span className="text-zinc-600 font-normal italic" dir="ltr">Not detected</span>}
+                                  {cand.name_ar || <span className="text-zinc-600 font-normal italic" dir="ltr">{t('contract_analysis.not_detected')}</span>}
                                 </p>
                               </div>
 
                               {/* Title English */}
                               <div className="space-y-1">
-                                <span className="text-[10px] text-text-secondary uppercase tracking-widest font-bold">Title (English)</span>
-                                <p className="text-sm font-semibold text-text-primary mt-0.5">
-                                  {cand.title_en || <span className="text-zinc-600 font-normal italic">Not detected</span>}
+                                <span className="text-[10px] text-text-secondary uppercase tracking-widest font-bold">{t('contract_analysis.title_en')}</span>
+                                <p className="text-sm font-semibold text-text-primary mt-0.5" dir="ltr">
+                                  {cand.title_en || <span className="text-zinc-600 font-normal italic">{t('contract_analysis.not_detected')}</span>}
                                 </p>
                               </div>
 
                               {/* Title Arabic */}
-                              <div className="space-y-1 text-right">
-                                <span className="text-[10px] text-text-secondary uppercase tracking-widest font-bold block text-left">Title (Arabic)</span>
+                              <div className="space-y-1 text-right rtl:text-right">
+                                <span className="text-[10px] text-text-secondary uppercase tracking-widest font-bold block text-left rtl:text-right">{t('contract_analysis.title_ar')}</span>
                                 <p className="text-sm font-semibold text-text-primary mt-0.5" dir="rtl">
-                                  {cand.title_ar || <span className="text-zinc-600 font-normal italic" dir="ltr">Not detected</span>}
+                                  {cand.title_ar || <span className="text-zinc-600 font-normal italic" dir="ltr">{t('contract_analysis.not_detected')}</span>}
                                 </p>
                               </div>
                             </div>
 
                             {cand.authority_clause && (
                               <div className="border-t border-border-color/50 pt-3">
-                                <span className="text-[10px] text-text-secondary uppercase tracking-widest font-bold block mb-1">Authority Clause</span>
+                                <span className="text-[10px] text-text-secondary uppercase tracking-widest font-bold block mb-1">{t('contract_analysis.capacity_clause')}</span>
                                 <p className="text-xs font-medium text-text-primary bg-black/20 p-2.5 rounded-lg border border-border-color/30 leading-relaxed">
                                   "{cand.authority_clause}"
                                 </p>
@@ -224,7 +226,7 @@ export default function ContractAnalysisPage() {
                     ) : (
                       <div className="flex flex-col items-center justify-center py-10 text-center text-zinc-600">
                         <AlertCircle className="h-8 w-8 mb-2 text-zinc-500" />
-                        <p className="text-sm font-medium">No representatives found in the uploaded document.</p>
+                        <p className="text-sm font-medium">{t('contract_analysis.no_candidates_desc')}</p>
                       </div>
                     )}
                   </motion.div>
@@ -236,8 +238,8 @@ export default function ContractAnalysisPage() {
                     className="flex flex-col items-center justify-center py-20 text-center text-zinc-600"
                   >
                     <Sparkles className="h-12 w-12 mb-3 text-zinc-800" />
-                    <p className="text-sm font-medium">Awaiting contract analysis.</p>
-                    <p className="text-xs text-zinc-600 mt-1 max-w-[240px]">Select a bilingual contract PDF file on the left and run analysis to extract insights.</p>
+                    <p className="text-sm font-medium">{t('contract_analysis.awaiting_analysis')}</p>
+                    <p className="text-xs text-zinc-600 mt-1 max-w-[240px]">{t('contract_analysis.awaiting_analysis_desc')}</p>
                   </motion.div>
                 )}
               </AnimatePresence>
