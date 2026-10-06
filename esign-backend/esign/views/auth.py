@@ -1,8 +1,8 @@
-from django.contrib.auth import authenticate
+from django.contrib.auth import authenticate, logout as django_logout
 from django.contrib.auth.models import User
 from django.db import transaction
+from knox.models import AuthToken
 from rest_framework import permissions, status
-from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -35,9 +35,9 @@ class RegisterView(APIView):
 
         with transaction.atomic():
             user = User.objects.create_user(username=username, email=email, password=password)
-            token, _ = Token.objects.get_or_create(user=user)
+            instance, token = AuthToken.objects.create(user=user)
         return Response({
-            "token": token.key,
+            "token": token,
             "user": {
                 "id": user.id,
                 "username": user.username,
@@ -71,9 +71,9 @@ class LoginView(APIView):
         if not user:
             return Response({"detail": "Invalid credentials."}, status=status.HTTP_401_UNAUTHORIZED)
 
-        token, _ = Token.objects.get_or_create(user=user)
+        instance, token = AuthToken.objects.create(user=user)
         return Response({
-            "token": token.key,
+            "token": token,
             "user": {
                 "id": user.id,
                 "username": user.username,
@@ -87,7 +87,16 @@ class LogoutView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        request.user.auth_token.delete()
+        if hasattr(request, 'auth') and request.auth and hasattr(request.auth, 'delete'):
+            request.auth.delete()
+        elif hasattr(request, '_auth') and request._auth and hasattr(request._auth, 'delete'):
+            request._auth.delete()
+        elif hasattr(request.user, 'auth_token'):
+            try:
+                request.user.auth_token.delete()
+            except Exception:
+                pass
+        django_logout(request)
         return Response({"detail": "Logged out successfully."}, status=status.HTTP_200_OK)
 
 class UserMeView(APIView):

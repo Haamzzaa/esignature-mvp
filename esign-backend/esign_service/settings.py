@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     'drf_yasg',
     'rest_framework',
     'rest_framework.authtoken',
+    'knox',
     'corsheaders',
 ]
 
@@ -188,11 +189,18 @@ CSRF_TRUSTED_ORIGINS = [
 
 X_FRAME_OPTIONS = "DENY"
 
+from datetime import timedelta
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication',
+        'knox.auth.TokenAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
+}
+
+REST_KNOX = {
+    'TOKEN_TTL': timedelta(hours=10),
+    'AUTH_HEADER_PREFIX': 'Token',
 }
 
 # Email Configuration

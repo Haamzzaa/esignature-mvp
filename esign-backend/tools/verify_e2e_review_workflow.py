@@ -22,7 +22,7 @@ from unittest.mock import patch
 from django.contrib.auth.models import User
 from django.utils import timezone
 from rest_framework.test import APIClient
-from rest_framework.authtoken.models import Token
+from knox.models import AuthToken
 
 from esign.models import (
     Document,
@@ -54,7 +54,7 @@ def run_e2e_validation():
         password="Password123!",
         is_staff=True
     )
-    staff_token, _ = Token.objects.get_or_create(user=staff_user)
+    _, staff_token = AuthToken.objects.create(user=staff_user)
 
     normal_user = User.objects.create_user(
         username="e2e_normal",
@@ -62,7 +62,7 @@ def run_e2e_validation():
         password="Password123!",
         is_staff=False
     )
-    normal_token, _ = Token.objects.get_or_create(user=normal_user)
+    _, normal_token = AuthToken.objects.create(user=normal_user)
 
     client = APIClient()
 
@@ -77,12 +77,12 @@ def run_e2e_validation():
     assert resp.status_code == 401, f"Expected 401 for unauth, got {resp.status_code}"
 
     # Normal authenticated user
-    client.credentials(HTTP_AUTHORIZATION=f"Token {normal_token.key}")
+    client.credentials(HTTP_AUTHORIZATION=f"Token {normal_token}")
     resp = client.get("/api/v1/admin/reviews/")
     assert resp.status_code == 403, f"Expected 403 for normal user, got {resp.status_code}"
 
     # Staff user
-    client.credentials(HTTP_AUTHORIZATION=f"Token {staff_token.key}")
+    client.credentials(HTTP_AUTHORIZATION=f"Token {staff_token}")
     resp = client.get("/api/v1/admin/reviews/")
     assert resp.status_code == 200, f"Expected 200 for staff user, got {resp.status_code}"
     print("  ✓ Unauthenticated -> 401 Unauthorized")
@@ -144,7 +144,7 @@ def run_e2e_validation():
     )
 
     # Query queue
-    client.credentials(HTTP_AUTHORIZATION=f"Token {staff_token.key}")
+    client.credentials(HTTP_AUTHORIZATION=f"Token {staff_token}")
     q_resp = client.get("/api/v1/admin/reviews/?status=under_review")
     assert q_resp.status_code == 200
     q_data = q_resp.json()
@@ -284,7 +284,7 @@ def run_e2e_validation():
         "target_step": "national_id",
         "notes": "Please capture the full document boundary without surface glare."
     }
-    client.credentials(HTTP_AUTHORIZATION=f"Token {staff_token.key}")
+    client.credentials(HTTP_AUTHORIZATION=f"Token {staff_token}")
     resub_resp = client.post(f"/api/v1/admin/reviews/{p2.id}/decision/", resub_payload, format="json")
     assert resub_resp.status_code == 200
     assert resub_resp.json()["review_status"] == "resubmission_required"

@@ -306,16 +306,16 @@ class S1SignerTokenBindingAndOTPSecurityTests(TestCase):
 
     def test_14_reviewer_admin_endpoints_remain_unchanged(self):
         """14. Admin review endpoints remain functional for staff and reject non-staff."""
-        from rest_framework.authtoken.models import Token
+        from knox.models import AuthToken
         staff_user = User.objects.create_user(
             username="staff_rev",
             email="staff@test.com",
             password="Password@123",
             is_staff=True
         )
-        staff_token = Token.objects.create(user=staff_user)
+        _, staff_token = AuthToken.objects.create(user=staff_user)
 
-        self.client.credentials(HTTP_AUTHORIZATION=f"Token {staff_token.key}")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {staff_token}")
         r_queue = self.client.get("/api/v1/admin/reviews/")
         self.assertEqual(r_queue.status_code, status.HTTP_200_OK)
 
@@ -326,8 +326,8 @@ class S1SignerTokenBindingAndOTPSecurityTests(TestCase):
             password="Password@123",
             is_staff=False
         )
-        normal_token = Token.objects.create(user=normal_user)
-        self.client.credentials(HTTP_AUTHORIZATION=f"Token {normal_token.key}")
+        _, normal_token = AuthToken.objects.create(user=normal_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {normal_token}")
         r_denied = self.client.get("/api/v1/admin/reviews/")
         self.assertEqual(r_denied.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -467,4 +467,142 @@ class F1ReliableEmailOTPDeliveryTests(TestCase):
         auth_post = get_authorization_status(self.participant)
         self.assertTrue(auth_post["requirements"]["email_otp"]["satisfied"])
         self.assertNotIn("email_otp", auth_post["missing_requirements"])
+
+
+class S2KnoxAuthenticationSecurityTests(TestCase):
+    """
+    Tests for S2 Security Remediation:
+    - Knox token generation on login & registration
+    - Header-based Knox authentication
+    - Token expiration enforcement
+    - Server-side logout token revocation
+    - Multi-session coexistence
+    - Rejection of invalid / revoked tokens
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="knox_test_user",
+            email="knox@test.com",
+            password="Password@123"
+        )
+
+    def test_01_login_returns_knox_token(self):
+        """1. Login returns a valid 64-character Knox token."""
+        response = self.client.post(
+            "/api/auth/login/",
+            {"username": "knox_test_user", "password": "Password@123"},
+            format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("token", response.data)
+        self.assertEqual(len(response.data["token"]), 64)
+        self.assertEqual(response.data["user"]["username"], "knox_test_user")
+
+    def test_02_register_returns_knox_token(self):
+        """2. Registration creates a user and returns a Knox token."""
+        response = self.client.post(
+            "/api/auth/register/",
+            {"username": "new_user", "email": "new@test.com", "password": "Password@123"},
+            format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("token", response.data)
+        self.assertEqual(len(response.data["token"]), 64)
+
+    def test_03_knox_token_authenticates_protected_endpoints(self):
+        """3. Authorization: Token <knox_token> authenticates successfully."""
+        from knox.models import AuthToken
+        _, token = AuthToken.objects.create(user=self.user)
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token}")
+        response = self.client.get("/api/auth/me/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["username"], "knox_test_user")
+
+    def test_04_invalid_token_rejected_401(self):
+        """4. Invalid Knox tokens are rejected with 401 Unauthorized."""
+        self.client.credentials(HTTP_AUTHORIZATION="Token invalid_token_1234567890abcdef")
+        response = self.client.get("/api/auth/me/")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_05_expired_token_rejected_401(self):
+        """5. Expired Knox tokens are rejected with 401 Unauthorized."""
+        from knox.models import AuthToken
+        instance, token = AuthToken.objects.create(
+            user=self.user,
+            expiry=timedelta(seconds=-1)
+        )
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token}")
+        response = self.client.get("/api/auth/me/")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_06_logout_revokes_token_server_side(self):
+        """6. Logout deletes the active Knox token from the database."""
+        from knox.models import AuthToken
+        instance, token = AuthToken.objects.create(user=self.user)
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token}")
+        r_logout = self.client.post("/api/auth/logout/")
+        self.assertEqual(r_logout.status_code, status.HTTP_200_OK)
+
+        # Confirm token is revoked and cannot be reused
+        r_after = self.client.get("/api/auth/me/")
+        self.assertEqual(r_after.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_07_multiple_knox_sessions_coexist(self):
+        """7. Multiple logins generate distinct tokens that both authenticate independently."""
+        from knox.models import AuthToken
+        _, token1 = AuthToken.objects.create(user=self.user)
+        _, token2 = AuthToken.objects.create(user=self.user)
+
+        # Token 1 works
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token1}")
+        r1 = self.client.get("/api/auth/me/")
+        self.assertEqual(r1.status_code, status.HTTP_200_OK)
+
+        # Token 2 works
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token2}")
+        r2 = self.client.get("/api/auth/me/")
+        self.assertEqual(r2.status_code, status.HTTP_200_OK)
+
+        # Logging out session 1 does not invalidate session 2
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token1}")
+        self.client.post("/api/auth/logout/")
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token2}")
+        r2_still_valid = self.client.get("/api/auth/me/")
+        self.assertEqual(r2_still_valid.status_code, status.HTTP_200_OK)
+
+
+class S3SecurityHeadersTests(TestCase):
+    """
+    Tests for S3 Security Headers:
+    - Content-Security-Policy
+    - X-Frame-Options: DENY
+    - X-Content-Type-Options: nosniff
+    - Referrer-Policy
+    - Permissions-Policy
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_01_backend_middleware_emits_security_headers(self):
+        """1. Backend responses include full security headers."""
+        response = self.client.get("/live")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.assertIn("Content-Security-Policy", response.headers)
+        csp = response.headers["Content-Security-Policy"]
+        self.assertIn("frame-ancestors 'none'", csp)
+        self.assertIn("frame-src 'self' blob:", csp)
+
+        self.assertEqual(response.headers.get("X-Frame-Options"), "DENY")
+        self.assertEqual(response.headers.get("X-Content-Type-Options"), "nosniff")
+        self.assertEqual(response.headers.get("Referrer-Policy"), "strict-origin-when-cross-origin")
+        self.assertIn("camera=(self)", response.headers.get("Permissions-Policy", ""))
 

@@ -1508,22 +1508,22 @@ class AuthenticationAndOwnershipTestCase(TestCase):
         self.assertEqual(response.status_code, 401)
 
     def test_logout_success(self):
-        from rest_framework.authtoken.models import Token
-        token = Token.objects.create(user=self.user_a)
-        self.client.credentials(HTTP_AUTHORIZATION='Token ' + token.key)
+        from knox.models import AuthToken
+        _, token = AuthToken.objects.create(user=self.user_a)
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + token)
         
         response = self.client.post("/api/auth/logout/")
         self.assertEqual(response.status_code, 200)
-        self.assertFalse(Token.objects.filter(user=self.user_a).exists())
+        self.assertFalse(AuthToken.objects.filter(user=self.user_a).exists())
 
     def test_logout_unauthenticated(self):
         response = self.client.post("/api/auth/logout/")
         self.assertEqual(response.status_code, 401)
 
     def test_userme_authenticated(self):
-        from rest_framework.authtoken.models import Token
-        token = Token.objects.create(user=self.user_a)
-        self.client.credentials(HTTP_AUTHORIZATION='Token ' + token.key)
+        from knox.models import AuthToken
+        _, token = AuthToken.objects.create(user=self.user_a)
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + token)
         
         response = self.client.get("/api/auth/me/")
         self.assertEqual(response.status_code, 200)
@@ -1555,9 +1555,9 @@ class AuthenticationAndOwnershipTestCase(TestCase):
         )
         
         # Authenticate user_a and retrieve the package list and detail
-        from rest_framework.authtoken.models import Token
-        token_a = Token.objects.create(user=self.user_a)
-        self.client.credentials(HTTP_AUTHORIZATION='Token ' + token_a.key)
+        from knox.models import AuthToken
+        _, token_a = AuthToken.objects.create(user=self.user_a)
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + token_a)
         
         response = self.client.get("/api/packages/")
         self.assertEqual(response.status_code, 200)
@@ -1568,8 +1568,8 @@ class AuthenticationAndOwnershipTestCase(TestCase):
         self.assertEqual(response_detail.status_code, 200)
         
         # Authenticate user_b and check isolation
-        token_b = Token.objects.create(user=self.user_b)
-        self.client.credentials(HTTP_AUTHORIZATION='Token ' + token_b.key)
+        _, token_b = AuthToken.objects.create(user=self.user_b)
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + token_b)
         
         response = self.client.get("/api/packages/")
         self.assertEqual(response.status_code, 200)
@@ -1591,9 +1591,9 @@ class AuthenticationAndOwnershipTestCase(TestCase):
         )
         
         # Authenticate user_a and retrieve
-        from rest_framework.authtoken.models import Token
-        token_a = Token.objects.create(user=self.user_a)
-        self.client.credentials(HTTP_AUTHORIZATION='Token ' + token_a.key)
+        from knox.models import AuthToken
+        _, token_a = AuthToken.objects.create(user=self.user_a)
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + token_a)
         
         response = self.client.get("/api/templates/")
         self.assertEqual(response.status_code, 200)
@@ -1603,11 +1603,15 @@ class AuthenticationAndOwnershipTestCase(TestCase):
         self.assertEqual(response_detail.status_code, 200)
         
         # Authenticate user_b and check isolation
-        token_b = Token.objects.create(user=self.user_b)
-        self.client.credentials(HTTP_AUTHORIZATION='Token ' + token_b.key)
+        _, token_b = AuthToken.objects.create(user=self.user_b)
+        self.client.credentials(HTTP_AUTHORIZATION='Token ' + token_b)
         
         response = self.client.get("/api/templates/")
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 0)
+        
+        response_detail = self.client.get(f"/api/templates/{template_a.id}/")
+        self.assertEqual(response_detail.status_code, 404)
         self.assertEqual(len(response.data), 0)
         
         response_detail = self.client.get(f"/api/templates/{template_a.id}/")
@@ -6423,7 +6427,7 @@ class AdminAuthorizationReviewTests(APITestCase):
     def setUp(self):
         from django.contrib.auth.models import User
         from django.utils import timezone
-        from rest_framework.authtoken.models import Token
+        from knox.models import AuthToken
         from esign.models import (
             Document, Envelope, Participant, ParticipantToken,
             ParticipantAuthorizationState, SignerIdentityVerification,
@@ -6436,7 +6440,7 @@ class AdminAuthorizationReviewTests(APITestCase):
             password="password123",
             is_staff=True
         )
-        self.staff_token, _ = Token.objects.get_or_create(user=self.staff_user)
+        _, self.staff_token = AuthToken.objects.create(user=self.staff_user)
 
         self.normal_user = User.objects.create_user(
             username="regular_user",
@@ -6444,7 +6448,7 @@ class AdminAuthorizationReviewTests(APITestCase):
             password="password123",
             is_staff=False
         )
-        self.normal_token, _ = Token.objects.get_or_create(user=self.normal_user)
+        _, self.normal_token = AuthToken.objects.create(user=self.normal_user)
 
         self.document = Document.objects.create(
             file="documents/sample.pdf",
@@ -6505,7 +6509,7 @@ class AdminAuthorizationReviewTests(APITestCase):
 
     def test_review_queue_staff_access(self):
         """Staff users can access the review queue and see review cases."""
-        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.staff_token.key}")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.staff_token}")
         response = self.client.get("/api/v1/admin/reviews/")
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -6516,7 +6520,7 @@ class AdminAuthorizationReviewTests(APITestCase):
 
     def test_review_queue_forbidden_for_regular_user(self):
         """Non-staff users are denied access with 403 Forbidden."""
-        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.normal_token.key}")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.normal_token}")
         response = self.client.get("/api/v1/admin/reviews/")
         self.assertEqual(response.status_code, 403)
 
@@ -6527,7 +6531,7 @@ class AdminAuthorizationReviewTests(APITestCase):
 
     def test_review_detail_dossier_content(self):
         """Review detail returns sanitized evidence dossier without sensitive secrets."""
-        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.staff_token.key}")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.staff_token}")
         response = self.client.get(f"/api/v1/admin/reviews/{self.participant.id}/")
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -6546,13 +6550,13 @@ class AdminAuthorizationReviewTests(APITestCase):
 
     def test_review_detail_forbidden_for_regular_user(self):
         """Non-staff users cannot access review detail endpoint."""
-        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.normal_token.key}")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.normal_token}")
         response = self.client.get(f"/api/v1/admin/reviews/{self.participant.id}/")
         self.assertEqual(response.status_code, 403)
 
     def test_approve_action(self):
         """Staff reviewer approves verification case."""
-        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.staff_token.key}")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.staff_token}")
         payload = {
             "action": "approve",
             "notes": "Name variance approved after checking company records."
@@ -6588,7 +6592,7 @@ class AdminAuthorizationReviewTests(APITestCase):
 
     def test_resubmit_action(self):
         """Staff reviewer requests resubmission of a specific verification step."""
-        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.staff_token.key}")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.staff_token}")
         payload = {
             "action": "resubmit",
             "target_step": "national_id",
@@ -6621,7 +6625,7 @@ class AdminAuthorizationReviewTests(APITestCase):
 
     def test_reject_action(self):
         """Staff reviewer rejects verification case."""
-        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.staff_token.key}")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.staff_token}")
         payload = {
             "action": "reject",
             "notes": "Identity document appears altered or invalid."
@@ -6643,7 +6647,7 @@ class AdminAuthorizationReviewTests(APITestCase):
 
     def test_reject_action_requires_reason(self):
         """Reject action fails if no reason/notes are provided."""
-        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.staff_token.key}")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.staff_token}")
         payload = {
             "action": "reject",
             "notes": ""
@@ -6654,7 +6658,7 @@ class AdminAuthorizationReviewTests(APITestCase):
 
     def test_resubmit_action_requires_valid_target_step(self):
         """Resubmit action fails if target_step is missing or invalid."""
-        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.staff_token.key}")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.staff_token}")
         payload = {
             "action": "resubmit",
             "target_step": "",
@@ -6669,7 +6673,7 @@ class AdminAuthorizationReviewTests(APITestCase):
 
     def test_decision_forbidden_for_regular_user(self):
         """Regular users cannot submit review decisions."""
-        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.normal_token.key}")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.normal_token}")
         payload = {"action": "approve"}
         response = self.client.post(f"/api/v1/admin/reviews/{self.participant.id}/decision/", payload, format="json")
         self.assertEqual(response.status_code, 403)

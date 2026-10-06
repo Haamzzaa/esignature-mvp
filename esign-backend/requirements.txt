@@ -25,3 +25,4 @@ opencv-python
 rapidfuzz==3.14.5
 requests==2.34.2
 numpy==2.3.5
+django-rest-knox==4.2.0

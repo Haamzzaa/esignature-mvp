@@ -99,12 +99,15 @@ class BrowserSecurityMiddleware:
         from django.conf import settings
         csp_config = getattr(settings, 'ESIGN_CSP', {
             "default-src": ["'self'"],
-            "script-src": ["'self'"],
+            "script-src": ["'self'", "'unsafe-inline'"],
             "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-            "font-src": ["'self'", "https://fonts.gstatic.com"],
+            "font-src": ["'self'", "https://fonts.gstatic.com", "data:"],
             "img-src": ["'self'", "data:", "blob:", "https:"],
             "connect-src": ["'self'", "https:", "wss:"],
-            "frame-ancestors": ["'none'"]
+            "frame-src": ["'self'", "blob:"],
+            "frame-ancestors": ["'none'"],
+            "object-src": ["'none'"],
+            "base-uri": ["'self'"]
         })
         
         csp_header = "; ".join(f"{directive} {' '.join(sources)}" for directive, sources in csp_config.items())
