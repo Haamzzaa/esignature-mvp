@@ -13,35 +13,6 @@ class EsignConfig(AppConfig):
         from esign.events.registry import register_built_in_handlers
         register_built_in_handlers()
         self._emit_startup_diagnostics()
-        self._prewarm_insightface()
-
-    def _prewarm_insightface(self):
-        import os, time
-        from django.conf import settings
-        
-        is_debug = getattr(settings, "DEBUG", False)
-
-        if is_debug:
-            # Avoid duplicate logging in StatReloader parent process
-            if os.environ.get("RUN_MAIN") != "true":
-                return
-            logger.info(
-                "[Startup] Development mode detected. "
-                "Skipping InsightFace pre-warming. "
-                "Models will initialize lazily on first biometric request."
-            )
-            return
-
-        logger.info("[Startup] Production mode detected. Prewarming InsightFace...")
-        t_start = time.perf_counter()
-        try:
-            from services.enterprise_biometric_service import get_face_analysis_app
-            get_face_analysis_app()
-            elapsed_sec = time.perf_counter() - t_start
-            logger.info("[Startup] InsightFace ready. Initialization Time: %.1f seconds", elapsed_sec)
-        except Exception as exc:
-            logger.exception("[Startup] Failed to prewarm InsightFace: %s", exc)
-            raise
 
     def _emit_startup_diagnostics(self):
         """

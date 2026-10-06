@@ -12,8 +12,8 @@ _app_instance = None
 def get_face_analysis_app():
     global _app_instance
     if _app_instance is None:
-        logger.info("Initializing InsightFace buffalo_l app...")
-        _app_instance = FaceAnalysis(name='buffalo_l', allowed_modules=['detection', 'recognition'], providers=['CPUExecutionProvider'])
+        logger.info("Initializing InsightFace buffalo_s app...")
+        _app_instance = FaceAnalysis(name='buffalo_s', allowed_modules=['detection', 'recognition'], providers=['CPUExecutionProvider'])
         _app_instance.prepare(ctx_id=-1, det_size=(640, 640))
     return _app_instance
 

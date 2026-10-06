@@ -1,19 +1,19 @@
 {
   "iteration": 0,
-  "timestamp": "2026-07-07T21:51:34.062989",
+  "timestamp": "2026-10-06T15:38:21.541133",
   "metrics": {
-    "threshold": 0.6,
-    "genuine_match_rate_pct": 0.0,
-    "impostor_rejection_rate_pct": 0.0,
-    "avg_genuine_similarity": 0.0,
-    "avg_impostor_similarity": 0.0,
-    "true_accepts": 0,
-    "false_rejects": 0,
-    "true_rejects": 0,
+    "threshold": 0.53,
+    "genuine_match_rate_pct": 25.0,
+    "impostor_rejection_rate_pct": 100.0,
+    "avg_genuine_similarity": 0.5149,
+    "avg_impostor_similarity": 0.2426,
+    "true_accepts": 1,
+    "false_rejects": 3,
+    "true_rejects": 2,
     "false_accepts": 0,
-    "genuine_retries": 4,
-    "impostor_retries": 2,
-    "retry_rate_pct": 100.0,
+    "genuine_retries": 0,
+    "impostor_retries": 0,
+    "retry_rate_pct": 0.0,
     "total_genuine_pairs": 4,
     "total_impostor_pairs": 2
   },
@@ -21,70 +21,58 @@
     {
       "id": "id.jpeg",
       "selfie": "selfie_1.jpg",
-      "decision": "RETRY",
-      "score": 0.0,
-      "reason": "Face detection failed on ID: Multiple faces detected (found 2). Exactly one face is required.",
-      "retry": true,
-      "stage_failures": [
-        "face_detection[id_image]: Multiple faces detected (found 2). Exactly one face is required."
-      ]
+      "decision": "MATCH",
+      "score": 0.5313624143600464,
+      "reason": "Face similarity matches successfully (similarity 0.5314 >= threshold 0.53).",
+      "retry": false,
+      "stage_failures": []
     },
     {
       "id": "id.jpeg",
       "selfie": "selfie_2.jpg",
-      "decision": "RETRY",
-      "score": 0.0,
-      "reason": "Face detection failed on ID: Multiple faces detected (found 2). Exactly one face is required.",
-      "retry": true,
-      "stage_failures": [
-        "face_detection[id_image]: Multiple faces detected (found 2). Exactly one face is required."
-      ]
+      "decision": "MANUAL_REVIEW",
+      "score": 0.505400538444519,
+      "reason": "Biometric anomaly. Score 0.5054 is close but below threshold 0.53.",
+      "retry": false,
+      "stage_failures": []
     },
     {
       "id": "id.jpeg",
       "selfie": "selfie_3.jpg",
-      "decision": "RETRY",
-      "score": 0.0,
-      "reason": "Face detection failed on ID: Multiple faces detected (found 2). Exactly one face is required.",
-      "retry": true,
-      "stage_failures": [
-        "face_detection[id_image]: Multiple faces detected (found 2). Exactly one face is required."
-      ]
+      "decision": "MANUAL_REVIEW",
+      "score": 0.5126599073410034,
+      "reason": "Biometric anomaly. Score 0.5127 is close but below threshold 0.53.",
+      "retry": false,
+      "stage_failures": []
     },
     {
       "id": "id.jpeg",
       "selfie": "selfie_4.jpg",
-      "decision": "RETRY",
-      "score": 0.0,
-      "reason": "Face detection failed on ID: Multiple faces detected (found 2). Exactly one face is required.",
-      "retry": true,
-      "stage_failures": [
-        "face_detection[id_image]: Multiple faces detected (found 2). Exactly one face is required."
-      ]
+      "decision": "MANUAL_REVIEW",
+      "score": 0.5101584196090698,
+      "reason": "Biometric anomaly. Score 0.5102 is close but below threshold 0.53.",
+      "retry": false,
+      "stage_failures": []
     }
   ],
   "impostor_pairs": [
     {
       "id": "id.jpeg",
       "selfie": "friend_1.JPG",
-      "decision": "RETRY",
-      "score": 0.0,
-      "reason": "Face detection failed on ID: Multiple faces detected (found 2). Exactly one face is required.",
-      "retry": true,
-      "stage_failures": [
-        "face_detection[id_image]: Multiple faces detected (found 2). Exactly one face is required."
-      ]
+      "decision": "NO_MATCH",
+      "score": 0.18006521463394165,
+      "reason": "Biometric mismatch. Score 0.1801 is significantly below threshold 0.53.",
+      "retry": false,
+      "stage_failures": []
     },
     {
       "id": "id.jpeg",
       "selfie": "friend_2.jpeg",
-      "decision": "RETRY",
-      "score": 0.0,
-      "reason": "Face detection failed on ID: Multiple faces detected (found 2). Exactly one face is required.",
-      "retry": true,
-      "stage_failures": [
-        "face_detection[id_image]: Multiple faces detected (found 2). Exactly one face is required."
-      ]
+      "decision": "NO_MATCH",
+      "score": 0.3052215576171875,
+      "reason": "Biometric mismatch. Score 0.3052 is significantly below threshold 0.53.",
+      "retry": false,
+      "stage_failures": []
     }
   ]
 }
