@@ -213,6 +213,21 @@ export async function submitIdentityVerification(participantId, documentImage, t
   return data
 }
 
+export async function getReviewQueue(params = {}) {
+  const { data } = await apiClient.get('/admin/reviews/', { params })
+  return data
+}
+
+export async function getReviewDetail(participantId) {
+  const { data } = await apiClient.get(`/admin/reviews/${participantId}/`)
+  return data
+}
+
+export async function submitReviewDecision(participantId, decisionData) {
+  const { data } = await apiClient.post(`/admin/reviews/${participantId}/decision/`, decisionData)
+  return data
+}
+
 
 
 

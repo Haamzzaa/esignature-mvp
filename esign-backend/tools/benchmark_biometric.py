@@ -14,11 +14,11 @@ Usage:
     python tools/benchmark_biometric.py [--threshold 0.60] [--iteration 0]
 """
 
-import os
-import sys
-import json
 import argparse
 import datetime
+import json
+import os
+import sys
 
 # Django setup
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))

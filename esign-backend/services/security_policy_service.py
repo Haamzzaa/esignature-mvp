@@ -1,5 +1,7 @@
-from esign.models import Participant, ParticipantAuthorizationState, SignerIdentityVerification, ContractAnalysis
+from esign.models import (ContractAnalysis, ParticipantAuthorizationState,
+                          SignerIdentityVerification)
 from services.authorization_service import authorize_signer
+
 
 def get_authorization_status(participant):
     """
@@ -25,23 +27,86 @@ def get_authorization_status(participant):
         contract_analysis = ContractAnalysis.objects.filter(file_hash=envelope.document.file_hash).first()
     auth_res = authorize_signer(participant, verification, contract_analysis)
 
+    from esign.models import BiometricVerification, VerificationSession
+    biometric = BiometricVerification.objects.filter(participant=participant).first()
+    session = VerificationSession.objects.filter(participant=participant).first()
+
+    # Determine Review Status
+    review_status = None
+    review_reason = None
+    resubmit_step = state.manual_review_resubmit_step or None
+    review_notes = state.manual_review_notes or None
+
+    is_under_manual_review = (
+        (verification is not None and verification.status == "requires_manual_review") or
+        (biometric is not None and biometric.status == "requires_manual_review") or
+        (session is not None and session.status == "requires_manual_review") or
+        (auth_res.get("status") == "MANUAL_REVIEW_REQUIRED")
+    )
+
+    if state.manual_review_rejected:
+        review_status = "rejected"
+        review_reason = state.manual_review_notes or "Verification rejected by administrative review."
+    elif state.manual_review_approved:
+        review_status = "approved"
+        review_reason = None
+    elif state.manual_review_resubmit_step:
+        review_status = "resubmission_required"
+        review_reason = state.manual_review_notes or "Resubmission requested by reviewer."
+    elif is_under_manual_review:
+        review_status = "under_review"
+        if verification and verification.status == "requires_manual_review":
+            review_reason = verification.failure_reason or "Identity verification requires review."
+        elif biometric and biometric.status == "requires_manual_review":
+            review_reason = biometric.failure_reason or "Face biometric verification requires review."
+        elif auth_res.get("status") == "MANUAL_REVIEW_REQUIRED":
+            review_reason = auth_res.get("reason") or "Representative authorization requires review."
+        else:
+            review_reason = session.failure_reason if session else "Administrative review required."
+
+    # Compute step satisfaction with manual review approval overrides
     national_id_req = envelope.national_id_required
-    national_id_sat = (verification is not None and verification.status == "verified")
+    if state.manual_review_approved and national_id_req:
+        national_id_sat = True
+    elif state.manual_review_resubmit_step == "national_id":
+        national_id_sat = False
+    else:
+        national_id_sat = (verification is not None and verification.status == "verified")
 
     face_biometric_req = envelope.face_biometric_required
-    from esign.models import BiometricVerification
-    biometric = BiometricVerification.objects.filter(participant=participant).first()
-    face_biometric_sat = (biometric is not None and biometric.status == "matched")
+    if state.manual_review_approved and face_biometric_req:
+        face_biometric_sat = True
+    elif state.manual_review_resubmit_step in ["face", "face_biometric"]:
+        face_biometric_sat = False
+    else:
+        face_biometric_sat = (biometric is not None and biometric.status == "matched")
 
     # Enforce representative match for signers via the Authorization Engine
     if participant.role == "signer":
-        representative_match_req = True
-        representative_match_sat = auth_res["authorized"]
+        representative_match_req = envelope.representative_match_required
+        if state.manual_review_approved and representative_match_req:
+            representative_match_sat = True
+            auth_res["authorized"] = True
+            auth_res["status"] = "AUTHORIZED"
+        elif state.manual_review_resubmit_step in ["representative", "representative_match"]:
+            representative_match_sat = False
+            auth_res["authorized"] = False
+        else:
+            representative_match_sat = auth_res["authorized"]
     else:
         representative_match_req = envelope.representative_match_required
         representative_match_sat = False
         if hasattr(participant, "representative_verification") and participant.representative_verification:
             representative_match_sat = (participant.representative_verification.status == "matched")
+
+    # If rejected by manual review, block authorization
+    if state.manual_review_rejected:
+        if national_id_req:
+            national_id_sat = False
+        if face_biometric_req:
+            face_biometric_sat = False
+        if representative_match_req:
+            representative_match_sat = False
 
     requirements = {
         "email_otp": {"required": email_otp_req, "satisfied": email_otp_sat},
@@ -57,7 +122,7 @@ def get_authorization_status(participant):
         if state_dict["required"] and not state_dict["satisfied"]:
             missing_requirements.append(code)
 
-    authorized = (len(missing_requirements) == 0)
+    authorized = (len(missing_requirements) == 0) and not state.manual_review_rejected
 
     # Secure verification summaries for UI consumption without exposing embeddings, API keys or internal raw data.
     identity_summary = None
@@ -80,12 +145,26 @@ def get_authorization_status(participant):
             "provider": biometric.provider
         }
 
+    derived_status = "NOT_AUTHORIZED"
+    if review_status == "under_review":
+        derived_status = "requires_manual_review"
+    elif review_status == "rejected":
+        derived_status = "REJECTED"
+    elif authorized:
+        derived_status = "AUTHORIZED"
+    elif participant.role == "signer":
+        derived_status = auth_res.get("status", "NOT_AUTHORIZED")
+
     return {
         "authorized": authorized,
         "requirements": requirements,
         "missing_requirements": missing_requirements,
-        "status": auth_res.get("status", "NOT_AUTHORIZED") if participant.role == "signer" else ("AUTHORIZED" if authorized else "NOT_AUTHORIZED"),
-        "reason": auth_res.get("reason") if participant.role == "signer" else None,
+        "status": derived_status,
+        "reason": review_reason or (auth_res.get("reason") if participant.role == "signer" else None),
+        "review_status": review_status,
+        "review_reason": review_reason,
+        "review_notes": review_notes,
+        "resubmit_step": resubmit_step,
         "matched_language": auth_res.get("matched_language") if participant.role == "signer" else None,
         "matched_representative": auth_res.get("matched_representative") if participant.role == "signer" else None,
         "identity_summary": identity_summary,

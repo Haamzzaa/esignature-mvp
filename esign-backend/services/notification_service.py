@@ -1,10 +1,12 @@
-import os
 import logging
-from django.core.mail import send_mail, EmailMessage
-from django.conf import settings
-from django.utils import timezone
+import os
 from datetime import timedelta
-from esign.models import Participant, Signer, ParticipantToken, SigningToken
+
+from django.conf import settings
+from django.core.mail import EmailMessage, send_mail
+from django.utils import timezone
+
+from esign.models import ParticipantToken, Signer, SigningToken
 
 logger = logging.getLogger(__name__)
 
@@ -25,33 +27,35 @@ def get_sender_name(envelope):
 def send_participant_email(participant, envelope, base_api_url=None):
     """
     Sends an email to a specific participant with their secure link.
+    Guaranteed not to raise exceptions to callers.
     """
-    token_obj, created = ParticipantToken.objects.get_or_create(
-        participant=participant,
-        defaults={
-            "expires_at": timezone.now() + timedelta(hours=24),
-            "is_used": False
-        }
-    )
-    token_val = token_obj.token
-    logger.debug("Preparing notification email for participant %s (role: %s)", participant.id, participant.role)
+    try:
+        token_obj, created = ParticipantToken.objects.get_or_create(
+            participant=participant,
+            defaults={
+                "expires_at": timezone.now() + timedelta(hours=24),
+                "is_used": False
+            }
+        )
+        token_val = token_obj.token
+        logger.debug("Preparing notification email for participant %s (role: %s)", getattr(participant, 'id', 'unknown'), getattr(participant, 'role', 'unknown'))
 
-    frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173")
-    secure_link = f"{frontend_url}/sign/{token_val}"
-    
-    package_title = get_envelope_title(envelope)
-    sender_name = get_sender_name(envelope)
-    role = participant.role or "signer"
-    role_lower = role.lower()
-    
-    if role_lower == 'approver':
-        subject = "Document waiting for your approval"
-    elif role_lower == 'reviewer':
-        subject = "Document waiting for your review"
-    else:
-        subject = "Document waiting for your signature"
+        frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173")
+        secure_link = f"{frontend_url}/sign/{token_val}"
         
-    body = f"""Hello {participant.name},
+        package_title = get_envelope_title(envelope)
+        sender_name = get_sender_name(envelope)
+        role = participant.role or "signer"
+        role_lower = role.lower()
+        
+        if role_lower == 'approver':
+            subject = "Document waiting for your approval"
+        elif role_lower == 'reviewer':
+            subject = "Document waiting for your review"
+        else:
+            subject = "Document waiting for your signature"
+            
+        body = f"""Hello {participant.name},
 
 {sender_name} has sent you a document: "{package_title}".
 Role: {role}
@@ -64,8 +68,6 @@ This link is valid for 24 hours.
 Thank you,
 The E-Signature Team
 """
-    
-    try:
         logger.info(f"Sending role email to participant {participant.id} for role {role}")
 
         send_mail(
@@ -75,36 +77,40 @@ The E-Signature Team
             recipient_list=[participant.email],
             fail_silently=False,
         )
-    except Exception:
+    except Exception as exc:
         logger.exception(
-            "Failed to send email to participant %s (role: %s)",
-            participant.id,
-            participant.role,
+            "Failed to send email to participant %s (%s) for envelope %s: %s",
+            getattr(participant, 'id', 'unknown'),
+            getattr(participant, 'email', 'unknown'),
+            getattr(envelope, 'id', 'unknown'),
+            exc,
         )
 
 
 def send_legacy_signer_email(signer, envelope, base_api_url=None):
     """
     Sends an email to a legacy signer with their secure link.
+    Guaranteed not to raise exceptions to callers.
     """
-    token_obj, created = SigningToken.objects.get_or_create(
-        signer=signer,
-        defaults={
-            "expires_at": timezone.now() + timedelta(hours=24),
-            "is_used": False
-        }
-    )
-    token_val = token_obj.token
-    
-    frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173")
-    secure_link = f"{frontend_url}/sign/{token_val}"
-    
-    package_title = get_envelope_title(envelope)
-    sender_name = get_sender_name(envelope)
-    
-    subject = "Document waiting for your signature"
-    
-    body = f"""Hello {signer.name},
+    try:
+        token_obj, created = SigningToken.objects.get_or_create(
+            signer=signer,
+            defaults={
+                "expires_at": timezone.now() + timedelta(hours=24),
+                "is_used": False
+            }
+        )
+        token_val = token_obj.token
+        
+        frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:5173")
+        secure_link = f"{frontend_url}/sign/{token_val}"
+        
+        package_title = get_envelope_title(envelope)
+        sender_name = get_sender_name(envelope)
+        
+        subject = "Document waiting for your signature"
+        
+        body = f"""Hello {signer.name},
 
 {sender_name} has sent you a document: "{package_title}".
 Role: Signer
@@ -117,8 +123,6 @@ This link is valid for 24 hours.
 Thank you,
 The E-Signature Team
 """
-    
-    try:
         logger.info(f"Sending legacy signer email to {signer.email}")
         send_mail(
             subject=subject,
@@ -127,27 +131,53 @@ The E-Signature Team
             recipient_list=[signer.email],
             fail_silently=False,
         )
-    except Exception:
+    except Exception as exc:
         logger.exception(
-            "Failed to send email to legacy signer %s",
-            signer.email,
+            "Failed to send email to legacy signer %s for envelope %s: %s",
+            getattr(signer, 'email', 'unknown'),
+            getattr(envelope, 'id', 'unknown'),
+            exc,
         )
 
 
 def send_package_sent_notifications(envelope, base_api_url=None):
     """
-    Sends email to the first active participant when a package is sent.
+    Sends email to active participants when a package is sent.
     If no participants exist, falls back to legacy Signer.
+    Each notification attempt is isolated and will not raise exceptions.
     """
-    active_participants = envelope.participants.filter(status__in=['active', 'viewed']).order_by('step_number', 'order', 'id')
-    if active_participants.exists():
-        first_p = active_participants.first()
-        send_participant_email(first_p, envelope, base_api_url)
-    else:
-        # Fallback to legacy signer
-        signer = Signer.objects.filter(envelope=envelope).first()
-        if signer:
-            send_legacy_signer_email(signer, envelope, base_api_url)
+    try:
+        active_participants = envelope.participants.filter(status__in=['active', 'viewed']).order_by('step_number', 'order', 'id')
+        if active_participants.exists():
+            for p in active_participants:
+                try:
+                    send_participant_email(p, envelope, base_api_url)
+                except Exception as exc:
+                    logger.exception(
+                        "Failed to send package sent notification to participant %s for envelope %s: %s",
+                        getattr(p, 'email', 'unknown'),
+                        getattr(envelope, 'id', 'unknown'),
+                        exc,
+                    )
+        else:
+            # Fallback to legacy signer
+            signer = Signer.objects.filter(envelope=envelope).first()
+            if signer:
+                try:
+                    send_legacy_signer_email(signer, envelope, base_api_url)
+                except Exception as exc:
+                    logger.exception(
+                        "Failed to send package sent notification to legacy signer %s for envelope %s: %s",
+                        getattr(signer, 'email', 'unknown'),
+                        getattr(envelope, 'id', 'unknown'),
+                        exc,
+                    )
+    except Exception as exc:
+        logger.exception(
+            "Unexpected error while processing package sent notifications for envelope %s: %s",
+            getattr(envelope, 'id', 'unknown'),
+            exc,
+        )
 
 
 def send_next_step_notifications(envelope, step_number, base_api_url=None):

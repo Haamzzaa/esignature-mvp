@@ -1,6 +1,7 @@
+import logging
+
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -183,10 +184,48 @@ class ESignatureConfig:
     def rate_limit_signing(self) -> str:
         return str(getattr(settings, "ESIGN_RATE_LIMIT_SIGNING", "10/m"))
 
+    # ── Image Quality Assessment Thresholds ──────────────────────────────
+    @property
+    def image_quality_blur_threshold(self) -> float:
+        return float(getattr(settings, "IMAGE_QUALITY_BLUR_THRESHOLD", 45.0))
+
+    @property
+    def image_quality_minimum_resolution(self) -> int:
+        return int(getattr(settings, "IMAGE_QUALITY_MINIMUM_RESOLUTION", 640))
+
+    @property
+    def image_quality_minimum_brightness(self) -> float:
+        return float(getattr(settings, "IMAGE_QUALITY_MINIMUM_BRIGHTNESS", 40.0))
+
+    @property
+    def image_quality_maximum_brightness(self) -> float:
+        return float(getattr(settings, "IMAGE_QUALITY_MAXIMUM_BRIGHTNESS", 225.0))
+
+    @property
+    def image_quality_maximum_rotation(self) -> float:
+        return float(getattr(settings, "IMAGE_QUALITY_MAXIMUM_ROTATION", 15.0))
+
+    @property
+    def image_quality_minimum_face_size(self) -> int:
+        return int(getattr(settings, "IMAGE_QUALITY_MINIMUM_FACE_SIZE", 100))
+
     def validate(self):
         """
         Validates all configuration attributes to prevent invalid runtimes.
         """
+        if self.image_quality_blur_threshold <= 0:
+            raise ImproperlyConfigured("IMAGE_QUALITY_BLUR_THRESHOLD must be positive")
+        if self.image_quality_minimum_resolution <= 0:
+            raise ImproperlyConfigured("IMAGE_QUALITY_MINIMUM_RESOLUTION must be positive")
+        if not (0.0 <= self.image_quality_minimum_brightness <= 255.0):
+            raise ImproperlyConfigured("IMAGE_QUALITY_MINIMUM_BRIGHTNESS must be between 0.0 and 255.0")
+        if not (0.0 <= self.image_quality_maximum_brightness <= 255.0):
+            raise ImproperlyConfigured("IMAGE_QUALITY_MAXIMUM_BRIGHTNESS must be between 0.0 and 255.0")
+        if self.image_quality_maximum_rotation < 0:
+            raise ImproperlyConfigured("IMAGE_QUALITY_MAXIMUM_ROTATION cannot be negative")
+        if self.image_quality_minimum_face_size <= 0:
+            raise ImproperlyConfigured("IMAGE_QUALITY_MINIMUM_FACE_SIZE must be positive")
+
         if not (0.0 <= self.face_match_threshold <= 1.0):
             raise ImproperlyConfigured("FACE_MATCH_THRESHOLD must be between 0.0 and 1.0")
         if not (0.0 <= self.identity_match_threshold <= 1.0):

@@ -237,7 +237,13 @@ export default function SignPage() {
   let currentStep = 'terms'
 
   if (authStatus) {
-    if (!authStatus.authorized) {
+    if (authStatus.review_status === 'resubmission_required' && authStatus.resubmit_step) {
+      if (authStatus.resubmit_step === 'national_id') {
+        currentStep = 'national_id'
+      } else if (['face', 'face_biometric'].includes(authStatus.resubmit_step)) {
+        currentStep = 'face'
+      }
+    } else if (!authStatus.authorized) {
       if (missingRequirements.includes('terms_acceptance') || missingRequirements.includes('terms')) {
         currentStep = 'terms'
       } else if (missingRequirements.includes('email_otp')) {
@@ -272,6 +278,28 @@ export default function SignPage() {
       }
     }
   }, [authStatus, authenticationRequirementsSatisfied, session?.status])
+
+  // Polling for administrative review resolution
+  useEffect(() => {
+    if (!session?.participant_id || (!verificationRequiresManualReview && authStatus?.review_status !== 'under_review')) {
+      return
+    }
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const data = await getAuthorizationStatus(session.participant_id, token)
+        setAuthStatus(data)
+        if (data.review_status !== 'under_review' && data.status !== 'requires_manual_review') {
+          localStorage.removeItem(`manual_review_${session.participant_id}`)
+          setVerificationRequiresManualReview(false)
+        }
+      } catch (err) {
+        // Ignore background polling error
+      }
+    }, 4000)
+
+    return () => clearInterval(pollInterval)
+  }, [session?.participant_id, token, verificationRequiresManualReview, authStatus?.review_status])
 
   const documentUrl = useMemo(() => {
     const url = session?.document_url
@@ -310,9 +338,11 @@ export default function SignPage() {
         if (isAuthSatisfied) {
           prevAuthRef.current = true
         }
-        const isManualReview = localStorage.getItem(`manual_review_${data.participant_id}`) === 'true'
-        if (isManualReview || authData.status === 'requires_manual_review') {
+        if (authData.review_status === 'under_review' || authData.status === 'requires_manual_review') {
           setVerificationRequiresManualReview(true)
+        } else {
+          localStorage.removeItem(`manual_review_${data.participant_id}`)
+          setVerificationRequiresManualReview(false)
         }
       }
     } catch (err) {
@@ -334,9 +364,11 @@ export default function SignPage() {
     try {
       const authData = await getAuthorizationStatus(session.participant_id, token)
       setAuthStatus(authData)
-      const isManualReview = localStorage.getItem(`manual_review_${session.participant_id}`) === 'true'
-      if (isManualReview || authData.status === 'requires_manual_review') {
+      if (authData.review_status === 'under_review' || authData.status === 'requires_manual_review') {
         setVerificationRequiresManualReview(true)
+      } else {
+        localStorage.removeItem(`manual_review_${session.participant_id}`)
+        setVerificationRequiresManualReview(false)
       }
       return authData
     } catch (err) {
@@ -1057,28 +1089,64 @@ export default function SignPage() {
               </a>
             )}
           </motion.div>
-        ) : verificationRequiresManualReview ? (
+        ) : authStatus?.review_status === 'rejected' ? (
+          <motion.div
+            key="rejected_state"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
+            className="glass-panel rounded-3xl p-8 text-center relative overflow-hidden group border-red-500/30"
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-red-500/10 to-transparent opacity-50" />
+            <div className="relative mb-6 flex justify-center">
+              <div className="absolute inset-0 rounded-full bg-red-500/10 blur-xl animate-pulse w-20 h-20 mx-auto" />
+              <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-red-500/10 border border-red-500/20 text-red-400">
+                <XCircle className="h-10 w-10" />
+              </div>
+            </div>
+            <h3 className="text-xl font-bold text-red-400 mb-2">
+              Verification Declined
+            </h3>
+            <p className="text-sm text-text-secondary leading-relaxed mb-4">
+              Your identity verification could not be approved by administrative review.
+            </p>
+          </motion.div>
+        ) : (verificationRequiresManualReview || authStatus?.review_status === 'under_review') ? (
           <motion.div
             key="manual_review"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.25, ease: 'easeInOut' }}
-            className="glass-panel rounded-3xl p-8 text-center relative overflow-hidden group"
+            className="glass-panel rounded-3xl p-8 text-center relative overflow-hidden group border-amber-500/30"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 to-transparent opacity-50" />
             <div className="relative mb-6 flex justify-center">
               <div className="absolute inset-0 rounded-full bg-amber-500/10 blur-xl animate-pulse w-20 h-20 mx-auto" />
-              <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-amber-500/5 border border-amber-500/20 text-amber-500">
-                <AlertCircle className="h-10 w-10 animate-bounce" />
+              <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400">
+                <ShieldCheck className="h-10 w-10 animate-pulse" />
               </div>
             </div>
-            <h3 className="text-xl font-light text-amber-500 mb-2">
-              {t('sign.manual_review_required')}
+            <h3 className="text-xl font-bold text-amber-400 mb-2">
+              Authorization Under Review
             </h3>
             <p className="text-sm text-text-secondary leading-relaxed mb-4">
-              {t('sign.manual_review_desc')}
+              Your verification requires administrative review. No action is required from you right now.
             </p>
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold">
+              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+              <span>Status: Under Review</span>
+            </div>
+            <div className="mt-6">
+              <button
+                type="button"
+                onClick={() => refreshAuthStatus()}
+                className="px-4 py-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1.5"
+              >
+                <RefreshCw className="h-3.5 w-3.5" /> Check Status
+              </button>
+            </div>
             {verifyingError && (
               <div className="mt-4 p-3 rounded-xl border border-red-500/20 bg-red-500/5 text-xs text-red-400">
                 {verifyingError}
@@ -1247,6 +1315,21 @@ export default function SignPage() {
               badgeText={t('common.step_of', { current: 3, total: 5 })}
               stepProgress={t('common.step_of', { current: 3, total: 5 })}
             >
+              {authStatus?.review_status === 'resubmission_required' && authStatus?.resubmit_step === 'national_id' && (
+                <div className="p-3.5 mb-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 space-y-1">
+                  <div className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                    <AlertTriangle className="h-4 w-4" /> Action Required: Resubmission Requested
+                  </div>
+                  <p className="text-xs">
+                    Your reviewer requested that you resubmit your National ID.
+                  </p>
+                  {authStatus.review_notes && (
+                    <div className="text-[11px] text-text-secondary bg-bg-primary/40 p-2 rounded-lg border border-border-color mt-1">
+                      <strong className="text-text-primary">Reviewer note:</strong> {authStatus.review_notes}
+                    </div>
+                  )}
+                </div>
+              )}
               {!idPreview ? (
                 <>
                   <p className="text-xs text-text-secondary leading-relaxed">
@@ -1401,6 +1484,21 @@ export default function SignPage() {
               badgeText={t('common.step_of', { current: 4, total: 5 })}
               stepProgress={t('common.step_of', { current: 4, total: 5 })}
             >
+              {authStatus?.review_status === 'resubmission_required' && ['face', 'face_biometric'].includes(authStatus?.resubmit_step) && (
+                <div className="p-3.5 mb-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 space-y-1">
+                  <div className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                    <AlertTriangle className="h-4 w-4" /> Action Required: Resubmission Requested
+                  </div>
+                  <p className="text-xs">
+                    Your reviewer requested that you resubmit your Face Biometrics.
+                  </p>
+                  {authStatus.review_notes && (
+                    <div className="text-[11px] text-text-secondary bg-bg-primary/40 p-2 rounded-lg border border-border-color mt-1">
+                      <strong className="text-text-primary">Reviewer note:</strong> {authStatus.review_notes}
+                    </div>
+                  )}
+                </div>
+              )}
               <style>{`
                 @keyframes scan {
                   0%, 100% { top: 10%; }

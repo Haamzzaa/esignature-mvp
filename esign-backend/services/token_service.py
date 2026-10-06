@@ -1,5 +1,7 @@
 from django.utils import timezone
-from esign.models import ParticipantToken, SigningToken, Participant, Signer
+
+from esign.models import ParticipantToken, SigningToken
+
 
 class TokenContext:
     def __init__(self, participant_token, participant, envelope, legacy_signing_token=None):

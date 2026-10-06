@@ -1,7 +1,9 @@
+import uuid
+from datetime import timedelta
+
 from django.db import migrations
 from django.utils import timezone
-from datetime import timedelta
-import uuid
+
 
 def backfill_participants(apps, schema_editor):
     Envelope = apps.get_model('esign', 'Envelope')

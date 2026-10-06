@@ -1,7 +1,10 @@
-from django.utils import timezone
 from django.db import transaction
+from django.utils import timezone
+
 from esign.models import BiometricVerification
-from services.verification_session_service import get_or_create_verification_session
+from services.verification_session_service import \
+    get_or_create_verification_session
+
 
 def get_or_create_biometric_verification(participant):
     """

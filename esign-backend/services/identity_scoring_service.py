@@ -1,7 +1,9 @@
-import re
 import datetime
-from datetime import date
-from services.identity_scores import ScoredCandidateName, ScoredCandidateIdentifier, ScoredCandidateDate
+import re
+
+from services.identity_scores import (ScoredCandidateDate,
+                                      ScoredCandidateIdentifier,
+                                      ScoredCandidateName)
 
 # --- Module-Level Scoring Constants ---
 

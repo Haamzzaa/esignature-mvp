@@ -19,12 +19,10 @@ Current exceptions:
 """
 from __future__ import annotations
 
-
 # ── Backward-compatible ───────────────────────────────────────────────────────
 
 class InvalidStateTransition(Exception):
     """Raised when an invalid status transition is attempted on an Envelope."""
-    pass
 
 
 # ── Base ──────────────────────────────────────────────────────────────────────

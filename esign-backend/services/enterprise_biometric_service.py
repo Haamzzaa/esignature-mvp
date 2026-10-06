@@ -1,10 +1,9 @@
+import logging
 import os
+
 import cv2
 import numpy as np
-import logging
-from django.conf import settings
 from insightface.app import FaceAnalysis
-
 logger = logging.getLogger(__name__)
 
 # Cache FaceAnalysis app instance

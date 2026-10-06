@@ -1,37 +1,20 @@
 from django.urls import path
-from .views import (
-    DocumentUploadView,
-    EnvelopeCreateView,
-    EnvelopePatchView,
-    SendEnvelopeView,
-    SigningView,
-    SigningDocumentView,
-    SigningSignedDocumentView,
-    SigningDownloadView,
-    DashboardView,
-    PackageDetailView,
-    PackageListView,
-    TemplateListCreateView,
-    TemplateDetailView,
-    PackageSignedPreviewView,
-    PackageSignedDownloadView,
-    RegisterView,
-    LoginView,
-    LogoutView,
-    UserMeView,
-    PackageCertificateDownloadView,
-    SigningCertificateDownloadView,
-    ContractAnalyzeView,
-    ConfirmCandidatesView,
-    IgnoreCandidatesView,
-    SignerAuthorizationStatusView,
-    TermsAcceptanceView,
-    SendEmailOTPView,
-    VerifyEmailOTPView,
-    FaceVerificationView,
-    SignerIdentityVerificationView,
-    EnvelopeReviewView,
-)
+
+from .views import (ConfirmCandidatesView, ContractAnalyzeView, DashboardView,
+                    DocumentUploadView, EnvelopeCreateView, EnvelopePatchView,
+                    EnvelopeReviewView, FaceVerificationView,
+                    IgnoreCandidatesView, LoginView, LogoutView,
+                    PackageCertificateDownloadView, PackageDetailView,
+                    PackageListView, PackageSignedDownloadView,
+                    PackageSignedPreviewView, RegisterView, SendEmailOTPView,
+                    SendEnvelopeView, SignerAuthorizationStatusView,
+                    SignerIdentityVerificationView,
+                    SigningCertificateDownloadView, SigningDocumentView,
+                    SigningDownloadView, SigningSignedDocumentView,
+                    SigningView, TemplateDetailView, TemplateListCreateView,
+                    TermsAcceptanceView, UserMeView, VerifyEmailOTPView,
+                    AdminReviewQueueView, AdminReviewDetailView,
+                    AdminReviewDecisionView)
 
 urlpatterns = [
     path('documents/upload/', DocumentUploadView.as_view()),
@@ -66,4 +49,9 @@ urlpatterns = [
     path('participants/<int:participant_id>/verify-email-otp/', VerifyEmailOTPView.as_view(), name='verify-email-otp'),
     path('participants/<int:participant_id>/face-verification/', FaceVerificationView.as_view(), name='face-verification'),
     path('participants/<int:participant_id>/identity-verification/', SignerIdentityVerificationView.as_view(), name='identity-verification'),
+
+    # Admin Review endpoints
+    path('admin/reviews/', AdminReviewQueueView.as_view(), name='admin-review-queue'),
+    path('admin/reviews/<int:participant_id>/', AdminReviewDetailView.as_view(), name='admin-review-detail'),
+    path('admin/reviews/<int:participant_id>/decision/', AdminReviewDecisionView.as_view(), name='admin-review-decision'),
 ]

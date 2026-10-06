@@ -1,6 +1,8 @@
-from esign.providers.base import BaseStorageProvider
-from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+
+from esign.providers.base import BaseStorageProvider
+
 
 class DjangoStorageProvider(BaseStorageProvider):
     """

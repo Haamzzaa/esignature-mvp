@@ -1,6 +1,8 @@
 import logging
+
 import cv2
 import numpy as np
+
 from services.face_matching_service import get_face_analysis_app
 
 logger = logging.getLogger(__name__)

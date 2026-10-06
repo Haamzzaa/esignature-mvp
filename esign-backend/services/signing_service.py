@@ -1,20 +1,22 @@
 import base64
-import io
 import hashlib
+import io
 import logging
-from PIL import Image
-from django.db import transaction
-from django.utils import timezone
 from datetime import timedelta
-from django.core.files.base import ContentFile
-from django.urls import reverse
-from django.db.models import Max
 
-from esign.models import Envelope, Participant, ParticipantToken, SigningToken, Signer, SignedDocument, AuditLog
-from services.token_service import get_token_context
-from services.pdf_signing_service import sign_document
-from services.workflow_service import check_and_advance_step
+from django.core.files.base import ContentFile
+from django.db import transaction
+from django.db.models import Max
+from django.urls import reverse
+from django.utils import timezone
+from PIL import Image
+
+from esign.models import (AuditLog, Envelope, Participant, ParticipantToken,
+                          SignedDocument, SigningToken)
 from services.field_service import get_fields_for_participant
+from services.pdf_signing_service import sign_document
+from services.token_service import get_token_context
+from services.workflow_service import check_and_advance_step
 
 logger = logging.getLogger(__name__)
 
@@ -466,7 +468,7 @@ def process_action(token_str, request_data, request):
                 original_bytes=original_bytes,
             )
         except Exception as e:
-            logger.error(f"Image/PDF processing failed: {str(e)}", exc_info=True)
+            logger.exception("Image/PDF processing failed")
             raise ValidationError("Unable to process uploaded signature image.")
 
         # Update existing SignedDocument record in place or create new one

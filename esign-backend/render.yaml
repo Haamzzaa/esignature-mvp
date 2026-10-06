@@ -3,7 +3,7 @@ services:
     name: esign-web
     env: python
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn esign_service.wsgi:application"
+    startCommand: "python manage.py migrate && gunicorn esign_service.wsgi:application"
     envVars:
       - key: REDIS_URL
         fromService:

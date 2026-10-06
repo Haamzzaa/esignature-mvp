@@ -1,5 +1,6 @@
 from esign.providers.base import BaseOCRProvider
 
+
 class CombinedOCRProvider(BaseOCRProvider):
     """
     Combines PDF digital extraction with a PaddleOCR fallback engine.

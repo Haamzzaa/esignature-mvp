@@ -1,9 +1,11 @@
 import logging
+
 from django.conf import settings
-from django.utils import timezone
-from esign.models import Envelope, Document, SignedDocument, CompletionCertificate, SignerIdentityVerification, Participant
-from services.token_service import resolve_token
+
+from esign.models import (CompletionCertificate, Document, SignedDocument,
+                          SignerIdentityVerification)
 from esign.request_context import get_request_id
+from services.token_service import resolve_token
 
 logger = logging.getLogger(__name__)
 

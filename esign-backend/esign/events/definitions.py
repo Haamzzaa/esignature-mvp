@@ -1,5 +1,6 @@
 from esign.events.base import DomainEvent
 
+
 class EnvelopeCreated(DomainEvent):
     def __init__(self, envelope_id: int, title: str, status: str, owner_id: int | None):
         super().__init__("envelope.created", {
@@ -94,9 +95,18 @@ class ManualReviewApproved(DomainEvent):
             "participant_id": participant_id,
         })
 
+class ManualReviewResubmissionRequested(DomainEvent):
+    def __init__(self, participant_id: int, target_step: str, reason: str = ""):
+        super().__init__("manual_review.resubmission_requested", {
+            "participant_id": participant_id,
+            "target_step": target_step,
+            "reason": reason,
+        })
+
 class ManualReviewRejected(DomainEvent):
     def __init__(self, participant_id: int, reason: str):
         super().__init__("manual_review.rejected", {
             "participant_id": participant_id,
             "reason": reason,
         })
+

@@ -1,12 +1,14 @@
-import os
-import logging
 import base64
-import requests
-import json
 import datetime
 import hashlib
+import json
+import logging
+import os
+
+import requests
 from PIL import Image
-from esign.models import SignerIdentityVerification, OcrCache
+
+from esign.models import OcrCache
 
 logger = logging.getLogger(__name__)
 

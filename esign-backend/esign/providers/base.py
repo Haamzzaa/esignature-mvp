@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
+
 from services.liveness_service import LivenessResult
+
 
 class BaseOCRProvider(ABC):
     @abstractmethod

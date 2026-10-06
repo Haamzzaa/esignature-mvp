@@ -1,7 +1,9 @@
+import difflib
 import string
 import unicodedata
-import difflib
+
 from esign.config import esign_config
+
 
 def normalize_string(s: str) -> str:
     """

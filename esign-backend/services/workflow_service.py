@@ -1,8 +1,10 @@
 import logging
+from datetime import timedelta
+
 from django.db import transaction
 from django.utils import timezone
-from datetime import timedelta
-from esign.models import Envelope, ParticipantToken, Signer, SigningToken, AuditLog
+
+from esign.models import AuditLog, ParticipantToken, Signer, SigningToken
 
 logger = logging.getLogger(__name__)
 
@@ -97,8 +99,8 @@ def check_and_advance_step(envelope, current_step, request=None):
             # Keep/reset envelope status to sent so the next participants can perform actions
             envelope.transition_to("sent")
 
-            from esign.events.dispatcher import esign_dispatcher
             from esign.events.definitions import ParticipantCompleted
+            from esign.events.dispatcher import esign_dispatcher
             base_api_url = request.build_absolute_uri('/')[:-1] if request else None
             
             event = ParticipantCompleted(participant_id=0, envelope_id=envelope.id, role="signer")
@@ -139,8 +141,8 @@ def check_and_advance_step(envelope, current_step, request=None):
                 user_agent=user_agent,
             )
 
-            from esign.events.dispatcher import esign_dispatcher
             from esign.events.definitions import EnvelopeCompleted
+            from esign.events.dispatcher import esign_dispatcher
             base_api_url = request.build_absolute_uri('/')[:-1] if request else None
             
             event = EnvelopeCompleted(envelope_id=envelope.id)

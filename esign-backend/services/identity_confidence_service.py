@@ -1,4 +1,5 @@
-from services.identity_confidence import FieldConfidence, IdentityConfidenceResult
+from services.identity_confidence import FieldConfidence
+
 
 def calculate_name_confidence(scored_name_candidates, selected_name, layout_name=None, ocr_confidence=None):
     if not selected_name:
@@ -14,7 +15,8 @@ def calculate_name_confidence(scored_name_candidates, selected_name, layout_name
         
     # 2. Agreement with layout parser
     if layout_name:
-        from services.national_identity_service import normalize_identity_fields
+        from services.national_identity_service import \
+            normalize_identity_fields
         norm_selected = normalize_identity_fields(selected_name.value).lower()
         norm_layout = normalize_identity_fields(layout_name).lower()
         if norm_selected == norm_layout:

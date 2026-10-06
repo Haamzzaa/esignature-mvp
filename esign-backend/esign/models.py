@@ -1,7 +1,9 @@
-from django.db import models
 import uuid
-from django.contrib.auth.models import User
+
 from django.conf import settings
+from django.contrib.auth.models import User
+from django.db import models
+
 
 def get_default_user():
     from django.contrib.auth.models import User
@@ -234,6 +236,19 @@ class ParticipantAuthorizationState(models.Model):
     accepted_terms = models.BooleanField(default=False)
     accepted_terms_at = models.DateTimeField(null=True, blank=True)
     terms_version = models.CharField(max_length=50, blank=True, default="")
+    # Manual Review Decisions & Notes
+    manual_review_approved = models.BooleanField(default=False)
+    manual_review_rejected = models.BooleanField(default=False)
+    manual_review_resubmit_step = models.CharField(max_length=50, blank=True, default="")
+    manual_review_notes = models.TextField(blank=True, default="")
+    manual_review_decided_at = models.DateTimeField(null=True, blank=True)
+    manual_review_decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="manual_review_decisions"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

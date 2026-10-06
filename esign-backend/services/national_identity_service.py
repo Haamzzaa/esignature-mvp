@@ -1,12 +1,10 @@
-import re
-import logging
 import datetime
+import logging
+import re
 import unicodedata
-from django.db import transaction
-from django.utils import timezone
-
-from PIL import Image, ImageOps, ImageEnhance
 from io import BytesIO
+
+from PIL import Image, ImageEnhance, ImageOps
 
 logger = logging.getLogger(__name__)
 
@@ -588,21 +586,14 @@ def parse_identity_document(raw_text):
     # BENCHMARK DEBUG ONLY
     # SAFE TO REMOVE AFTER OCR TUNING
     from services.identity_candidate_service import (
-        generate_name_candidates,
-        generate_identifier_candidates,
-        generate_date_candidates
-    )
-    from services.identity_scoring_service import (
-        score_name_candidates,
-        score_identifier_candidates,
-        score_date_candidates
-    )
+        generate_date_candidates, generate_identifier_candidates,
+        generate_name_candidates)
+    from services.identity_scoring_service import (score_date_candidates,
+                                                   score_identifier_candidates,
+                                                   score_name_candidates)
     from services.identity_selection_service import (
-        select_best_name_candidate,
-        select_best_identifier_candidate,
-        select_best_birth_date_candidate,
-        select_best_expiry_date_candidate
-    )
+        select_best_birth_date_candidate, select_best_expiry_date_candidate,
+        select_best_identifier_candidate, select_best_name_candidate)
     name_candidates = generate_name_candidates(raw_text)
     identifier_candidates = generate_identifier_candidates(raw_text)
     date_candidates = generate_date_candidates(raw_text)
@@ -636,12 +627,9 @@ def parse_identity_document(raw_text):
     _log_safe("SELECTED EXPIRY DATE", selected_expiry_date.value if selected_expiry_date else "None")
 
     from services.identity_confidence_service import (
-        calculate_name_confidence,
-        calculate_identifier_confidence,
-        calculate_birth_date_confidence,
-        calculate_expiry_date_confidence,
-        calculate_overall_confidence
-    )
+        calculate_birth_date_confidence, calculate_expiry_date_confidence,
+        calculate_identifier_confidence, calculate_name_confidence,
+        calculate_overall_confidence)
     
     name_conf = calculate_name_confidence(
         scored_name_candidates,

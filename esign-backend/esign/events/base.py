@@ -1,5 +1,6 @@
 from datetime import datetime
 
+
 class DomainEvent:
     """
     Abstract base class for all domain events in the E-Signature module.

@@ -1,4 +1,7 @@
-from services.identity_scores import ScoredCandidateName, ScoredCandidateIdentifier, ScoredCandidateDate
+from services.identity_scores import (ScoredCandidateDate,
+                                      ScoredCandidateIdentifier,
+                                      ScoredCandidateName)
+
 
 def select_best_name_candidate(scored_candidates: list[ScoredCandidateName]) -> ScoredCandidateName | None:
     if not scored_candidates:

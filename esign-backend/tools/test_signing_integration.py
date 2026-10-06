@@ -1,9 +1,10 @@
 import os
 import sys
+from datetime import timedelta
+
 import django
 from django.test import RequestFactory
 from django.utils import timezone
-from datetime import timedelta
 
 # Setup django environment
 BASE_DIR = r"c:\Users\Mohammed Hamza\esign_Module\esign-backend"
@@ -11,11 +12,17 @@ sys.path.insert(0, BASE_DIR)
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'esign_service.settings')
 django.setup()
 from django.conf import settings
+
 settings.ALLOWED_HOSTS = ['*']
 
-from esign.models import Envelope, Participant, Document, SignerIdentityVerification, BiometricVerification, ContractAnalysis, VerificationSession, ParticipantToken, AuditLog, SignedDocument
-from services.signing_service import process_action
 from django.db import transaction
+
+from esign.models import (AuditLog, BiometricVerification, ContractAnalysis,
+                          Document, Envelope, Participant, ParticipantToken,
+                          SignedDocument, SignerIdentityVerification,
+                          VerificationSession)
+from services.signing_service import process_action
+
 
 def run_tests():
     print("=" * 50)

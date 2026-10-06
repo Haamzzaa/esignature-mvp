@@ -1,16 +1,17 @@
-from esign.config import esign_config
 import logging
+from datetime import timedelta
+
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.validators import validate_email as dj_validate_email
 from django.db import transaction
 from django.utils import timezone
-from datetime import timedelta
-from django.core.validators import validate_email as dj_validate_email
-from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework.generics import get_object_or_404
 
-from esign.models import Envelope, Document, DocumentField, Participant, ParticipantToken, Signer, SigningToken, AuditLog
+from esign.config import esign_config
+from esign.models import (AuditLog, Document, DocumentField, Envelope,
+                          Participant, ParticipantToken, Signer, SigningToken)
 from esign.serializers import EnvelopeCreateSerializer
 from services.workflow_service import activate_workflow_step
-from services.notification_service import send_package_sent_notifications
 
 logger = logging.getLogger(__name__)
 
@@ -136,15 +137,19 @@ def send_envelope(envelope_id, owner, request):
         )
 
         base_api_url = request.build_absolute_uri('/')[:-1] if request else None
-        from esign.events.dispatcher import esign_dispatcher
         from esign.events.definitions import EnvelopeSent
+        from esign.events.dispatcher import esign_dispatcher
         
         event = EnvelopeSent(envelope_id=envelope.id, expires_at=expires_at.isoformat())
         event.payload["base_api_url"] = base_api_url
         
-        transaction.on_commit(
-            lambda: esign_dispatcher.publish(event)
-        )
+        def _safe_publish():
+            try:
+                esign_dispatcher.publish(event)
+            except Exception as exc:
+                logger.exception("Failed to publish EnvelopeSent event for envelope %s: %s", envelope.id, exc)
+
+        transaction.on_commit(_safe_publish)
 
     return {
         "message": "Envelope sent to signer.",
@@ -283,12 +288,15 @@ def save_envelope_from_validated_data(validated_data):
     Creates an envelope, participants, legacy signers, and fields from validated serializer data.
     Moves core creation business logic out of the serializer class.
     """
-    from django.db import transaction
-    from esign.models import Document, Envelope, Signer, Participant, ParticipantToken, AuditLog
-    from django.utils import timezone
     from datetime import timedelta
-    from services.workflow_service import activate_workflow_step
+
+    from django.db import transaction
+    from django.utils import timezone
+
+    from esign.models import (AuditLog, Document, Envelope, Participant,
+                              ParticipantToken, Signer)
     from esign.serializers import clean_filename
+    from services.workflow_service import activate_workflow_step
 
     with transaction.atomic():
         is_draft          = validated_data.pop('is_draft', False)

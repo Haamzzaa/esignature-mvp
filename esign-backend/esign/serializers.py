@@ -1,10 +1,12 @@
 # pyrefly: ignore [missing-import]
-from rest_framework import serializers
 import hashlib
 import os
 import re
-from django.db import transaction
-from .models import Document, Signer, Envelope, Participant, AuditLog, Template
+
+from rest_framework import serializers
+
+from .models import Document, Participant, Signer, Template
+
 
 def clean_filename(filename):
     if not filename:
@@ -123,8 +125,9 @@ class EnvelopeCreateSerializer(serializers.Serializer):
         if not isinstance(value, list):
             raise serializers.ValidationError("additional_recipients must be a list of emails.")
         
+        from django.core.exceptions import \
+            ValidationError as DjangoValidationError
         from django.core.validators import validate_email
-        from django.core.exceptions import ValidationError as DjangoValidationError
         
         seen = set()
         validated_emails = []

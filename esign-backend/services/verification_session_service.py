@@ -1,6 +1,8 @@
-from django.utils import timezone
 from django.db import transaction
+from django.utils import timezone
+
 from esign.models import VerificationSession
+
 
 def get_or_create_verification_session(participant):
     """

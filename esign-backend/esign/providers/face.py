@@ -1,5 +1,6 @@
 from esign.providers.base import BaseFaceMatchingProvider
 
+
 class InsightFaceMatchingProvider(BaseFaceMatchingProvider):
     """
     Facial recognition similarity using the InsightFace buffalo_l engine.

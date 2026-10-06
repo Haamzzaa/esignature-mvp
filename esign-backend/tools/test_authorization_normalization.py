@@ -1,5 +1,6 @@
 import os
 import sys
+
 import django
 
 # Setup Django Environment
@@ -8,8 +9,11 @@ sys.path.append(BASE_DIR)
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "esign_service.settings")
 django.setup()
 
-from services.authorization_service import strip_honorifics, authorize_signer
-from esign.models import Participant, SignerIdentityVerification, BiometricVerification, ContractAnalysis, Document, Envelope, VerificationSession
+from esign.models import (BiometricVerification, ContractAnalysis, Document,
+                          Envelope, Participant, SignerIdentityVerification,
+                          VerificationSession)
+from services.authorization_service import authorize_signer, strip_honorifics
+
 
 def run_normalization_tests():
     print("==================================================")

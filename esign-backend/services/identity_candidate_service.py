@@ -1,7 +1,9 @@
-import re
 import datetime
+import re
 from datetime import date
-from services.identity_candidates import CandidateName, CandidateIdentifier, CandidateDate
+
+from services.identity_candidates import (CandidateDate, CandidateIdentifier,
+                                          CandidateName)
 
 # ---------------------------------------------------------------------------
 # Metadata label blocklist

@@ -1,6 +1,7 @@
 from esign.providers.base import BaseLivenessProvider
 from services.liveness_service import LivenessResult
 
+
 class PlaceholderLivenessProvider(BaseLivenessProvider):
     """
     Placeholder check verifying selfie liveness checks.

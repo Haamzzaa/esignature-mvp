@@ -1,16 +1,16 @@
-import re
 import logging
-from rapidfuzz import process, fuzz
-from services.authority_extraction_patterns import (
-    ENGLISH_AUTHORITY_KEYWORDS,
-    ARABIC_AUTHORITY_KEYWORDS,
-    ENGLISH_CAPACITY_PHRASES,
-    ARABIC_CAPACITY_PHRASES,
-    ENGLISH_PREFIXES,
-    ARABIC_PREFIXES,
-    ENGLISH_TITLES,
-    ARABIC_TITLES,
-)
+import re
+
+from rapidfuzz import fuzz, process
+
+from services.authority_extraction_patterns import (ARABIC_AUTHORITY_KEYWORDS,
+                                                    ARABIC_CAPACITY_PHRASES,
+                                                    ARABIC_PREFIXES,
+                                                    ARABIC_TITLES,
+                                                    ENGLISH_AUTHORITY_KEYWORDS,
+                                                    ENGLISH_CAPACITY_PHRASES,
+                                                    ENGLISH_PREFIXES,
+                                                    ENGLISH_TITLES)
 
 logger = logging.getLogger(__name__)
 

@@ -1,18 +1,15 @@
-import time
 import logging
+import time
 
 from django.core.exceptions import ImproperlyConfigured
-from esign.config import esign_config
 
+from esign.config import esign_config
 # Import base interfaces
-from esign.providers.base import (
-    BaseOCRProvider,
-    BaseFaceMatchingProvider,
-    BaseLivenessProvider,
-    BaseNotificationProvider,
-    BaseStorageProvider,
-    BaseCertificateProvider,
-)
+from esign.providers.base import (BaseCertificateProvider,
+                                  BaseFaceMatchingProvider,
+                                  BaseLivenessProvider,
+                                  BaseNotificationProvider, BaseOCRProvider,
+                                  BaseStorageProvider)
 
 logger = logging.getLogger("esign.providers")
 
@@ -38,12 +35,11 @@ def _resolve_provider(category: str, configured_name: str, factory):
         return instance
     except Exception as exc:
         elapsed_ms = int((time.perf_counter() - start) * 1000)
-        logger.error(
+        logger.exception(
             "[ProviderRegistry] Failed to resolve provider: category=%s configured=%s "
-            "error=%s duration=%dms",
+            "duration=%dms",
             category,
             configured_name,
-            str(exc),
             elapsed_ms,
         )
         raise
@@ -84,7 +80,8 @@ class ESignatureProviderRegistry:
 
             def _factory():
                 if provider_name in ('internal', 'insightface'):
-                    from esign.providers.face import InsightFaceMatchingProvider
+                    from esign.providers.face import \
+                        InsightFaceMatchingProvider
                     return InsightFaceMatchingProvider()
                 else:
                     raise ImproperlyConfigured(f"Unsupported Face provider: {provider_name}")
@@ -99,7 +96,8 @@ class ESignatureProviderRegistry:
 
             def _factory():
                 if provider_name in ('internal', 'placeholder'):
-                    from esign.providers.liveness import PlaceholderLivenessProvider
+                    from esign.providers.liveness import \
+                        PlaceholderLivenessProvider
                     return PlaceholderLivenessProvider()
                 else:
                     raise ImproperlyConfigured(f"Unsupported Liveness provider: {provider_name}")
@@ -114,7 +112,8 @@ class ESignatureProviderRegistry:
 
             def _factory():
                 if provider_name in ('email', 'smtp', 'brevo'):
-                    from esign.providers.notification import SMTPEmailNotificationProvider
+                    from esign.providers.notification import \
+                        SMTPEmailNotificationProvider
                     return SMTPEmailNotificationProvider()
                 else:
                     raise ImproperlyConfigured(f"Unsupported Notification provider: {provider_name}")
@@ -136,7 +135,8 @@ class ESignatureProviderRegistry:
     def certificate_provider(self) -> BaseCertificateProvider:
         if self._certificate_provider is None:
             def _factory():
-                from esign.providers.certificate import InternalPDFCertificateProvider
+                from esign.providers.certificate import \
+                    InternalPDFCertificateProvider
                 return InternalPDFCertificateProvider()
 
             self._certificate_provider = _resolve_provider("certificate", "internal_pdf", _factory)

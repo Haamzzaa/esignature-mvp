@@ -1,5 +1,6 @@
-import time
 import logging
+import time
+
 from esign.config import esign_config
 from esign.events.base import DomainEvent
 from esign.request_context import get_request_id
@@ -59,13 +60,11 @@ class EventDispatcher:
             except Exception as e:
                 elapsed_ms = int((time.perf_counter() - start) * 1000)
                 failures += 1
-                logger.error(
-                    "[EventDispatcher] Handler failed: handler=%s event=%s error=%s duration=%dms",
+                logger.exception(
+                    "[EventDispatcher] Handler failed: handler=%s event=%s duration=%dms",
                     handler_name,
                     event.event_name,
-                    str(e),
                     elapsed_ms,
-                    exc_info=True,
                 )
 
         if failures:

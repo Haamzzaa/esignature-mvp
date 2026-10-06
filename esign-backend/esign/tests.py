@@ -6306,4 +6306,376 @@ class ImageQualityAssessmentTestCase(TestCase):
         self.assertIn("Multiple faces detected in the image", res["quality_report"]["issues"])
 
 
+class PackageSendNotificationDecouplingTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from esign.models import Document, DocumentField, Envelope, Participant
+
+        self.user = User.objects.create_user(username="sender_user", password="password123", email="sender@example.com")
+        self.client.force_login(self.user)
+
+        self.doc = Document.objects.create(file_hash="test_hash_send_isolation")
+        self.envelope = Envelope.objects.create(
+            owner=self.user,
+            document=self.doc,
+            title="Test Package Decouple",
+            status="draft",
+        )
+        self.p1 = Participant.objects.create(
+            envelope=self.envelope,
+            name="Recipient One",
+            email="recipient1@example.com",
+            role="signer",
+            step_number=1,
+            order=1,
+        )
+        self.field1 = DocumentField.objects.create(
+            envelope=self.envelope,
+            participant=self.p1,
+            field_type="signature",
+            required=True,
+            page=1,
+            x_ratio=0.2,
+            y_ratio=0.5,
+        )
+
+    @patch("services.notification_service.send_mail")
+    def test_1_successful_package_send_when_email_succeeds(self, mock_send_mail):
+        """Test 1: When notification delivery succeeds, POST /send/ returns 200, status is sent, email triggered."""
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(f"/api/v1/envelopes/{self.envelope.id}/send/")
+        self.assertEqual(response.status_code, 200)
+        self.envelope.refresh_from_db()
+        self.assertEqual(self.envelope.status, "sent")
+        self.assertTrue(mock_send_mail.called)
+
+    @patch("services.notification_service.send_mail", side_effect=ConnectionError("SMTP connection timed out"))
+    def test_2_notification_failure_does_not_fail_package_send(self, mock_send_mail):
+        """Test 2: When notification/email delivery raises an exception, POST /send/ still returns 200 and envelope is sent."""
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(f"/api/v1/envelopes/{self.envelope.id}/send/")
+        self.assertEqual(response.status_code, 200)
+        self.envelope.refresh_from_db()
+        self.assertEqual(self.envelope.status, "sent")
+
+    @patch("services.notification_service.send_mail", side_effect=Exception("Connection refused to smtp.brevo.com:2525"))
+    def test_3_notification_exception_is_logged(self, mock_send_mail):
+        """Test 3: Verify notification failure is caught and logged without leaking credentials."""
+        with self.assertLogs("services.notification_service", level="ERROR") as cm:
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post(f"/api/v1/envelopes/{self.envelope.id}/send/")
+            self.assertEqual(response.status_code, 200)
+            self.envelope.refresh_from_db()
+            self.assertEqual(self.envelope.status, "sent")
+            self.assertTrue(any(f"envelope {self.envelope.id}" in log_msg for log_msg in cm.output), f"Logs were: {cm.output}")
+
+    def test_4_actual_envelope_send_failures_still_propagate(self):
+        """Test 4: Business logic validation failure (e.g. signer missing signature field) still returns 400 and preserves draft status."""
+        from esign.models import DocumentField
+        DocumentField.objects.filter(envelope=self.envelope).delete()
+        response = self.client.post(f"/api/v1/envelopes/{self.envelope.id}/send/")
+        self.assertEqual(response.status_code, 400)
+        self.envelope.refresh_from_db()
+        self.assertEqual(self.envelope.status, "draft")
+
+    def test_5_multiple_participants_partial_notification_failure(self):
+        """Test 5: Multi-participant parallel send where one email fails and another succeeds preserves package sent status."""
+        from esign.models import DocumentField, Participant
+        p2 = Participant.objects.create(
+            envelope=self.envelope,
+            name="Recipient Two",
+            email="recipient2@example.com",
+            role="signer",
+            step_number=1,
+            order=2,
+        )
+        DocumentField.objects.create(
+            envelope=self.envelope,
+            participant=p2,
+            field_type="signature",
+            required=True,
+            page=1,
+            x_ratio=0.5,
+            y_ratio=0.5,
+        )
+
+        def mock_send(subject, message, from_email, recipient_list, **kwargs):
+            if "recipient1" in recipient_list[0]:
+                raise ConnectionResetError("Socket reset by peer")
+            return 1
+
+        with patch("services.notification_service.send_mail", side_effect=mock_send):
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post(f"/api/v1/envelopes/{self.envelope.id}/send/")
+            self.assertEqual(response.status_code, 200)
+            self.envelope.refresh_from_db()
+            self.assertEqual(self.envelope.status, "sent")
+            self.p1.refresh_from_db()
+            p2.refresh_from_db()
+            self.assertEqual(self.p1.status, "active")
+            self.assertEqual(p2.status, "active")
+
+
+from rest_framework.test import APITestCase
+
+
+class AdminAuthorizationReviewTests(APITestCase):
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from django.utils import timezone
+        from rest_framework.authtoken.models import Token
+        from esign.models import (
+            Document, Envelope, Participant, ParticipantToken,
+            ParticipantAuthorizationState, SignerIdentityVerification,
+            BiometricVerification, VerificationSession, AuditLog
+        )
+
+        self.staff_user = User.objects.create_user(
+            username="staff_reviewer",
+            email="staff@example.com",
+            password="password123",
+            is_staff=True
+        )
+        self.staff_token, _ = Token.objects.get_or_create(user=self.staff_user)
+
+        self.normal_user = User.objects.create_user(
+            username="regular_user",
+            email="regular@example.com",
+            password="password123",
+            is_staff=False
+        )
+        self.normal_token, _ = Token.objects.get_or_create(user=self.normal_user)
+
+        self.document = Document.objects.create(
+            file="documents/sample.pdf",
+            file_hash="testhashreview123",
+            owner=self.normal_user
+        )
+
+        self.envelope = Envelope.objects.create(
+            document=self.document,
+            owner=self.normal_user,
+            title="Employment Contract",
+            status="sent",
+            terms_acceptance_required=True,
+            email_otp_required=True,
+            national_id_required=True,
+            face_biometric_required=True,
+            representative_match_required=False
+        )
+
+        self.participant = Participant.objects.create(
+            envelope=self.envelope,
+            name="John Reviewee",
+            email="john@example.com",
+            role="signer",
+            status="active"
+        )
+        self.participant_token = ParticipantToken.objects.create(
+            participant=self.participant,
+            expires_at=timezone.now() + timezone.timedelta(days=7)
+        )
+
+        self.auth_state = ParticipantAuthorizationState.objects.create(
+            participant=self.participant,
+            accepted_terms=True,
+            email_verified=True
+        )
+
+        self.session = VerificationSession.objects.create(
+            participant=self.participant,
+            status="requires_manual_review",
+            failure_reason="Identity OCR name mismatch"
+        )
+
+        self.id_verification = SignerIdentityVerification.objects.create(
+            participant=self.participant,
+            status="requires_manual_review",
+            full_name="John R. Reviewee",
+            national_id_number="1234567890",
+            document_type="national_id",
+            failure_reason="Name discrepancy between participant and ID document"
+        )
+
+        self.biometric = BiometricVerification.objects.create(
+            participant=self.participant,
+            verification_session=self.session,
+            status="pending"
+        )
+
+    def test_review_queue_staff_access(self):
+        """Staff users can access the review queue and see review cases."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.staff_token.key}")
+        response = self.client.get("/api/v1/admin/reviews/")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["count"], 1)
+        self.assertEqual(data["cases"][0]["participant_id"], self.participant.id)
+        self.assertEqual(data["cases"][0]["participant_name"], "John Reviewee")
+        self.assertEqual(data["cases"][0]["review_status"], "under_review")
+
+    def test_review_queue_forbidden_for_regular_user(self):
+        """Non-staff users are denied access with 403 Forbidden."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.normal_token.key}")
+        response = self.client.get("/api/v1/admin/reviews/")
+        self.assertEqual(response.status_code, 403)
+
+    def test_review_queue_unauthenticated_forbidden(self):
+        """Unauthenticated requests are denied access."""
+        response = self.client.get("/api/v1/admin/reviews/")
+        self.assertEqual(response.status_code, 401)
+
+    def test_review_detail_dossier_content(self):
+        """Review detail returns sanitized evidence dossier without sensitive secrets."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.staff_token.key}")
+        response = self.client.get(f"/api/v1/admin/reviews/{self.participant.id}/")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        
+        self.assertEqual(data["participant"]["id"], self.participant.id)
+        self.assertEqual(data["participant"]["name"], "John Reviewee")
+        self.assertEqual(data["review_state"]["review_status"], "under_review")
+        self.assertIsNotNone(data["identity_verification"])
+        self.assertEqual(data["identity_verification"]["full_name"], "John R. Reviewee")
+        self.assertEqual(data["identity_verification"]["status"], "requires_manual_review")
+        
+        # Verify no sensitive secrets or raw embeddings exposed
+        self.assertNotIn("embeddings", str(data).lower())
+        self.assertNotIn("api_key", str(data).lower())
+        self.assertNotIn("secret", str(data).lower())
+
+    def test_review_detail_forbidden_for_regular_user(self):
+        """Non-staff users cannot access review detail endpoint."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.normal_token.key}")
+        response = self.client.get(f"/api/v1/admin/reviews/{self.participant.id}/")
+        self.assertEqual(response.status_code, 403)
+
+    def test_approve_action(self):
+        """Staff reviewer approves verification case."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.staff_token.key}")
+        payload = {
+            "action": "approve",
+            "notes": "Name variance approved after checking company records."
+        }
+        response = self.client.post(f"/api/v1/admin/reviews/{self.participant.id}/decision/", payload, format="json")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["review_status"], "approved")
+
+        self.auth_state.refresh_from_db()
+        self.assertTrue(self.auth_state.manual_review_approved)
+        self.assertFalse(self.auth_state.manual_review_rejected)
+        self.assertEqual(self.auth_state.manual_review_notes, "Name variance approved after checking company records.")
+        self.assertEqual(self.auth_state.manual_review_decided_by, self.staff_user)
+
+        self.id_verification.refresh_from_db()
+        self.assertEqual(self.id_verification.status, "verified")
+
+        # Verify audit log was created
+        from esign.models import AuditLog
+        log = AuditLog.objects.filter(envelope=self.envelope).last()
+        self.assertIsNotNone(log)
+        self.assertIn("manual_review_approved", log.event)
+        self.assertIn("staff_reviewer", log.event)
+
+        # Verify signer authorization status now reflects approval and preserved prior steps
+        from services.security_policy_service import get_authorization_status
+        auth_status = get_authorization_status(self.participant)
+        self.assertEqual(auth_status["review_status"], "approved")
+        self.assertTrue(auth_status["requirements"]["terms_acceptance"]["satisfied"])
+        self.assertTrue(auth_status["requirements"]["email_otp"]["satisfied"])
+        self.assertTrue(auth_status["requirements"]["national_id"]["satisfied"])
+
+    def test_resubmit_action(self):
+        """Staff reviewer requests resubmission of a specific verification step."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.staff_token.key}")
+        payload = {
+            "action": "resubmit",
+            "target_step": "national_id",
+            "notes": "Please upload a clearer copy of your National ID card."
+        }
+        response = self.client.post(f"/api/v1/admin/reviews/{self.participant.id}/decision/", payload, format="json")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["review_status"], "resubmission_required")
+        self.assertEqual(data["target_step"], "national_id")
+
+        self.auth_state.refresh_from_db()
+        self.assertFalse(self.auth_state.manual_review_approved)
+        self.assertEqual(self.auth_state.manual_review_resubmit_step, "national_id")
+        self.assertEqual(self.auth_state.manual_review_notes, "Please upload a clearer copy of your National ID card.")
+
+        # Verify target step was reset to pending while preserving prior completed steps
+        self.id_verification.refresh_from_db()
+        self.assertEqual(self.id_verification.status, "pending")
+        self.assertEqual(self.id_verification.failure_reason, "")
+
+        # Verify signer authorization status
+        from services.security_policy_service import get_authorization_status
+        auth_status = get_authorization_status(self.participant)
+        self.assertEqual(auth_status["review_status"], "resubmission_required")
+        self.assertEqual(auth_status["resubmit_step"], "national_id")
+        self.assertTrue(auth_status["requirements"]["terms_acceptance"]["satisfied"])
+        self.assertTrue(auth_status["requirements"]["email_otp"]["satisfied"])
+        self.assertFalse(auth_status["requirements"]["national_id"]["satisfied"])
+
+    def test_reject_action(self):
+        """Staff reviewer rejects verification case."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.staff_token.key}")
+        payload = {
+            "action": "reject",
+            "notes": "Identity document appears altered or invalid."
+        }
+        response = self.client.post(f"/api/v1/admin/reviews/{self.participant.id}/decision/", payload, format="json")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["review_status"], "rejected")
+
+        self.auth_state.refresh_from_db()
+        self.assertTrue(self.auth_state.manual_review_rejected)
+        self.assertFalse(self.auth_state.manual_review_approved)
+        self.assertEqual(self.auth_state.manual_review_notes, "Identity document appears altered or invalid.")
+
+        from services.security_policy_service import get_authorization_status
+        auth_status = get_authorization_status(self.participant)
+        self.assertEqual(auth_status["review_status"], "rejected")
+        self.assertFalse(auth_status["authorized"])
+
+    def test_reject_action_requires_reason(self):
+        """Reject action fails if no reason/notes are provided."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.staff_token.key}")
+        payload = {
+            "action": "reject",
+            "notes": ""
+        }
+        response = self.client.post(f"/api/v1/admin/reviews/{self.participant.id}/decision/", payload, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("rejection reason is required", response.json()["detail"])
+
+    def test_resubmit_action_requires_valid_target_step(self):
+        """Resubmit action fails if target_step is missing or invalid."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.staff_token.key}")
+        payload = {
+            "action": "resubmit",
+            "target_step": "",
+            "notes": "Resubmit"
+        }
+        response = self.client.post(f"/api/v1/admin/reviews/{self.participant.id}/decision/", payload, format="json")
+        self.assertEqual(response.status_code, 400)
+
+        payload["target_step"] = "invalid_step_name"
+        response = self.client.post(f"/api/v1/admin/reviews/{self.participant.id}/decision/", payload, format="json")
+        self.assertEqual(response.status_code, 400)
+
+    def test_decision_forbidden_for_regular_user(self):
+        """Regular users cannot submit review decisions."""
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {self.normal_token.key}")
+        payload = {"action": "approve"}
+        response = self.client.post(f"/api/v1/admin/reviews/{self.participant.id}/decision/", payload, format="json")
+        self.assertEqual(response.status_code, 403)
+
+
+
+
+
 

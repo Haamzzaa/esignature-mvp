@@ -1,13 +1,15 @@
+import hashlib
 import secrets
 import string
-import hashlib
-from django.utils import timezone
 from datetime import timedelta
+
 from django.core.mail import send_mail
 from django.db import transaction
+from django.utils import timezone
 
 OTP_LENGTH = 6
 from esign.config import esign_config
+
 OTP_EXPIRY_MINUTES = esign_config.otp_expiry
 
 

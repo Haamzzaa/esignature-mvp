@@ -1,9 +1,9 @@
+import argparse
+import json
 import os
 import sys
-import json
-import argparse
+
 import cv2
-import numpy as np
 
 # Ensure django is set up so we can import services and settings correctly
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -14,7 +14,9 @@ try:
 except Exception:
     pass
 
-from services.enterprise_biometric_service import run_biometric_pipeline, get_face_analysis_app
+from services.enterprise_biometric_service import (get_face_analysis_app,
+                                                   run_biometric_pipeline)
+
 
 def annotate_image(image_path, out_path, detection_detail, quality_detail):
     """

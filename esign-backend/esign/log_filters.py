@@ -4,6 +4,7 @@ the %(request_id)s format specifier is always available in
 formatter strings, regardless of where the log is emitted.
 """
 import logging
+
 from esign.request_context import get_request_id
 
 

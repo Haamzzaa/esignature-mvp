@@ -1,5 +1,6 @@
 from django.db import migrations
 
+
 def backfill_owners(apps, schema_editor):
     User = apps.get_model('auth', 'User')
     Envelope = apps.get_model('esign', 'Envelope')

@@ -1,11 +1,11 @@
-import time
 import sys
-import os
+import time
 
 print("Starting InsightFace diagnostic script...")
 
 # Record environment info
 import platform
+
 print(f"Python version: {platform.python_version()}")
 
 try:

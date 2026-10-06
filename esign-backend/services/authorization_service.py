@@ -1,6 +1,7 @@
+import logging
 import re
 import unicodedata
-import logging
+
 from esign.models import BiometricVerification
 
 logger = logging.getLogger(__name__)

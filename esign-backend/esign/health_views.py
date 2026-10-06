@@ -5,7 +5,9 @@ Views are intentionally thin — all logic lives in esign.health_service.
 No authentication required (operational use by load balancers and orchestrators).
 """
 from django.http import JsonResponse
-from esign.health_service import liveness_check, readiness_check, full_health_check
+
+from esign.health_service import (full_health_check, liveness_check,
+                                  readiness_check)
 
 
 def live_view(request):

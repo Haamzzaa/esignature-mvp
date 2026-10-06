@@ -12,6 +12,7 @@ import PackageDetailPage from './pages/PackageDetailPage.jsx'
 import TemplatesPage from './pages/TemplatesPage.jsx'
 import InboxPage from './pages/InboxPage.jsx'
 import ContractAnalysisPage from './pages/ContractAnalysisPage.jsx'
+import ReviewsPage from './pages/ReviewsPage.jsx'
 import { RefreshCw } from 'lucide-react'
 
 function ProtectedRoute({ children }) {
@@ -28,6 +29,24 @@ function ProtectedRoute({ children }) {
   }
   if (!user) {
     return <Navigate to="/login" replace />
+  }
+  return children
+}
+
+function StaffRoute({ children }) {
+  const { user, isLoading } = useAuth()
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-dvh text-cyan-500 bg-bg-primary">
+        <RefreshCw className="h-10 w-10 animate-spin" />
+        <span className="mt-4 text-xs font-semibold tracking-widest uppercase animate-pulse">
+          Verifying Session...
+        </span>
+      </div>
+    )
+  }
+  if (!user || (!user.is_staff && !user.is_superuser)) {
+    return <Navigate to="/" replace />
   }
   return children
 }
@@ -78,6 +97,7 @@ export default function App() {
                 <Route path="/packages/:id" element={<ProtectedRoute><PackageDetailPage /></ProtectedRoute>} />
                 <Route path="/inbox" element={<ProtectedRoute><InboxPage /></ProtectedRoute>} />
                 <Route path="/analyze" element={<ProtectedRoute><ContractAnalysisPage /></ProtectedRoute>} />
+                <Route path="/reviews" element={<StaffRoute><ReviewsPage /></StaffRoute>} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </div>

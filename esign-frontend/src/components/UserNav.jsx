@@ -1,7 +1,8 @@
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { useLocale } from '../context/LocaleContext'
-import { User, LogOut, Sun, Moon, Globe } from 'lucide-react'
+import { User, LogOut, Sun, Moon, Globe, ShieldCheck } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 export default function UserNav() {
   const { user, logout } = useAuth()
@@ -16,6 +17,19 @@ export default function UserNav() {
         <div className="h-1.5 w-1.5 rounded-full bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.4)] animate-pulse" />
         <span className="font-semibold text-text-primary">{user.username}</span>
       </div>
+      {(user.is_staff || user.is_superuser) && (
+        <>
+          <div className="h-3 w-px bg-border-color" />
+          <Link
+            to="/reviews"
+            className="text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+            title="Admin Review Queue"
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+            <span>Reviews</span>
+          </Link>
+        </>
+      )}
       <div className="h-3 w-px bg-border-color" />
       <button
         type="button"

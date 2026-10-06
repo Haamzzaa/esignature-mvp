@@ -1,14 +1,19 @@
+"""
+Biometric face matching service module for calculating facial similarity and matching participant identities.
+"""
 import logging
-import numpy as np
+
 import cv2
+import numpy as np
+
 from esign.config import esign_config
-from insightface.app import FaceAnalysis
 
 logger = logging.getLogger(__name__)
 
 from services.enterprise_biometric_service import get_face_analysis_app
 
-def extract_face_embedding(image_bytes):
+
+def extract_face_embedding(image_bytes: bytes):
     """
     Parses the image bytes and extracts the ArcFace embedding of the first detected face.
     Raises ValueError("no_face_detected") if no face is detected.
@@ -25,7 +30,7 @@ def extract_face_embedding(image_bytes):
 
     return faces[0].normed_embedding
 
-def calculate_face_similarity(reference_image_bytes, selfie_image_bytes):
+def calculate_face_similarity(reference_image_bytes: bytes, selfie_image_bytes: bytes) -> float:
     """
     Detects faces from both images and computes their cosine similarity.
     """
@@ -44,14 +49,11 @@ def perform_face_match(participant, selfie_image_bytes):
     Runs face verification workflow, updating state in BiometricVerification.
     Retrieves the reference face image from signer_identity_verification dynamically.
     """
-    from services.biometric_verification_service import (
-        mark_biometric_processing,
-        mark_biometric_matched,
-        mark_biometric_failed,
-        mark_biometric_manual_review
-    )
     from esign.providers.registry import esign_provider_registry
     from esign.timing import timed_operation
+    from services.biometric_verification_service import (
+        mark_biometric_failed, mark_biometric_manual_review,
+        mark_biometric_matched, mark_biometric_processing)
 
     logger.info("[FaceMatch] Starting face match: participant_id=%s", participant.id)
     mark_biometric_processing(participant)
@@ -78,7 +80,7 @@ def perform_face_match(participant, selfie_image_bytes):
         verification.reference_face_image.close()
 
     except Exception as e:
-        logger.error("[FaceMatch] Failed to retrieve reference face: participant_id=%s error=%s", participant.id, str(e))
+        logger.exception("[FaceMatch] Failed to retrieve reference face: participant_id=%s", participant.id)
         return mark_biometric_manual_review(
             participant,
             reason=f"Failed to retrieve reference face: {str(e)}"
@@ -125,13 +127,13 @@ def perform_face_match(participant, selfie_image_bytes):
                 participant,
                 reason="no_face_detected"
             )
-        logger.error("[FaceMatch] ValueError: participant_id=%s error=%s", participant.id, str(e))
+        logger.exception("[FaceMatch] ValueError: participant_id=%s", participant.id)
         return mark_biometric_manual_review(
             participant,
             reason=str(e)
         )
     except Exception as e:
-        logger.error("[FaceMatch] Unexpected error: participant_id=%s error=%s", participant.id, str(e))
+        logger.exception("[FaceMatch] Unexpected error: participant_id=%s", participant.id)
         return mark_biometric_manual_review(
             participant,
             reason=str(e)

@@ -1,10 +1,12 @@
-import os
-import logging
 import base64
-import requests
-import json
 import hashlib
-from esign.models import Document, ContractAnalysis
+import json
+import logging
+import os
+
+import requests
+
+from esign.models import ContractAnalysis, Document
 
 logger = logging.getLogger(__name__)
 

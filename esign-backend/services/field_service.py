@@ -1,5 +1,6 @@
 from rest_framework.exceptions import ValidationError
 
+
 def validate_field(field_data, participant_emails):
     """
     Validates field_data dictionary.
@@ -50,7 +51,7 @@ def create_field(envelope, participant, field_type, page, x_ratio, y_ratio, requ
     Creates and saves a DocumentField record.
     """
     from esign.models import DocumentField
-    
+
     # Extra safety check
     valid_types = ['signature', 'date', 'text', 'checkbox']
     if field_type not in valid_types:

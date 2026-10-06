@@ -1,9 +1,11 @@
-import logging
 import hashlib
+import logging
 import uuid
-from django.utils import timezone
+
 from django.core.files.base import ContentFile
-from esign.models import CompletionCertificate, AuditLog
+from django.utils import timezone
+
+from esign.models import AuditLog, CompletionCertificate
 from services.pdf_service import generate_certificate_pdf
 
 logger = logging.getLogger(__name__)

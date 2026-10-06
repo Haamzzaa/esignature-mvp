@@ -1,17 +1,19 @@
-import re
-import math
-import time
 import hashlib
 import logging
+import math
+import re
 import sys
+import time
+
 from django.conf import settings
 from django.core.cache import cache
-from esign.request_context import get_request_id
+
 from esign.config import esign_config
+from esign.request_context import get_request_id
 
 logger = logging.getLogger(__name__)
 
-def parse_rate_limit(limit_str):
+def parse_rate_limit(limit_str: str) -> tuple[int, int]:
     """
     Parses rate limit string (e.g. '5/m', '10/30s', '100/h') into (count, period_seconds).
     """
@@ -46,7 +48,7 @@ def get_client_ip(request):
         ip = request.META.get('REMOTE_ADDR')
     return ip or "unknown-ip"
 
-def check_rate_limit(key_prefix, identifier, limit_str, endpoint_name=""):
+def check_rate_limit(key_prefix: str, identifier: str | int, limit_str: str, endpoint_name: str = "") -> tuple[bool, int, int | None]:
     """
     Checks sliding window rate limit in cache.
     Fails open if the cache store is unavailable.
@@ -59,7 +61,7 @@ def check_rate_limit(key_prefix, identifier, limit_str, endpoint_name=""):
     try:
         max_requests, period = parse_rate_limit(limit_str)
     except ValueError as exc:
-        logger.error(f"[RateLimit] Configuration error parse_rate_limit failed for '{limit_str}': {exc}")
+        logger.exception("[RateLimit] Configuration error parse_rate_limit failed for '%s'", limit_str)
         return False, 1, None
 
     # Hashing key to ensure privacy (e.g. hash IPs, emails, tokens)
@@ -112,7 +114,7 @@ def check_rate_limit(key_prefix, identifier, limit_str, endpoint_name=""):
     )
     return False, remaining, None
 
-def check_otp_lockout(participant_id):
+def check_otp_lockout(participant_id: int | str) -> tuple[bool, int | None]:
     """
     Checks if a participant is locked out of OTP verification.
     Returns (is_locked, remaining_seconds).
@@ -144,7 +146,7 @@ def check_otp_lockout(participant_id):
             pass
     return False, None
 
-def register_otp_failed_attempt(participant_id):
+def register_otp_failed_attempt(participant_id: int | str) -> bool:
     """
     Registers a failed OTP attempt. Triggers lockout if threshold is reached.
     Fails open if cache backend is unavailable.
@@ -193,7 +195,7 @@ def register_otp_failed_attempt(participant_id):
     )
     return False
 
-def reset_otp_failed_attempts(participant_id):
+def reset_otp_failed_attempts(participant_id: int | str) -> None:
     """
     Resets OTP lockout counters and blocks upon successful OTP verification.
     """

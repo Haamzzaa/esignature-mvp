@@ -1,5 +1,6 @@
-import time
 import logging
+import time
+
 from esign.config import esign_config
 from esign.events.base import DomainEvent
 
@@ -23,9 +24,9 @@ def handle_envelope_completed(event: DomainEvent):
     Built-in handler to generate completion certificate and dispatch final completion email.
     """
     from esign.models import Envelope
+    from esign.timing import timed_operation
     from services.certificate_service import generate_certificate
     from services.email_dispatch import dispatch_completion_email
-    from esign.timing import timed_operation
 
     envelope_id = event.payload.get("envelope_id")
     base_api_url = event.payload.get("base_api_url")
@@ -99,9 +100,10 @@ def handle_webhooks(event: DomainEvent):
     if not subscriptions.exists():
         return
 
-    import requests
     import json
     from urllib.parse import urlparse
+
+    import requests
 
     payload = {
         "event": event.event_name,
@@ -135,10 +137,9 @@ def handle_webhooks(event: DomainEvent):
                 )
             except Exception as e:
                 elapsed_ms = int((time.perf_counter() - start) * 1000)
-                logger.error(
-                    "[Webhook] Delivery failed: event=%s host=%s error=%s duration=%dms",
+                logger.exception(
+                    "[Webhook] Delivery failed: event=%s host=%s duration=%dms",
                     event.event_name,
                     host,
-                    str(e),
                     elapsed_ms,
                 )

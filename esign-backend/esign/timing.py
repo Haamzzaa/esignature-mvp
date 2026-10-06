@@ -10,9 +10,10 @@ Usage:
     with timed_operation("ocr_extraction", logger, envelope_id=42):
         result = perform_ocr(image_bytes)
 """
-import time
 import logging
+import time
 from contextlib import contextmanager
+
 from esign.request_context import get_request_id
 
 

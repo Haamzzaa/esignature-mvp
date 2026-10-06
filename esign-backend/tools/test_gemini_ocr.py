@@ -1,6 +1,7 @@
-import os
-import django
 import json
+import os
+
+import django
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "esign_service.settings")
 django.setup()

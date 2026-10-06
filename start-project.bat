@@ -31,7 +31,7 @@ if not exist "%VENV_DIR%" (
 )
 
 echo [Backend] Spawning backend terminal window...
-start "E-Sign Backend (Django)" cmd /k "cd /d "%BACKEND_DIR%" && (if exist "venv\Scripts\activate.bat" (call venv\Scripts\activate.bat) else (echo Warning: Virtual environment not activated.)) && python manage.py runserver"
+start "E-Sign Backend (Django)" cmd /k "cd /d "%BACKEND_DIR%" && (if exist "venv\Scripts\activate.bat" (call venv\Scripts\activate.bat) else (echo Warning: Virtual environment not activated.)) && python manage.py runserver 0.0.0.0:8001"
 
 REM ----------------------------------------------------
 REM 2. Start React Frontend

@@ -1,5 +1,6 @@
 import os
 import sys
+
 import django
 from django.test import RequestFactory
 
@@ -10,13 +11,19 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'esign_service.settings')
 django.setup()
 
 from django.conf import settings
+
 settings.ALLOWED_HOSTS = ['*']
 
-from esign.models import Envelope, Participant, Document, SignerIdentityVerification, BiometricVerification, ContractAnalysis, VerificationSession, ParticipantToken, AuditLog
-from services.signing_service import process_action
+from datetime import timedelta
+
 from django.db import transaction
 from django.utils import timezone
-from datetime import timedelta
+
+from esign.models import (BiometricVerification, Document, Envelope,
+                          Participant, ParticipantToken,
+                          SignerIdentityVerification, VerificationSession)
+from services.signing_service import process_action
+
 
 def run_security_tests():
     print("=" * 50)

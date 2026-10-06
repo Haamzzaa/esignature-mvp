@@ -1,6 +1,8 @@
-from esign.providers.base import BaseNotificationProvider
 from django.core.mail import send_mail
+
 from esign.config import esign_config
+from esign.providers.base import BaseNotificationProvider
+
 
 class SMTPEmailNotificationProvider(BaseNotificationProvider):
     """

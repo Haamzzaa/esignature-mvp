@@ -1,5 +1,6 @@
 import os
 import sys
+
 import django
 
 # Setup django environment
@@ -8,9 +9,13 @@ sys.path.insert(0, BASE_DIR)
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'esign_service.settings')
 django.setup()
 
-from esign.models import Envelope, Participant, Document, SignerIdentityVerification, BiometricVerification, ContractAnalysis, VerificationSession
-from services.authorization_service import authorize_signer
 from django.db import transaction
+
+from esign.models import (BiometricVerification, ContractAnalysis, Document,
+                          Envelope, Participant, SignerIdentityVerification,
+                          VerificationSession)
+from services.authorization_service import authorize_signer
+
 
 def run_tests():
     print("=" * 50)

@@ -1,11 +1,9 @@
 from esign.events.dispatcher import esign_dispatcher
-from esign.events.handlers import (
-    handle_envelope_sent,
-    handle_envelope_completed,
-    handle_next_workflow_step,
-    handle_audit_logging,
-    handle_webhooks,
-)
+from esign.events.handlers import (handle_audit_logging,
+                                   handle_envelope_completed,
+                                   handle_envelope_sent,
+                                   handle_next_workflow_step, handle_webhooks)
+
 
 def register_built_in_handlers():
     """
@@ -39,4 +37,6 @@ def register_built_in_handlers():
     # 4. Manual review events
     esign_dispatcher.register("manual_review.requested", handle_webhooks)
     esign_dispatcher.register("manual_review.approved", handle_webhooks)
+    esign_dispatcher.register("manual_review.resubmission_requested", handle_webhooks)
     esign_dispatcher.register("manual_review.rejected", handle_webhooks)
+
