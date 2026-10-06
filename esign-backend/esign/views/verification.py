@@ -69,16 +69,27 @@ class SendEmailOTPView(APIView):
         is_limited, _, retry_after = check_rate_limit("otp_send_ip", ip, esign_config.rate_limit_otp_send, "send_otp")
         if is_limited:
             return make_rate_limited_response(retry_after)
+
+        token_ident = str(token_obj.token) if token_obj else str(participant.id)
+        is_limited, _, retry_after = check_rate_limit("otp_send_token", token_ident, esign_config.rate_limit_otp_send, "send_otp")
+        if is_limited:
+            return make_rate_limited_response(retry_after)
             
         is_limited, _, retry_after = check_rate_limit("otp_send_participant", participant.id, esign_config.rate_limit_otp_send, "send_otp")
         if is_limited:
             return make_rate_limited_response(retry_after)
 
-        from services.email_otp_service import send_email_otp
+        from services.email_otp_service import EmailDeliveryError, send_email_otp
         try:
             send_email_otp(participant)
+        except EmailDeliveryError as exc:
+            logger.error("[SendEmailOTPView] Email delivery failed for participant %s: %s", participant.id, exc)
+            return Response(
+                {"detail": "Unable to send the verification email. Please try again later."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         except Exception as exc:
-            logger.exception("Failed to send OTP")
+            logger.exception("[SendEmailOTPView] Unexpected error sending OTP for participant %s", participant.id)
             return Response(
                 {"detail": "Unable to send the verification email. Please try again later."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,

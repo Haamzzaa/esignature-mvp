@@ -44,90 +44,145 @@ def handle_token_error(error_msg):
 def check_participant_authorization(request, participant_id):
     """
     Validates authorization for a participant.
+    Derives participant from the secure signing token to prevent ID enumeration and unauthorized actions.
     Returns (participant, token_obj, error_response) tuple.
     If authorized, error_response is None.
     """
     import logging
     from django.utils import timezone
-    from esign.models import Participant
+    from esign.models import Participant, ParticipantToken, SigningToken
     from services.token_service import resolve_token
 
     logger = logging.getLogger(__name__)
 
-    try:
-        participant = Participant.objects.get(id=participant_id)
-    except Participant.DoesNotExist:
-        logger.warning(f"Authorization denied: Participant {participant_id} not found.")
-        return None, None, Response({"detail": "Participant not found."}, status=status.HTTP_404_NOT_FOUND)
-        
-    envelope = participant.envelope
+    # 1. Check owner access (GET only)
+    if request.method == 'GET' and request.user and request.user.is_authenticated:
+        try:
+            participant = Participant.objects.select_related('envelope').get(id=participant_id)
+            if participant.envelope.owner == request.user:
+                return participant, None, None
+        except (Participant.DoesNotExist, ValueError):
+            pass
 
-    # Check owner access (GET only)
-    is_owner = False
-    if request.user and request.user.is_authenticated:
-        if envelope.owner == request.user:
-            is_owner = True
+    # 2. Extract token from header, query param, or request body
+    token_str = (
+        request.headers.get('X-Participant-Token') or
+        request.META.get('HTTP_X_PARTICIPANT_TOKEN') or
+        request.query_params.get('token')
+    )
+    if not token_str and hasattr(request, 'data') and isinstance(request.data, dict):
+        token_str = request.data.get('token')
 
-    if request.method == 'GET' and is_owner:
-        # Owner can view verification detail/status without token
-        return participant, None, None
-
-    # Check token access
-    token_str = request.headers.get('X-Participant-Token') or request.query_params.get('token')
     if not token_str:
-        logger.warning(f"Authorization denied: Authentication credentials were not provided for participant {participant_id}.")
-        return None, None, Response({"detail": "Authentication credentials were not provided."}, status=status.HTTP_403_FORBIDDEN)
-        
+        logger.warning("Authorization denied: Authentication credentials were not provided.")
+        return None, None, Response(
+            {"detail": "Authentication credentials were not provided."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    # 3. Resolve and validate token
     allow_used = (request.method == 'GET')
     token_obj, error_msg = resolve_token(token_str, allow_used=allow_used)
     if error_msg:
-        logger.warning(f"Authorization denied: Token resolution failed for participant {participant_id}: {error_msg}")
-        return None, None, Response({"detail": error_msg}, status=status.HTTP_403_FORBIDDEN)
-        
-    # Verify token matches this participant
-    from esign.models import ParticipantToken, SigningToken
-    if isinstance(token_obj, ParticipantToken):
-        if token_obj.participant != participant:
-            logger.warning(f"Authorization denied: Token does not match participant {participant_id}.")
-            return None, None, Response({"detail": "Token does not match the requested participant."}, status=status.HTTP_403_FORBIDDEN)
-    elif isinstance(token_obj, SigningToken):
-        if token_obj.signer.email != participant.email or token_obj.signer.envelope != envelope:
-            logger.warning(f"Authorization denied: Token does not match participant {participant_id}.")
-            return None, None, Response({"detail": "Token does not match the requested participant."}, status=status.HTTP_403_FORBIDDEN)
-    else:
-        logger.warning(f"Authorization denied: Invalid token type for participant {participant_id}.")
-        return None, None, Response({"detail": "Invalid token type."}, status=status.HTTP_403_FORBIDDEN)
+        logger.warning("Authorization denied: Token resolution failed: %s", error_msg)
+        return None, None, Response(
+            {"detail": error_msg},
+            status=status.HTTP_403_FORBIDDEN
+        )
 
-    # For mutating requests (POST), perform strict checks on token/envelope/participant state
+    # 4. Derive participant directly from the validated token
+    if isinstance(token_obj, ParticipantToken):
+        authorized_participant = token_obj.participant
+    elif isinstance(token_obj, SigningToken):
+        signer = token_obj.signer
+        envelope = signer.envelope
+        authorized_participant = envelope.participants.filter(email=signer.email).first()
+        if not authorized_participant:
+            authorized_participant = envelope.participants.filter(role="signer").first() or envelope.participants.first()
+    else:
+        logger.warning("Authorization denied: Invalid token type.")
+        return None, None, Response(
+            {"detail": "Invalid token type."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    if not authorized_participant:
+        logger.warning("Authorization denied: No participant found for token.")
+        return None, None, Response(
+            {"detail": "Invalid token."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    # 5. Strict binding: verify URL participant_id matches authorized_participant.id
+    try:
+        req_id = int(participant_id)
+    except (ValueError, TypeError):
+        return None, None, Response(
+            {"detail": "Invalid participant identifier."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    if authorized_participant.id != req_id:
+        logger.warning(
+            "Authorization denied: Token participant %s does not match requested participant %s.",
+            authorized_participant.id, req_id
+        )
+        return None, None, Response(
+            {"detail": "Token does not match the requested participant."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    participant = authorized_participant
+    envelope = participant.envelope
+
+    # 6. For mutating requests (POST), perform strict checks on token/envelope/participant state
     if request.method != 'GET':
         # Check token expiration
         if token_obj.expires_at < timezone.now():
-            logger.warning(f"Authorization denied: Token expired for participant {participant_id}.")
-            return None, None, Response({"detail": "This signing link has expired."}, status=status.HTTP_403_FORBIDDEN)
+            logger.warning("Authorization denied: Token expired for participant %s.", participant.id)
+            return None, None, Response(
+                {"detail": "This signing link has expired."},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         # Check token used
         if token_obj.is_used:
-            logger.warning(f"Authorization denied: Token already used for participant {participant_id}.")
-            return None, None, Response({"detail": "Your step has already been completed."}, status=status.HTTP_403_FORBIDDEN)
+            logger.warning("Authorization denied: Token already used for participant %s.", participant.id)
+            return None, None, Response(
+                {"detail": "Your step has already been completed."},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         # Check envelope status
         if envelope.status == "completed":
-            logger.warning(f"Authorization denied: Envelope {envelope.id} already completed.")
-            return None, None, Response({"detail": "This package has already been completed."}, status=status.HTTP_400_BAD_REQUEST)
+            logger.warning("Authorization denied: Envelope %s already completed.", envelope.id)
+            return None, None, Response(
+                {"detail": "This package has already been completed."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         if envelope.status not in ("sent", "viewed"):
-            logger.warning(f"Authorization denied: Envelope {envelope.id} has invalid status '{envelope.status}'.")
-            return None, None, Response({"detail": f"Envelope status '{envelope.status}' does not allow this action."}, status=status.HTTP_400_BAD_REQUEST)
+            logger.warning("Authorization denied: Envelope %s has invalid status '%s'.", envelope.id, envelope.status)
+            return None, None, Response(
+                {"detail": f"Envelope status '{envelope.status}' does not allow this action."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         # Check participant completion
         if participant.has_completed or participant.status in ('completed', 'declined', 'returned'):
-            logger.warning(f"Authorization denied: Participant {participant_id} already completed/declined/returned.")
-            return None, None, Response({"detail": "Your step has already been completed."}, status=status.HTTP_400_BAD_REQUEST)
+            logger.warning("Authorization denied: Participant %s already completed/declined/returned.", participant.id)
+            return None, None, Response(
+                {"detail": "Your step has already been completed."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         # Check workflow stage (active/viewed check)
         if participant.status not in ('active', 'viewed'):
-            logger.warning(f"Authorization denied: Participant {participant_id} is in status '{participant.status}' (not active/viewed).")
-            return None, None, Response({"detail": "Workflow stage is not yet active for your role. Actions are restricted."}, status=status.HTTP_400_BAD_REQUEST)
-            
+            logger.warning("Authorization denied: Participant %s is in status '%s' (not active/viewed).", participant.id, participant.status)
+            return None, None, Response(
+                {"detail": "Workflow stage is not yet active for your role. Actions are restricted."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
     return participant, token_obj, None
 
 def validate_image_file(file_obj):

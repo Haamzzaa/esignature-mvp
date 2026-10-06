@@ -53,7 +53,8 @@ def check_rate_limit(key_prefix: str, identifier: str | int, limit_str: str, end
     Checks sliding window rate limit in cache.
     Fails open if the cache store is unavailable.
     """
-    if getattr(settings, "ESIGN_DISABLE_RATE_LIMITS", False) or 'test' in sys.argv or getattr(settings, 'TESTING', False):
+    is_test_env = 'test' in sys.argv or getattr(settings, 'TESTING', False)
+    if getattr(settings, "ESIGN_DISABLE_RATE_LIMITS", False) or (is_test_env and not getattr(settings, 'ENABLE_TEST_RATE_LIMITING', False)):
         return False, 999, None
         
     request_id = get_request_id() or "unknown-request-id"
@@ -120,7 +121,8 @@ def check_otp_lockout(participant_id: int | str) -> tuple[bool, int | None]:
     Returns (is_locked, remaining_seconds).
     Fails open if cache backend is unavailable.
     """
-    if getattr(settings, "ESIGN_DISABLE_RATE_LIMITS", False) or 'test' in sys.argv or getattr(settings, 'TESTING', False):
+    is_test_env = 'test' in sys.argv or getattr(settings, 'TESTING', False)
+    if getattr(settings, "ESIGN_DISABLE_RATE_LIMITS", False) or (is_test_env and not getattr(settings, 'ENABLE_TEST_RATE_LIMITING', False)):
         return False, None
         
     lock_key = f"otp_lockout:{participant_id}"
@@ -151,7 +153,8 @@ def register_otp_failed_attempt(participant_id: int | str) -> bool:
     Registers a failed OTP attempt. Triggers lockout if threshold is reached.
     Fails open if cache backend is unavailable.
     """
-    if getattr(settings, "ESIGN_DISABLE_RATE_LIMITS", False) or 'test' in sys.argv or getattr(settings, 'TESTING', False):
+    is_test_env = 'test' in sys.argv or getattr(settings, 'TESTING', False)
+    if getattr(settings, "ESIGN_DISABLE_RATE_LIMITS", False) or (is_test_env and not getattr(settings, 'ENABLE_TEST_RATE_LIMITING', False)):
         return False
         
     request_id = get_request_id() or "unknown-request-id"
