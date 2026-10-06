@@ -188,14 +188,18 @@ def perform_contract_analysis(filename, file_size, file_bytes, envelope=None):
     if file_size > esign_config.max_upload_size:
         raise ValidationError(f"File size exceeds the {esign_config.max_upload_size // (1024 * 1024)}MB limit.")
 
-    start_time = time.perf_counter()
 
     # Determine logic based on file type
     if filename.endswith('.pdf'):
         try:
             doc = fitz.open(stream=file_bytes, filetype="pdf")
+            if getattr(doc, 'is_encrypted', False) is True or (isinstance(getattr(doc, 'needs_pass', 0), int) and getattr(doc, 'needs_pass', 0) > 0):
+                doc.close()
+                raise ValidationError("Encrypted or password-protected PDF files are not supported.")
             page_count = len(doc)
             doc.close()
+        except ValidationError:
+            raise
         except Exception as e:
             raise ValidationError(f"Failed to parse PDF pages: {str(e)}")
 
@@ -209,12 +213,9 @@ def perform_contract_analysis(filename, file_size, file_bytes, envelope=None):
         ocr_confidence = ocr_result["ocr_confidence"]
         source = ocr_result["extraction_source"]
         page_count = ocr_result.get("page_count", page_count)
-        digital_extraction_ms = ocr_result.get("digital_extraction_ms", 0.0)
         ocr_ms = ocr_result.get("ocr_ms", 0.0)
-        dominant_strategy = ocr_result.get("dominant_strategy", source)
         page_strategies = ocr_result.get("page_strategies", {1: source})
         page_quality_scores = ocr_result.get("page_quality_scores", {1: 1.0})
-        dominant_arabic_region = ocr_result.get("dominant_arabic_region", "right")
         page_regions = ocr_result.get("page_regions", {1: "right"})
     else:
         # Image processing
@@ -222,15 +223,12 @@ def perform_contract_analysis(filename, file_size, file_bytes, envelope=None):
         t_ocr_start = time.perf_counter()
         raw_text, ocr_confidence = extract_text_from_image(file_bytes)
         ocr_ms = (time.perf_counter() - t_ocr_start) * 1000
-        digital_extraction_ms = 0.0
         english_text = raw_text
         arabic_text = raw_text
         source = "paddleocr"
         page_count = 1
-        dominant_strategy = "full_page_ocr"
         page_strategies = {1: "full_page_ocr"}
         page_quality_scores = {1: 0.0}
-        dominant_arabic_region = "right"
         page_regions = {1: "right"}
         ocr_result = {
             "ocr_provider": "paddle",
@@ -240,12 +238,7 @@ def perform_contract_analysis(filename, file_size, file_bytes, envelope=None):
         }
 
     # Extract Authority Information
-    t_auth_start = time.perf_counter()
     analysis = analyze_contract_authority(raw_text, english_text=english_text, arabic_text=arabic_text)
-    authority_extraction_ms = (time.perf_counter() - t_auth_start) * 1000
-
-    end_time = time.perf_counter()
-    total_processing_ms = (end_time - start_time) * 1000
 
     extraction_result = ocr_result
 

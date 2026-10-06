@@ -1,7 +1,10 @@
-import fitz  # PyMuPDF
-import re
+"""
+OCR service module for text extraction from PDF pages and images using PaddleOCR.
+"""
 import logging
-import os
+import re
+
+import fitz  # PyMuPDF
 
 logger = logging.getLogger(__name__)
 
@@ -9,6 +12,9 @@ logger = logging.getLogger(__name__)
 OCR_ENGINE = None
 
 def get_ocr_engine():
+    """
+    Initializes and retrieves the global PaddleOCR engine singleton instance.
+    """
     global OCR_ENGINE
     if OCR_ENGINE is None:
         logger.info("Initializing PaddleOCR engine")
@@ -53,8 +59,12 @@ def extract_text_with_pymupdf(pdf_bytes: bytes) -> str:
     """
     Extracts raw text from PDF bytes using PyMuPDF (fitz).
     """
+    from rest_framework.exceptions import ValidationError
     raw_text = ""
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    if getattr(doc, 'is_encrypted', False) is True or (isinstance(getattr(doc, 'needs_pass', 0), int) and getattr(doc, 'needs_pass', 0) > 0):
+        doc.close()
+        raise ValidationError("Encrypted or password-protected PDF files are not supported.")
     text_list = []
     for page in doc:
         text_list.append(page.get_text())
@@ -67,10 +77,15 @@ def extract_text_with_paddleocr(pdf_bytes: bytes) -> tuple[str, float]:
     Converts PDF pages into images and runs PaddleOCR on each page.
     """
     import io
-    from PIL import Image
+    from rest_framework.exceptions import ValidationError
+
     import numpy as np
+    from PIL import Image
     
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    if getattr(doc, 'is_encrypted', False) is True or (isinstance(getattr(doc, 'needs_pass', 0), int) and getattr(doc, 'needs_pass', 0) > 0):
+        doc.close()
+        raise ValidationError("Encrypted or password-protected PDF files are not supported.")
     all_text_list = []
     confidences = []
     ocr = get_ocr_engine()
@@ -104,8 +119,9 @@ def extract_text_from_image(image_bytes: bytes) -> tuple[str, float]:
     Processes image bytes directly with PaddleOCR.
     """
     import io
-    from PIL import Image
+
     import numpy as np
+    from PIL import Image
     
     ocr = get_ocr_engine()
     img = Image.open(io.BytesIO(image_bytes))
@@ -229,19 +245,27 @@ def extract_text_with_paddle(pdf_bytes: bytes, fallback_used: bool = False) -> d
     """
     Extracts raw text from PDF bytes using a layout-aware adaptive strategy layer.
     """
-    import time
     import io
-    from PIL import Image
+    import time
+
     import numpy as np
+    from PIL import Image
     
     start_time = time.perf_counter()
     
     # Get page count
     try:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        if getattr(doc, 'is_encrypted', False) is True or (isinstance(getattr(doc, 'needs_pass', 0), int) and getattr(doc, 'needs_pass', 0) > 0):
+            doc.close()
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError("Encrypted or password-protected PDF files are not supported.")
         page_count = len(doc)
     except Exception as e:
-        logger.error(f"Error checking page count: {str(e)}")
+        from rest_framework.exceptions import ValidationError
+        if isinstance(e, ValidationError):
+            raise
+        logger.exception("Error checking page count")
         page_count = 1
         doc = None
 

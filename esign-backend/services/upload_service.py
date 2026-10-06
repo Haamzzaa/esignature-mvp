@@ -1,7 +1,10 @@
-from rest_framework.exceptions import ValidationError
-from esign.config import esign_config
 import os
+
 import fitz
+from rest_framework.exceptions import ValidationError
+
+from esign.config import esign_config
+
 
 def validate_pdf_extension(file):
     """
@@ -77,8 +80,14 @@ def validate_pdf_upload(file):
         
         # Try opening with fitz
         doc = fitz.open(stream=content, filetype="pdf")
+        if getattr(doc, 'is_encrypted', False) is True or (isinstance(getattr(doc, 'needs_pass', 0), int) and getattr(doc, 'needs_pass', 0) > 0):
+            doc.close()
+            raise ValidationError("Encrypted or password-protected PDF files are not supported.")
         if doc.page_count < 1:
+            doc.close()
             raise ValidationError("Invalid PDF upload. Please upload a valid PDF document.")
         doc.close()
+    except ValidationError:
+        raise
     except Exception:
         raise ValidationError("Invalid PDF upload. Please upload a valid PDF document.")

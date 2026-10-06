@@ -1,7 +1,8 @@
 from django.test import TestCase, TransactionTestCase
-from rest_framework.exceptions import ValidationError
-from .models import Document, Envelope, Signer, Participant
+
+from .models import Document, Envelope, Participant, Signer
 from .serializers import EnvelopeCreateSerializer
+
 
 class ParticipantManagementTestCase(TestCase):
     def setUp(self):
@@ -129,13 +130,15 @@ class ParticipantManagementTestCase(TestCase):
 
     def test_historical_backfill_works(self):
         """Verify that the historical backfill data migration runs and maps correctly."""
-        from .models import Signer, SigningToken
         import importlib
+
+        from .models import Signer, SigningToken
         migration_module = importlib.import_module('esign.migrations.0019_backfill_participants')
         backfill_participants = migration_module.backfill_participants
-        from django.utils import timezone
         from datetime import timedelta
-        
+
+        from django.utils import timezone
+
         # 1. Create legacy database records bypass serializer mapping
         envelope_sent = Envelope.objects.create(document=self.document, status='sent', signature_page=1)
         signer_sent = Signer.objects.create(envelope=envelope_sent, name="Sent Signer", email="sent@email.com")
@@ -351,8 +354,9 @@ class SequentialWorkflowTestCase(TestCase):
     def setUp(self):
         import fitz
         from django.core.files.base import ContentFile
+
         from .models import Document
-        
+
         # Generate a valid 1-page mock PDF using PyMuPDF
         doc = fitz.open()
         doc.new_page()
@@ -366,7 +370,6 @@ class SequentialWorkflowTestCase(TestCase):
 
     def test_workflow_started_initializes_statuses(self):
         """Verify that workflow creation sets step 1 to active, step 2 to pending, and logs audit events."""
-        from .models import Participant
         data = {
             "document_id": self.document.id,
             "participants": [
@@ -396,9 +399,11 @@ class SequentialWorkflowTestCase(TestCase):
 
     def test_step_signing_advances_workflow(self):
         """Verify that completing a step activates the next step and transitions the legacy Signer/token."""
-        from .models import Signer, SigningToken
-        from django.utils import timezone
         from datetime import timedelta
+
+        from django.utils import timezone
+
+        from .models import Signer, SigningToken
         
         data = {
             "document_id": self.document.id,
@@ -429,6 +434,7 @@ class SequentialWorkflowTestCase(TestCase):
 
         # Now simulate signing for the first participant via SigningView logic
         from django.test import RequestFactory
+
         from .views import SigningView
         
         factory = RequestFactory()
@@ -476,9 +482,11 @@ class SequentialWorkflowTestCase(TestCase):
 
     def test_final_step_completes_workflow(self):
         """Verify that signing the final step completes the entire package/workflow."""
-        from .models import Signer, SigningToken
-        from django.utils import timezone
         from datetime import timedelta
+
+        from django.utils import timezone
+
+        from .models import Signer, SigningToken
         
         data = {
             "document_id": self.document.id,
@@ -503,6 +511,7 @@ class SequentialWorkflowTestCase(TestCase):
         )
 
         from django.test import RequestFactory
+
         from .views import SigningView
         
         factory = RequestFactory()
@@ -535,8 +544,9 @@ class ParticipantAccessAndActionsTestCase(TestCase):
     def setUp(self):
         import fitz
         from django.core.files.base import ContentFile
+
         from .models import Document
-        
+
         # Generate a valid mock PDF
         doc = fitz.open()
         doc.new_page()
@@ -550,7 +560,7 @@ class ParticipantAccessAndActionsTestCase(TestCase):
 
     def test_reviewer_approve_and_return(self):
         """Verify that Reviewer role can approve (advancing step) or return (declining envelope)."""
-        from .models import ParticipantToken, AuditLog
+        from .models import ParticipantToken
         data = {
             "document_id": self.document.id,
             "participants": [
@@ -573,6 +583,7 @@ class ParticipantAccessAndActionsTestCase(TestCase):
 
         # 1. Simulate Reviewer approving the document
         from django.test import RequestFactory
+
         from .views import SigningView
         
         factory = RequestFactory()
@@ -623,6 +634,7 @@ class ParticipantAccessAndActionsTestCase(TestCase):
         token_rec = ParticipantToken.objects.get(participant=p_approver)
 
         from django.test import RequestFactory
+
         from .views import SigningView
         
         factory = RequestFactory()
@@ -667,6 +679,7 @@ class ParticipantAccessAndActionsTestCase(TestCase):
 
         # 1. Simulate CC viewing the session via GET and then explicit POST view action
         from django.test import RequestFactory
+
         from .views import SigningView
         
         factory = RequestFactory()
@@ -740,7 +753,9 @@ class ParticipantAccessAndActionsTestCase(TestCase):
 
         # 1. Complete signing
         from django.test import RequestFactory
-        from .views import SigningView, SigningDownloadView, SigningSignedDocumentView
+
+        from .views import (SigningDownloadView, SigningSignedDocumentView,
+                            SigningView)
         
         factory = RequestFactory()
         request_post = factory.post(f"/api/signing/{token_rec.token}/", {
@@ -812,10 +827,11 @@ class ParticipantAccessAndActionsTestCase(TestCase):
         serializer = EnvelopeCreateSerializer(data=data)
         self.assertTrue(serializer.is_valid(), serializer.errors)
         
-        from django.test import RequestFactory
-        from .views import EnvelopeCreateView, PackageDetailView
         from django.contrib.auth.models import User
+        from django.test import RequestFactory
         from rest_framework.test import force_authenticate
+
+        from .views import EnvelopeCreateView, PackageDetailView
         user = User.objects.create_user(username='test_req_settings', password='password')
         
         factory = RequestFactory()
@@ -866,6 +882,7 @@ class ParticipantAccessAndActionsTestCase(TestCase):
 
         # 1. GET request should return status 'pending', step information, and NOT transition status to 'viewed'
         from django.test import RequestFactory
+
         from .views import SigningView
         
         factory = RequestFactory()
@@ -916,10 +933,12 @@ class TemplateAPITests(TestCase):
             }
         }
         
-        from django.test import RequestFactory
-        from .views import TemplateListCreateView, TemplateDetailView, DashboardView
         from django.contrib.auth.models import User
+        from django.test import RequestFactory
         from rest_framework.test import force_authenticate
+
+        from .views import (DashboardView, TemplateDetailView,
+                            TemplateListCreateView)
         user = User.objects.create_user(username='test_template_user', password='password')
         
         factory = RequestFactory()
@@ -985,6 +1004,7 @@ class PackageSignedDocumentTestCase(TestCase):
 
         import fitz
         from django.core.files.base import ContentFile
+
         from .models import Document, Envelope, SignedDocument
         
         doc = fitz.open()
@@ -1005,8 +1025,9 @@ class PackageSignedDocumentTestCase(TestCase):
     def test_signed_document_preview(self):
         """Verify that PackageSignedPreviewView serves the signed document inline."""
         from django.test import RequestFactory
-        from .views import PackageSignedPreviewView
         from rest_framework.test import force_authenticate
+
+        from .views import PackageSignedPreviewView
         
         factory = RequestFactory()
         request = factory.get(f"/api/packages/{self.envelope.id}/preview/")
@@ -1022,8 +1043,9 @@ class PackageSignedDocumentTestCase(TestCase):
     def test_signed_document_download(self):
         """Verify that PackageSignedDownloadView serves the signed document as an attachment."""
         from django.test import RequestFactory
-        from .views import PackageSignedDownloadView
         from rest_framework.test import force_authenticate
+
+        from .views import PackageSignedDownloadView
         
         factory = RequestFactory()
         request = factory.get(f"/api/packages/{self.envelope.id}/download/")
@@ -1099,6 +1121,7 @@ class DocumentUploadValidationTestCase(TestCase):
 
     def test_oversized_file_rejected(self):
         from django.core.files.uploadedfile import SimpleUploadedFile
+
         # 10 MB + 1 byte
         oversized_data = b"0" * (10 * 1024 * 1024 + 1)
         uploaded_file = SimpleUploadedFile(
@@ -1144,13 +1167,35 @@ class DocumentUploadValidationTestCase(TestCase):
         self.assertIn("file", response.data)
         self.assertEqual(response.data["file"][0], "Invalid PDF upload. Please upload a valid PDF document.")
 
+    def test_encrypted_pdf_rejected(self):
+        import fitz
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        doc = fitz.open()
+        doc.new_page()
+        encrypted_bytes = doc.tobytes(encryption=fitz.PDF_ENCRYPT_AES_256, owner_pw="owner123", user_pw="user123")
+        doc.close()
+
+        uploaded_file = SimpleUploadedFile(
+            "encrypted.pdf",
+            encrypted_bytes,
+            content_type="application/pdf"
+        )
+        response = self.client.post(
+            "/api/documents/upload/",
+            {"file": uploaded_file}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("file", response.data)
+        self.assertEqual(response.data["file"][0], "Encrypted or password-protected PDF files are not supported.")
+
 
 class DocumentFieldsTestCase(TestCase):
     def setUp(self):
         import fitz
         from django.core.files.base import ContentFile
+
         from .models import Document
-        
+
         # Generate a valid 1-page mock PDF using PyMuPDF
         doc = fitz.open()
         doc.new_page()
@@ -1289,6 +1334,7 @@ class DocumentFieldsTestCase(TestCase):
 
         # Post signing data
         from django.test import RequestFactory
+
         from .views import SigningView
         
         factory = RequestFactory()
@@ -1331,6 +1377,7 @@ class DocumentFieldsTestCase(TestCase):
         token_rec = ParticipantToken.objects.get(participant=p_signer)
 
         from django.test import RequestFactory
+
         from .views import SigningView
         
         factory = RequestFactory()
@@ -1367,8 +1414,9 @@ class DocumentFieldsTestCase(TestCase):
         envelope = serializer.save(owner=user)
 
         from django.test import RequestFactory
-        from .views import PackageDetailView
         from rest_framework.test import force_authenticate
+
+        from .views import PackageDetailView
 
         factory = RequestFactory()
         request = factory.get(f"/api/packages/{envelope.id}/")
@@ -1532,6 +1580,7 @@ class AuthenticationAndOwnershipTestCase(TestCase):
 
     def test_owner_isolation_templates(self):
         from .models import Template
+
         # Create a template owned by user_a
         template_a = Template.objects.create(
             name="NDA A",
@@ -1583,9 +1632,11 @@ class AuthenticationAndOwnershipTestCase(TestCase):
             step_number=1,
             status="active"
         )
-        from .models import ParticipantToken
-        from django.utils import timezone
         from datetime import timedelta
+
+        from django.utils import timezone
+
+        from .models import ParticipantToken
         pt = ParticipantToken.objects.create(
             participant=participant,
             expires_at=timezone.now() + timedelta(hours=24),
@@ -1600,11 +1651,12 @@ class AuthenticationAndOwnershipTestCase(TestCase):
 
 class EmailNotificationsTestCase(TransactionTestCase):
     def setUp(self):
-        from django.contrib.auth.models import User
-        from rest_framework.test import APIClient
-        from django.core.files.base import ContentFile
         import fitz
-        from .models import Document, Envelope
+        from django.contrib.auth.models import User
+        from django.core.files.base import ContentFile
+        from rest_framework.test import APIClient
+
+        from .models import Document
         from .serializers import EnvelopeCreateSerializer
         
         self.client = APIClient()
@@ -1755,11 +1807,12 @@ class EmailNotificationsTestCase(TransactionTestCase):
 
 class CertificateOfCompletionTestCase(TransactionTestCase):
     def setUp(self):
-        from django.contrib.auth.models import User
-        from rest_framework.test import APIClient
-        from django.core.files.base import ContentFile
         import fitz
-        from .models import Document, Envelope
+        from django.contrib.auth.models import User
+        from django.core.files.base import ContentFile
+        from rest_framework.test import APIClient
+
+        from .models import Document
         from .serializers import EnvelopeCreateSerializer
         
         self.client = APIClient()
@@ -1791,8 +1844,9 @@ class CertificateOfCompletionTestCase(TransactionTestCase):
 
     def test_certificate_generation_on_completion(self):
         from django.core import mail
-        from .models import ParticipantToken, CompletionCertificate
-        
+
+        from .models import CompletionCertificate, ParticipantToken
+
         # 1. Send the package
         self.client.post(f"/api/envelopes/{self.envelope.id}/send/")
         
@@ -2016,6 +2070,7 @@ class EmailValidationTestCase(TestCase):
     def test_register_invalid_email_returns_400(self):
         """RegisterView must return 400 when an invalid email is provided."""
         from django.test import RequestFactory
+
         from .views import RegisterView
 
         factory = RequestFactory()
@@ -2032,6 +2087,7 @@ class EmailValidationTestCase(TestCase):
     def test_register_missing_at_email_returns_400(self):
         """RegisterView must reject 'hamza@' as email."""
         from django.test import RequestFactory
+
         from .views import RegisterView
 
         factory = RequestFactory()
@@ -2048,6 +2104,7 @@ class EmailValidationTestCase(TestCase):
     def test_register_valid_email_accepted(self):
         """RegisterView must accept a valid email and create the user."""
         from django.test import RequestFactory
+
         from .views import RegisterView
 
         factory = RequestFactory()
@@ -2064,6 +2121,7 @@ class EmailValidationTestCase(TestCase):
     def test_register_no_email_accepted(self):
         """RegisterView must accept registration with no email (email is optional)."""
         from django.test import RequestFactory
+
         from .views import RegisterView
 
         factory = RequestFactory()
@@ -2102,8 +2160,9 @@ class EmailValidationTestCase(TestCase):
 # business state across all workflow scenarios and exception types.
 # ══════════════════════════════════════════════════════════════════════════════
 
-from unittest.mock import patch, MagicMock
 from smtplib import SMTPAuthenticationError, SMTPConnectError
+from unittest.mock import MagicMock, patch
+
 import fitz
 from rest_framework.test import APIClient as _APIClient
 
@@ -2118,6 +2177,7 @@ def _smtp_make_pdf():
 
 def _smtp_make_envelope(owner, participants_def):
     from django.core.files.base import ContentFile
+
     from .models import Document
     from .serializers import EnvelopeCreateSerializer
     document = Document.objects.create(file_hash=f"smtptest_{owner.username}")
@@ -2188,6 +2248,7 @@ class SmtpResilienceVerificationTest(TransactionTestCase):
 
     def _s2_body(self, error_label, smtp_exc):
         from django.contrib.auth.models import User
+
         from .models import ParticipantToken
         owner = User.objects.create_user(
             username=f"s2_{error_label}", password="pass",
@@ -2225,7 +2286,8 @@ class SmtpResilienceVerificationTest(TransactionTestCase):
 
     def _s3_body(self, error_label, smtp_exc):
         from django.contrib.auth.models import User
-        from .models import ParticipantToken, CompletionCertificate, AuditLog
+
+        from .models import AuditLog, CompletionCertificate, ParticipantToken
         owner = User.objects.create_user(
             username=f"s3_{error_label}", password="pass",
             email=f"s3_{error_label}@example.com"
@@ -2275,7 +2337,8 @@ class SmtpResilienceVerificationTest(TransactionTestCase):
     def test_s4_full_multistep_smtp_always_broken(self):
         """Approver -> Reviewer -> Signer with SMTP broken at every single step."""
         from django.contrib.auth.models import User
-        from .models import ParticipantToken, CompletionCertificate
+
+        from .models import CompletionCertificate, ParticipantToken
         smtp_exc = SMTPAuthenticationError(535, b"Authentication credentials invalid")
         owner = User.objects.create_user(
             username="s4_owner", password="pass",
@@ -2339,7 +2402,7 @@ class EnvelopeStateTransitionTests(TestCase):
         self.envelope = Envelope.objects.create(document=self.document, status="draft")
 
     def test_valid_transitions(self):
-        from esign.exceptions import InvalidStateTransition
+        pass
         
         # draft -> sent
         self.envelope.transition_to("sent")
@@ -2375,7 +2438,7 @@ class EnvelopeStateTransitionTests(TestCase):
 
     def test_invalid_transitions(self):
         from esign.exceptions import InvalidStateTransition
-        
+
         # completed -> sent
         self.envelope.status = "completed"
         self.envelope.save()
@@ -2408,6 +2471,7 @@ class EnvelopeStateTransitionTests(TestCase):
 class GetSideEffectsRemovalTests(TestCase):
     def setUp(self):
         from django.contrib.auth.models import User
+
         from .models import Document, Envelope, Participant, ParticipantToken
         
         self.owner = User.objects.create_user(username='owner_p2b', password='password', email='owner_p2b@example.com')
@@ -2421,8 +2485,9 @@ class GetSideEffectsRemovalTests(TestCase):
             step_number=1,
             status="active"
         )
-        from django.utils import timezone
         from datetime import timedelta
+
+        from django.utils import timezone
         self.pt = ParticipantToken.objects.create(
             participant=self.participant,
             expires_at=timezone.now() + timedelta(hours=24),
@@ -2480,8 +2545,9 @@ class GetSideEffectsRemovalTests(TestCase):
         # Test that legacy signer view POST transitions the envelope status from 'sent' to 'viewed'
         from .models import Signer, SigningToken
         signer = Signer.objects.create(envelope=self.envelope, name="Legacy Signer", email="legacy@example.com")
-        from django.utils import timezone
         from datetime import timedelta
+
+        from django.utils import timezone
         st = SigningToken.objects.create(
             signer=signer,
             expires_at=timezone.now() + timedelta(hours=24),
@@ -2529,10 +2595,11 @@ class ContractAnalysisTestCase(TestCase):
             del os.environ["OCR_PROVIDER"]
 
     def test_analysis_endpoint_no_file(self):
-        from django.test import RequestFactory
-        from .views import ContractAnalyzeView
         from django.contrib.auth.models import User
+        from django.test import RequestFactory
         from rest_framework.test import force_authenticate
+
+        from .views import ContractAnalyzeView
         
         user = User.objects.create_user(username="test_analyzer", password="password")
         factory = RequestFactory()
@@ -2544,14 +2611,15 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_analysis_endpoint_success(self):
-        from django.test import RequestFactory
-        from .views import ContractAnalyzeView
-        from django.contrib.auth.models import User
-        from rest_framework.test import force_authenticate
-        from django.core.files.uploadedfile import SimpleUploadedFile
         from unittest.mock import patch
-        
+
         import fitz
+        from django.contrib.auth.models import User
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import RequestFactory
+        from rest_framework.test import force_authenticate
+
+        from .views import ContractAnalyzeView
         doc = fitz.open()
         doc.new_page()
         pdf_bytes = doc.write()
@@ -2589,6 +2657,7 @@ class ContractAnalysisTestCase(TestCase):
 
     def test_is_text_sufficient(self):
         from services.ocr_service import is_text_sufficient
+
         # Too short
         self.assertFalse(is_text_sufficient("short text"))
         # Low alphabetic density
@@ -2600,11 +2669,12 @@ class ContractAnalysisTestCase(TestCase):
         self.assertTrue(is_text_sufficient(good_text))
 
     def test_invalid_file_extension(self):
-        from django.test import RequestFactory
-        from .views import ContractAnalyzeView
         from django.contrib.auth.models import User
-        from rest_framework.test import force_authenticate
         from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import RequestFactory
+        from rest_framework.test import force_authenticate
+
+        from .views import ContractAnalyzeView
         
         user = User.objects.create_user(username="test_analyzer_invalid_ext", password="password")
         uploaded_file = SimpleUploadedFile("contract.txt", b"some plain text content", content_type="text/plain")
@@ -2618,15 +2688,42 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("Unsupported file format", response.data["detail"])
 
-    def test_uppercase_file_extension(self):
-        from django.test import RequestFactory
-        from .views import ContractAnalyzeView
-        from django.contrib.auth.models import User
-        from rest_framework.test import force_authenticate
-        from django.core.files.uploadedfile import SimpleUploadedFile
-        from unittest.mock import patch
-        
+    def test_encrypted_pdf_analysis_rejected(self):
         import fitz
+        from django.contrib.auth.models import User
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import RequestFactory
+        from rest_framework.test import force_authenticate
+
+        from .views import ContractAnalyzeView
+
+        doc = fitz.open()
+        doc.new_page()
+        encrypted_bytes = doc.tobytes(encryption=fitz.PDF_ENCRYPT_AES_256, owner_pw="owner123", user_pw="user123")
+        doc.close()
+
+        user = User.objects.create_user(username="test_analyzer_encrypted", password="password")
+        uploaded_file = SimpleUploadedFile("encrypted_contract.pdf", encrypted_bytes, content_type="application/pdf")
+
+        factory = RequestFactory()
+        request = factory.post("/api/contracts/analyze/", {"file": uploaded_file})
+        force_authenticate(request, user=user)
+
+        view = ContractAnalyzeView.as_view()
+        response = view(request)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Encrypted or password-protected PDF files are not supported.", response.data["detail"])
+
+    def test_uppercase_file_extension(self):
+        from unittest.mock import patch
+
+        import fitz
+        from django.contrib.auth.models import User
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import RequestFactory
+        from rest_framework.test import force_authenticate
+
+        from .views import ContractAnalyzeView
         doc = fitz.open()
         doc.new_page()
         pdf_bytes = doc.write()
@@ -2652,11 +2749,12 @@ class ContractAnalysisTestCase(TestCase):
         self.assertNotIn("extraction_source", response.data)
 
     def test_file_size_limit(self):
-        from django.test import RequestFactory
-        from .views import ContractAnalyzeView
         from django.contrib.auth.models import User
-        from rest_framework.test import force_authenticate
         from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import RequestFactory
+        from rest_framework.test import force_authenticate
+
+        from .views import ContractAnalyzeView
         
         user = User.objects.create_user(username="test_analyzer_size", password="password")
         large_bytes = b"0" * (21 * 1024 * 1024)
@@ -2672,12 +2770,14 @@ class ContractAnalysisTestCase(TestCase):
         self.assertIn("File size exceeds", response.data["detail"])
 
     def test_page_count_limit(self):
-        from django.test import RequestFactory
-        from .views import ContractAnalyzeView
-        from django.contrib.auth.models import User
-        from rest_framework.test import force_authenticate
-        from django.core.files.uploadedfile import SimpleUploadedFile
         from unittest.mock import patch
+
+        from django.contrib.auth.models import User
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import RequestFactory
+        from rest_framework.test import force_authenticate
+
+        from .views import ContractAnalyzeView
         
         user = User.objects.create_user(username="test_analyzer_pages", password="password")
         uploaded_file = SimpleUploadedFile("contract.pdf", b"%PDF-1.4 dummy", content_type="application/pdf")
@@ -2696,14 +2796,15 @@ class ContractAnalysisTestCase(TestCase):
         self.assertIn("PDF exceeds the maximum limit of 20 pages", response.data["detail"])
 
     def test_digital_pdf_metadata(self):
-        from django.test import RequestFactory
-        from .views import ContractAnalyzeView
-        from django.contrib.auth.models import User
-        from rest_framework.test import force_authenticate
-        from django.core.files.uploadedfile import SimpleUploadedFile
         from unittest.mock import patch
-        
+
         import fitz
+        from django.contrib.auth.models import User
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import RequestFactory
+        from rest_framework.test import force_authenticate
+
+        from .views import ContractAnalyzeView
         doc = fitz.open()
         doc.new_page()
         pdf_bytes = doc.write()
@@ -2733,14 +2834,15 @@ class ContractAnalysisTestCase(TestCase):
         self.assertNotIn("processing_time_ms", response.data)
 
     def test_pdf_ocr_fallback(self):
-        from django.test import RequestFactory
-        from .views import ContractAnalyzeView
-        from django.contrib.auth.models import User
-        from rest_framework.test import force_authenticate
-        from django.core.files.uploadedfile import SimpleUploadedFile
         from unittest.mock import patch
-        
+
         import fitz
+        from django.contrib.auth.models import User
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import RequestFactory
+        from rest_framework.test import force_authenticate
+
+        from .views import ContractAnalyzeView
         doc = fitz.open()
         doc.new_page()
         pdf_bytes = doc.write()
@@ -2771,12 +2873,14 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(response.data["title_ar"], "المدير العام")
 
     def test_image_ocr_extraction(self):
-        from django.test import RequestFactory
-        from .views import ContractAnalyzeView
-        from django.contrib.auth.models import User
-        from rest_framework.test import force_authenticate
-        from django.core.files.uploadedfile import SimpleUploadedFile
         from unittest.mock import patch
+
+        from django.contrib.auth.models import User
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import RequestFactory
+        from rest_framework.test import force_authenticate
+
+        from .views import ContractAnalyzeView
         
         user = User.objects.create_user(username="test_analyzer_image", password="password")
         uploaded_file = SimpleUploadedFile("contract.png", b"dummy png bytes", content_type="image/png")
@@ -2801,7 +2905,8 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(response.data["title_en"], "General Manager")
 
     def test_arabic_representative_and_title_extraction(self):
-        from services.authority_extraction_service import analyze_contract_authority
+        from services.authority_extraction_service import \
+            analyze_contract_authority
         text = "ويمثلها السيد/ ياسر عثمان رمضان بصفته/ المدير العام"
         res = analyze_contract_authority(text)
         self.assertEqual(res["representative_name_ar"], "ياسر عثمان رمضان")
@@ -2809,7 +2914,8 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(res["authority_clause_ar"], "ويمثلها السيد/ ياسر عثمان رمضان بصفته/ المدير العام")
 
     def test_english_representative_and_title_extraction(self):
-        from services.authority_extraction_service import analyze_contract_authority
+        from services.authority_extraction_service import \
+            analyze_contract_authority
         text = "represented by Mr. Yasser Othman Ramadan, in his capacity as General Manager"
         res = analyze_contract_authority(text)
         self.assertEqual(res["representative_name_en"], "Yasser Othman Ramadan")
@@ -2817,7 +2923,8 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(res["authority_clause_en"], "represented by Mr. Yasser Othman Ramadan, in his capacity as General Manager")
 
     def test_mixed_bilingual_contracts(self):
-        from services.authority_extraction_service import analyze_contract_authority
+        from services.authority_extraction_service import \
+            analyze_contract_authority
         text = (
             "represented by Mr. Yasser Othman Ramadan, in his capacity as General Manager. "
             "ويمثلها السيد/ ياسر عثمان رمضان بصفته/ المدير العام."
@@ -2842,7 +2949,8 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(normalize_text(text_with_newlines), "represented by Mr. YasserOthman")
 
     def test_multiple_authority_keywords_and_scoring(self):
-        from services.authority_extraction_service import extract_english_authority
+        from services.authority_extraction_service import \
+            extract_english_authority
         text = (
             "represented by Mr. John Doe. Some dummy text. "
             "acting through Dr. Yasser Othman Ramadan, in his capacity as General Manager"
@@ -2853,7 +2961,8 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(res["score"], 4)
 
     def test_candidate_window_tie_breaking(self):
-        from services.authority_extraction_service import extract_english_authority
+        from services.authority_extraction_service import \
+            extract_english_authority
         text = (
             "represented by Mr. Yasser Ramadan, in his capacity as CEO. "
             "represented by Mr. Yasser Othman Ramadan, in his capacity as General Manager."
@@ -2863,7 +2972,8 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(res["title"], "General Manager")
 
     def test_english_prefixes_support(self):
-        from services.authority_extraction_service import extract_english_authority
+        from services.authority_extraction_service import \
+            extract_english_authority
         prefixes = ["Mr.", "Mrs.", "Ms.", "Dr.", "Prof.", "Eng."]
         for p in prefixes:
             text = f"represented by {p} Yasser Ramadan, in his capacity as CEO"
@@ -2874,7 +2984,8 @@ class ContractAnalysisTestCase(TestCase):
                 self.assertEqual(res["representative_name"], "Yasser Ramadan")
 
     def test_arabic_prefixes_support(self):
-        from services.authority_extraction_service import extract_arabic_authority
+        from services.authority_extraction_service import \
+            extract_arabic_authority
         prefixes = ["السيد", "السيدة", "الأستاذ", "الدكتور", "المهندس", "البروفيسور", "م."]
         for p in prefixes:
             text = f"ويمثلها {p}/ ياسر رمضان بصفته/ المدير العام"
@@ -2885,13 +2996,15 @@ class ContractAnalysisTestCase(TestCase):
                 self.assertEqual(res["representative_name"], "ياسر رمضان")
 
     def test_dictionary_title_detection(self):
-        from services.authority_extraction_service import extract_english_authority
+        from services.authority_extraction_service import \
+            extract_english_authority
         text = "represented by Mr. Yasser Ramadan, in his capacity as Managing Director"
         res = extract_english_authority(text)
         self.assertEqual(res["title"], "Managing Director")
 
     def test_confidence_computation_with_penalties(self):
-        from services.authority_extraction_service import extract_english_authority
+        from services.authority_extraction_service import \
+            extract_english_authority
         text1 = "represented by Mr. Yasser Ramadan, in his capacity as CEO"
         res1 = extract_english_authority(text1)
         self.assertEqual(res1["confidence_score"], 1.0)
@@ -2901,7 +3014,8 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(res2["confidence_score"], 0.4)
 
     def test_failure_cases(self):
-        from services.authority_extraction_service import validate_representative_name
+        from services.authority_extraction_service import \
+            validate_representative_name
         self.assertFalse(validate_representative_name("Yasser", "en"))
         self.assertFalse(validate_representative_name("ياسر", "ar"))
         self.assertFalse(validate_representative_name("Mr. Yasser Ramadan", "en"))
@@ -2910,7 +3024,8 @@ class ContractAnalysisTestCase(TestCase):
         self.assertFalse(validate_representative_name("ياسر المدير العام", "ar"))
 
     def test_exact_title_matching_en(self):
-        from services.authority_extraction_service import extract_english_authority
+        from services.authority_extraction_service import \
+            extract_english_authority
         text = "represented by Mr. Yasser Ramadan, in his capacity as CEO"
         res = extract_english_authority(text)
         self.assertEqual(res["title"], "CEO")
@@ -2918,7 +3033,8 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(res["title_match_method"], "exact")
 
     def test_exact_title_matching_ar(self):
-        from services.authority_extraction_service import extract_arabic_authority
+        from services.authority_extraction_service import \
+            extract_arabic_authority
         text = "ويمثلها السيد/ ياسر رمضان بصفته/ المدير العام"
         res = extract_arabic_authority(text)
         self.assertEqual(res["title"], "المدير العام")
@@ -2926,7 +3042,9 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(res["title_match_method"], "exact")
 
     def test_arabic_ocr_typo_resolving(self):
-        from services.authority_extraction_service import extract_arabic_authority
+        from services.authority_extraction_service import \
+            extract_arabic_authority
+
         # Typo: املدير العام instead of المدير العام
         text = "ويمثلها السيد/ ياسر رمضان بصفته/ املدير العام"
         res = extract_arabic_authority(text)
@@ -2935,7 +3053,9 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(res["title_match_method"], "fuzzy")
 
     def test_arabic_ocr_typo_resolving_alternative(self):
-        from services.authority_extraction_service import extract_arabic_authority
+        from services.authority_extraction_service import \
+            extract_arabic_authority
+
         # Typo: الرئيس التنفيدي instead of الرئيس التنفيذي
         text = "ويمثلها السيد/ ياسر رمضان بصفته/ الرئيس التنفيدي"
         res = extract_arabic_authority(text)
@@ -2944,7 +3064,9 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(res["title_match_method"], "fuzzy")
 
     def test_longer_suffix_arabic(self):
-        from services.authority_extraction_service import extract_arabic_authority
+        from services.authority_extraction_service import \
+            extract_arabic_authority
+
         # Suffix includes extra words: املدير العام لشركة الشرق الأوسط
         text = "ويمثلها السيد/ ياسر رمضان بصفته/ املدير العام لشركة الشرق الأوسط"
         res = extract_arabic_authority(text)
@@ -2953,7 +3075,8 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(res["title_match_method"], "fuzzy")
 
     def test_longer_suffix_arabic_alternative(self):
-        from services.authority_extraction_service import extract_arabic_authority
+        from services.authority_extraction_service import \
+            extract_arabic_authority
         text = "ويمثلها السيد/ ياسر رمضان بصفته/ المدير العام والمدير التنفيذي"
         res = extract_arabic_authority(text)
         self.assertEqual(res["title"], "المدير العام")
@@ -2961,7 +3084,9 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(res["title_match_method"], "exact")
 
     def test_english_fuzzy_title_matching(self):
-        from services.authority_extraction_service import extract_english_authority
+        from services.authority_extraction_service import \
+            extract_english_authority
+
         # Typo: Generral Manager instead of General Manager
         text = "represented by Mr. Yasser Ramadan, in his capacity as Generral Manager"
         res = extract_english_authority(text)
@@ -2970,7 +3095,9 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(res["title_match_method"], "fuzzy")
 
     def test_english_fuzzy_title_matching_ceo(self):
-        from services.authority_extraction_service import extract_english_authority
+        from services.authority_extraction_service import \
+            extract_english_authority
+
         # Typo: Chief Executve Officer instead of Chief Executive Officer
         text = "represented by Mr. Yasser Ramadan, in his capacity as Chief Executve Officer"
         res = extract_english_authority(text)
@@ -2994,6 +3121,7 @@ class ContractAnalysisTestCase(TestCase):
 
     def test_title_match_method_fuzzy_low(self):
         from services.authority_extraction_service import find_best_title_match
+
         # A score around 85-90
         # "General Mngr" vs "General Manager"
         matched_title, score, method, penalty = find_best_title_match("General Mngr", ["General Manager", "CEO"])
@@ -3003,6 +3131,7 @@ class ContractAnalysisTestCase(TestCase):
 
     def test_title_match_method_none(self):
         from services.authority_extraction_service import find_best_title_match
+
         # Score below 85
         matched_title, score, method, penalty = find_best_title_match("Random String", ["General Manager", "CEO"])
         self.assertEqual(method, "none")
@@ -3010,27 +3139,34 @@ class ContractAnalysisTestCase(TestCase):
         self.assertIsNone(matched_title)
 
     def test_confidence_penalty_fuzzy_93(self):
-        from services.authority_extraction_service import extract_english_authority
+        from services.authority_extraction_service import \
+            extract_english_authority
+
         # "Generral Manager" typo has score 93.33, penalty -0.02, base confidence would be 1.0, final 0.98
         text = "represented by Mr. Yasser Ramadan, in his capacity as Generral Manager"
         res = extract_english_authority(text)
         self.assertAlmostEqual(res["confidence_score"], 0.98, places=5)
 
     def test_confidence_penalty_fuzzy_87(self):
-        from services.authority_extraction_service import extract_english_authority
+        from services.authority_extraction_service import \
+            extract_english_authority
+
         # "General Mngr" typo has score around 87, penalty -0.05, base confidence 1.0, final 0.95
         text = "represented by Mr. Yasser Ramadan, in his capacity as General Mngr"
         res = extract_english_authority(text)
         self.assertAlmostEqual(res["confidence_score"], 0.95, places=5)
 
     def test_confidence_penalty_exact_98(self):
-        from services.authority_extraction_service import extract_english_authority
+        from services.authority_extraction_service import \
+            extract_english_authority
         text = "represented by Mr. Yasser Ramadan, in his capacity as CEO"
         res = extract_english_authority(text)
         self.assertEqual(res["confidence_score"], 1.0)
 
     def test_average_confidence_aggregation(self):
-        from services.authority_extraction_service import analyze_contract_authority
+        from services.authority_extraction_service import \
+            analyze_contract_authority
+
         # English confidence = 1.0, Arabic confidence = 1.0 => overall = 1.0
         text = (
             "represented by Mr. Yasser Othman Ramadan, in his capacity as General Manager. "
@@ -3040,7 +3176,9 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(res["confidence_score"], 1.0)
 
     def test_average_confidence_aggregation_with_mismatch(self):
-        from services.authority_extraction_service import analyze_contract_authority
+        from services.authority_extraction_service import \
+            analyze_contract_authority
+
         # English confidence = 1.0
         # Arabic confidence = 0.0 (incomplete, e.g. no representative found)
         # Overall = 0.5
@@ -3052,7 +3190,9 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(res["confidence_score"], 0.5)
 
     def test_rejection_below_85(self):
-        from services.authority_extraction_service import extract_english_authority
+        from services.authority_extraction_service import \
+            extract_english_authority
+
         # Suffix doesn't match any title: "represented by Mr. Yasser Ramadan, in his capacity as Engineer"
         # "Engineer" vs ENGLISH_TITLES (score below 85) => rejected => title = ""
         text = "represented by Mr. Yasser Ramadan, in his capacity as Engineer"
@@ -3061,7 +3201,8 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(res["title_match_method"], "none")
 
     def test_regression_bilingual_contract(self):
-        from services.authority_extraction_service import analyze_contract_authority
+        from services.authority_extraction_service import \
+            analyze_contract_authority
         text = (
             "This Agreement is represented by Mr. Yasser Othman Ramadan, in his capacity as General Manager. "
             "ويمثلها السيد/ ياسر عثمان رمضان بصفته/ المدير العام."
@@ -3081,7 +3222,9 @@ class ContractAnalysisTestCase(TestCase):
         )
 
     def test_empty_suffix_handling(self):
-        from services.authority_extraction_service import extract_english_authority
+        from services.authority_extraction_service import \
+            extract_english_authority
+
         # Suffix is empty after capacity phrase
         text = "represented by Mr. Yasser Ramadan, in his capacity as "
         res = extract_english_authority(text)
@@ -3089,7 +3232,9 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(res["title_match_method"], "none")
 
     def test_no_capacity_phrase_matching(self):
-        from services.authority_extraction_service import extract_english_authority
+        from services.authority_extraction_service import \
+            extract_english_authority
+
         # Test fallback to search on whole window when no capacity phrase is matched
         text = "represented by Mr. Yasser Ramadan. CEO of the Company."
         res = extract_english_authority(text)
@@ -3097,7 +3242,8 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(res["title_match_method"], "exact")
 
     def test_normalization_zero_width_chars(self):
-        from services.authority_extraction_service import analyze_contract_authority
+        from services.authority_extraction_service import \
+            analyze_contract_authority
         text = (
             "represented by Mr. Y\u200basser Othman Ramadan, in his capacity as Gen\u200ceral Manager"
         )
@@ -3107,6 +3253,7 @@ class ContractAnalysisTestCase(TestCase):
 
     def test_garbage_ratio_penalty(self):
         from services.ocr_service import evaluate_arabic_quality
+
         # Clean text
         res_clean = evaluate_arabic_quality("المدير العام")
         self.assertEqual(res_clean["garbage_ratio"], 0.0)
@@ -3131,10 +3278,12 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(res_en["arabic_chars"], 0)
 
     def test_page_level_strategy_selection(self):
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
+
         import fitz
+
         from services.ocr_service import extract_text_from_pdf
-        
+
         # Mock fitz.open and page.get_text
         doc = fitz.open()
         p1 = doc.new_page() # empty page
@@ -3166,8 +3315,10 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(res["page_strategies"][2], "digital_pdf")
 
     def test_dominant_strategy(self):
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
+
         import fitz
+
         from services.ocr_service import extract_text_from_pdf
         
         doc = fitz.open()
@@ -3194,8 +3345,10 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(res["dominant_strategy"], "english_only")
 
     def test_page_regions(self):
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
+
         import fitz
+
         from services.ocr_service import extract_text_from_pdf
         
         doc = fitz.open()
@@ -3227,8 +3380,10 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(res["page_regions"][1], "left")
 
     def test_dominant_region(self):
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
+
         import fitz
+
         from services.ocr_service import extract_text_from_pdf
         
         doc = fitz.open()
@@ -3274,8 +3429,10 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(res["dominant_arabic_region"], "right")
 
     def test_mixed_strategy_document(self):
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
+
         import fitz
+
         from services.ocr_service import extract_text_from_pdf
         
         doc = fitz.open()
@@ -3317,14 +3474,15 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(res["page_strategies"][2], "full_page_ocr")
 
     def test_processing_metadata(self):
-        from django.test import RequestFactory
-        from .views import ContractAnalyzeView
-        from django.contrib.auth.models import User
-        from rest_framework.test import force_authenticate
-        from django.core.files.uploadedfile import SimpleUploadedFile
         from unittest.mock import patch
-        
+
         import fitz
+        from django.contrib.auth.models import User
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import RequestFactory
+        from rest_framework.test import force_authenticate
+
+        from .views import ContractAnalyzeView
         doc = fitz.open()
         doc.new_page()
         pdf_bytes = doc.write()
@@ -3378,8 +3536,10 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(count_suspicious_unicode(PUA_text), 6)
 
     def test_healthy_english_corrupted_arabic(self):
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
+
         import fitz
+
         from services.ocr_service import extract_text_from_pdf
         
         doc = fitz.open()
@@ -3423,8 +3583,10 @@ class ContractAnalysisTestCase(TestCase):
         self.assertIn("المدير العام", res["arabic_text"])
 
     def test_corrupted_text_layer_strategy(self):
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
+
         import fitz
+
         from services.ocr_service import extract_text_from_pdf
         
         doc = fitz.open()
@@ -3463,8 +3625,10 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(res["page_strategies"][1], "corrupted_text_layer")
 
     def test_page_metadata(self):
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
+
         import fitz
+
         from services.ocr_service import extract_text_from_pdf
         
         doc = fitz.open()
@@ -3496,12 +3660,14 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(meta["ocr_confidence"], 1.0)
 
     def test_language_specific_quality_scores(self):
-        from services.ocr_service import evaluate_english_quality, evaluate_arabic_quality
-        
+        from services.ocr_service import (evaluate_arabic_quality,
+                                          evaluate_english_quality)
+
         # Corrupted Arabic layer text
         text = "This is clean English text. ᒠᓞᓢᓚ\u1505\u14A2" # English segment has no corruption, Arabic segment has corruption
         
-        from services.ocr_service import extract_latin_segments, extract_arabic_segments
+        from services.ocr_service import (extract_arabic_segments,
+                                          extract_latin_segments)
         lat_seg = extract_latin_segments(text)
         ara_seg = extract_arabic_segments(text)
         
@@ -3516,8 +3682,10 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(ara_q["suspicious_unicode_count"], 6)
 
     def test_corrupted_arabic_layer(self):
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
+
         import fitz
+
         from services.ocr_service import extract_text_from_pdf
         
         doc = fitz.open()
@@ -3557,8 +3725,10 @@ class ContractAnalysisTestCase(TestCase):
         self.assertEqual(res["dominant_strategy"], "corrupted_text_layer")
 
     def test_full_page_ocr(self):
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
+
         import fitz
+
         from services.ocr_service import extract_text_from_pdf
         
         doc = fitz.open()
@@ -3596,8 +3766,9 @@ class ContractAnalysisTestCase(TestCase):
 
 class AuthorityExtractionTestCase(TestCase):
     def test_english_authority_phrases(self):
-        from services.authority_extraction_service import analyze_contract_authority
-        
+        from services.authority_extraction_service import \
+            analyze_contract_authority
+
         # 1. represented by
         text1 = "This contract is represented by Dr. Abdulrahman Al-Dosari in his capacity as Procurement Manager."
         res1 = analyze_contract_authority(text1)
@@ -3625,8 +3796,9 @@ class AuthorityExtractionTestCase(TestCase):
         self.assertEqual(res4["title_en"], "Executive Director")
 
     def test_arabic_authority_phrases(self):
-        from services.authority_extraction_service import analyze_contract_authority
-        
+        from services.authority_extraction_service import \
+            analyze_contract_authority
+
         # 1. يمثلها
         text1 = "الطرف الأول يمثلها الدكتور/ عبدالرحمن الدوسري بصفته مدير المشتريات."
         res1 = analyze_contract_authority(text1)
@@ -3660,13 +3832,15 @@ class AuthorityExtractionTestCase(TestCase):
         self.assertEqual(res5["title_ar"], "مدير المشروع")
 
     def test_api_authority_detected(self):
-        from django.test import RequestFactory
-        from .views import ContractAnalyzeView
-        from django.contrib.auth.models import User
-        from rest_framework.test import force_authenticate
-        from django.core.files.uploadedfile import SimpleUploadedFile
         from unittest.mock import patch
+
         import fitz
+        from django.contrib.auth.models import User
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.test import RequestFactory
+        from rest_framework.test import force_authenticate
+
+        from .views import ContractAnalyzeView
         
         doc = fitz.open()
         doc.new_page()
@@ -3725,7 +3899,9 @@ class PartialExtractionRecoveryTestCase(TestCase):
         self.assertEqual(canonicalize_name("عبدالرحمن"), "عبدالرحمن")
 
     def test_prefix_restoration(self):
-        from services.authority_extraction_service import extract_english_authority, extract_arabic_authority
+        from services.authority_extraction_service import (
+            extract_arabic_authority, extract_english_authority)
+
         # English: Dr., Eng., Prof.
         res_en1 = extract_english_authority("represented by Dr. Yasser Ramadan, in his capacity as CEO")
         self.assertEqual(res_en1["representative_name"], "Dr. Yasser Ramadan")
@@ -3754,7 +3930,9 @@ class PartialExtractionRecoveryTestCase(TestCase):
         self.assertEqual(canonicalize_name("Yasser Ramadan, "), "Yasser Ramadan")
 
     def test_larger_candidate_window(self):
-        from services.authority_extraction_service import extract_english_authority, extract_arabic_authority
+        from services.authority_extraction_service import (
+            extract_arabic_authority, extract_english_authority)
+
         # When capacity is absent, fallback window should extract up to 80 chars / 6 words
         text_en = "represented by Dr. Yasser Othman Salem Al-Harbi who is signing this contract standard draft"
         res_en = extract_english_authority(text_en)
@@ -3768,8 +3946,9 @@ class PartialExtractionRecoveryTestCase(TestCase):
 
 class OCRRecoveryTestCase(TestCase):
     def test_canonicalization_consistency(self):
-        from services.authority_extraction_service import canonicalize_name
         from rapidfuzz import fuzz
+
+        from services.authority_extraction_service import canonicalize_name
         name1 = canonicalize_name("Al Dosari")
         name2 = canonicalize_name("Al-Dosari")
         name3 = canonicalize_name("AL DOSARI")
@@ -3779,7 +3958,9 @@ class OCRRecoveryTestCase(TestCase):
         self.assertTrue(fuzz.token_set_ratio(name1.lower(), name3.lower()) == 100)
 
     def test_ocr_character_noise(self):
-        from services.authority_extraction_service import extract_arabic_authority
+        from services.authority_extraction_service import \
+            extract_arabic_authority
+
         # Expected is الدكتور/ عبدالرحمن الدوسري, but raw text has minor typo "عبد الرحمن الدوشي"
         # Since it is a self-contained fuzzy comparison, it should still evaluate candidate correctly
         text = "ويمثلها الدكتور/ عبدالرحمن الدوشي بصفته/ مدير المشتريات"
@@ -3788,7 +3969,8 @@ class OCRRecoveryTestCase(TestCase):
         self.assertTrue(res["name_similarity_score"] >= 0.8)
 
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 
 class OCRProviderVisibilityTestCase(TestCase):
     @patch.dict('os.environ', {'OCR_PROVIDER': 'paddle'})
@@ -3810,11 +3992,12 @@ class OCRProviderVisibilityTestCase(TestCase):
     @patch.dict('os.environ', {'OCR_PROVIDER': 'paddle'})
     def test_api_response_observability_fields(self):
         import fitz
-        from django.test import RequestFactory
         from django.contrib.auth.models import User
         from django.core.files.uploadedfile import SimpleUploadedFile
-        from esign.views import ContractAnalyzeView
+        from django.test import RequestFactory
         from rest_framework.test import force_authenticate
+
+        from esign.views import ContractAnalyzeView
         
         user = User.objects.create_user(username='test_visibility_user', password='password')
         factory = RequestFactory()
@@ -3856,7 +4039,7 @@ class OCRProviderVisibilityTestCase(TestCase):
 class UnicodeNormalizationTestCase(TestCase):
     def test_unicode_normalization(self):
         from services.authority_extraction_service import normalize_text
-        
+
         # 1. Yeh compatibility: \u06cc (Persian/Urdu Yeh) -> \u064a (Arabic Yeh)
         self.assertEqual(normalize_text("المخول بالتوقيع"), normalize_text("المخول بالتوقیع"))
         
@@ -3882,6 +4065,7 @@ class UnicodeNormalizationTestCase(TestCase):
 class RepresentativeCandidateSelectionTestCase(TestCase):
     def setUp(self):
         from django.contrib.auth.models import User
+
         from esign.models import Document, Envelope
         
         self.user = User.objects.create_user(username='candidate_test_user', password='password')
@@ -3890,8 +4074,8 @@ class RepresentativeCandidateSelectionTestCase(TestCase):
 
     def test_case_1_single_representative_auto_added(self):
         """Case 1: When a single candidate is found, it must be auto-converted to a participant."""
+        from esign.models import RepresentativeCandidate
         from services.recipient_discovery_service import generate_candidates
-        from esign.models import RepresentativeCandidate, Participant
 
         analysis_result = {
             "representative_name_en": "Yasser Ramadan",
@@ -3925,12 +4109,12 @@ class RepresentativeCandidateSelectionTestCase(TestCase):
 
     def test_case_2_multiple_representatives_not_auto_added(self):
         """Case 2: When multiple candidates are found, they are NOT auto-converted but can be confirmed manually."""
-        from services.recipient_discovery_service import generate_candidates
-        from esign.models import RepresentativeCandidate, Participant
         from django.test import RequestFactory
-        from esign.views import ConfirmCandidatesView
         from rest_framework.test import force_authenticate
-        import json
+
+        from esign.models import RepresentativeCandidate
+        from esign.views import ConfirmCandidatesView
+        from services.recipient_discovery_service import generate_candidates
 
         analysis_result = {
             "representative_name_en": "Yasser Ramadan",
@@ -3985,11 +4169,12 @@ class RepresentativeCandidateSelectionTestCase(TestCase):
 
     def test_case_3_manual_ignore_candidates(self):
         """Case 3: Unselected candidates can be explicitly ignored."""
-        from services.recipient_discovery_service import generate_candidates
-        from esign.models import RepresentativeCandidate
         from django.test import RequestFactory
-        from esign.views import IgnoreCandidatesView
         from rest_framework.test import force_authenticate
+
+        from esign.models import RepresentativeCandidate
+        from esign.views import IgnoreCandidatesView
+        from services.recipient_discovery_service import generate_candidates
 
         analysis_result = {
             "representative_name_en": "Yasser Ramadan",
@@ -4030,7 +4215,8 @@ class RepresentativeCandidateSelectionTestCase(TestCase):
 
 class PrefixDeduplicationTestCase(TestCase):
     def test_collapse_duplicate_prefixes_en(self):
-        from services.authority_extraction_service import collapse_duplicate_prefixes
+        from services.authority_extraction_service import \
+            collapse_duplicate_prefixes
         self.assertEqual(collapse_duplicate_prefixes("Dr. Dr. Abdulrahman Al-Dosari", "en"), "Dr. Abdulrahman Al-Dosari")
         self.assertEqual(collapse_duplicate_prefixes("Dr. Abdulrahman Al-Dosari", "en"), "Dr. Abdulrahman Al-Dosari")
         self.assertEqual(collapse_duplicate_prefixes("dr dr Abdulrahman Al-Dosari", "en"), "Dr. Abdulrahman Al-Dosari")
@@ -4038,13 +4224,15 @@ class PrefixDeduplicationTestCase(TestCase):
         self.assertEqual(collapse_duplicate_prefixes("Eng. Eng. Smith", "en"), "Eng. Smith")
 
     def test_collapse_duplicate_prefixes_ar(self):
-        from services.authority_extraction_service import collapse_duplicate_prefixes
+        from services.authority_extraction_service import \
+            collapse_duplicate_prefixes
         self.assertEqual(collapse_duplicate_prefixes("الدكتور/ الدكتور/ عبدالرحمن الدوسري", "ar"), "الدكتور/ عبدالرحمن الدوسري")
         self.assertEqual(collapse_duplicate_prefixes("الدكتور/ عبدالرحمن الدوسري", "ar"), "الدكتور/ عبدالرحمن الدوسري")
         self.assertEqual(collapse_duplicate_prefixes("المهندس المهندس محمد", "ar"), "المهندس/ محمد")
 
     def test_restore_prefix_en(self):
         from services.authority_extraction_service import restore_prefix
+
         # Already has prefix
         self.assertEqual(restore_prefix("Dr.", "Dr. Abdulrahman Al-Dosari", "en"), "Dr. Abdulrahman Al-Dosari")
         self.assertEqual(restore_prefix("Dr", "Dr. Abdulrahman Al-Dosari", "en"), "Dr. Abdulrahman Al-Dosari")
@@ -4059,6 +4247,7 @@ class PrefixDeduplicationTestCase(TestCase):
 
     def test_restore_prefix_ar(self):
         from services.authority_extraction_service import restore_prefix
+
         # Already has prefix
         self.assertEqual(restore_prefix("الدكتور/", "الدكتور/ عبدالرحمن الدوسري", "ar"), "الدكتور/ عبدالرحمن الدوسري")
         self.assertEqual(restore_prefix("الدكتور", "الدكتور/ عبدالرحمن الدوسري", "ar"), "الدكتور/ عبدالرحمن الدوسري")
@@ -4071,14 +4260,18 @@ class PrefixDeduplicationTestCase(TestCase):
         self.assertEqual(restore_prefix("الدكتور", "الدكتور/ الدكتور/ عبدالرحمن الدوسري", "ar"), "الدكتور/ عبدالرحمن الدوسري")
 
     def test_end_to_end_extraction_deduplicates_en(self):
-        from services.authority_extraction_service import extract_english_authority
+        from services.authority_extraction_service import \
+            extract_english_authority
+
         # Test contract snippet where the candidate has "Dr. Dr."
         snippet = "Signed by the authorized signatory Dr. Dr. Abdulrahman Al-Dosari in his capacity as General Manager"
         res = extract_english_authority(snippet)
         self.assertEqual(res["representative_name"], "Dr. Abdulrahman Al-Dosari")
 
     def test_end_to_end_extraction_deduplicates_ar(self):
-        from services.authority_extraction_service import extract_arabic_authority
+        from services.authority_extraction_service import \
+            extract_arabic_authority
+
         # Test contract snippet where the candidate has "الدكتور/ الدكتور/"
         snippet = "تم التوقيع بواسطة المفوض بالتوقيع الدكتور/ الدكتور/ عبدالرحمن الدوسري بصفته المدير العام"
         res = extract_arabic_authority(snippet)
@@ -4087,7 +4280,8 @@ class PrefixDeduplicationTestCase(TestCase):
 
 class DuplicatePrefixCollapseTestCase(TestCase):
     def test_collapse_duplicate_prefixes_en(self):
-        from services.authority_extraction_service import collapse_duplicate_prefixes
+        from services.authority_extraction_service import \
+            collapse_duplicate_prefixes
         self.assertEqual(
             collapse_duplicate_prefixes("Dr. Dr. Abdulrahman Al-Dosari"),
             "Dr. Abdulrahman Al-Dosari"
@@ -4103,7 +4297,8 @@ class DuplicatePrefixCollapseTestCase(TestCase):
         )
 
     def test_collapse_duplicate_prefixes_ar(self):
-        from services.authority_extraction_service import collapse_duplicate_prefixes
+        from services.authority_extraction_service import \
+            collapse_duplicate_prefixes
         self.assertEqual(
             collapse_duplicate_prefixes("الدكتور/ الدكتور/ عبدالرحمن الدوسري"),
             "الدكتور/ عبدالرحمن الدوسري"
@@ -4119,7 +4314,8 @@ class DuplicatePrefixCollapseTestCase(TestCase):
         )
 
     def test_collapse_in_clauses(self):
-        from services.authority_extraction_service import collapse_duplicate_prefixes
+        from services.authority_extraction_service import \
+            collapse_duplicate_prefixes
         self.assertEqual(
             collapse_duplicate_prefixes("authorized signatory Dr. Dr. Abdulrahman Al-Dosari"),
             "authorized signatory Dr. Abdulrahman Al-Dosari"
@@ -4130,7 +4326,9 @@ class DuplicatePrefixCollapseTestCase(TestCase):
         )
 
     def test_preserves_legitimate_later_occurrences(self):
-        from services.authority_extraction_service import collapse_duplicate_prefixes
+        from services.authority_extraction_service import \
+            collapse_duplicate_prefixes
+
         # Legitimate later occurrences of prefixes should NOT be collapsed
         self.assertEqual(
             collapse_duplicate_prefixes("Dr. Abdulrahman met Dr. Ahmed"),
@@ -4139,7 +4337,6 @@ class DuplicatePrefixCollapseTestCase(TestCase):
 
 
 from unittest.mock import patch
-import unittest
 
 
 class NationalIdentityOCRTestCase(TestCase):
@@ -4153,8 +4350,9 @@ class NationalIdentityOCRTestCase(TestCase):
 
     def generate_mock_image(self, name="test.png", size=(100, 100)):
         from io import BytesIO
-        from PIL import Image
+
         from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
 
         file_obj = BytesIO()
         image = Image.new("RGB", size, color="blue")
@@ -4167,10 +4365,13 @@ class NationalIdentityOCRTestCase(TestCase):
 
     def test_original_bytes_preserved(self):
         """Verifies that original bytes are not mutated by preprocess_identity_image, preprocessing is non-destructive, and returned bytes are valid image data."""
-        from services.national_identity_service import preprocess_identity_image
-        from PIL import Image
         from io import BytesIO
-        
+
+        from PIL import Image
+
+        from services.national_identity_service import \
+            preprocess_identity_image
+
         # 1. Generate standard mock image bytes
         file_obj = BytesIO()
         image = Image.new("RGB", (200, 150), color="red")
@@ -4231,9 +4432,11 @@ class NationalIdentityOCRTestCase(TestCase):
         'National ID', 'Saudi', or 'Saudi National ID' as the selected name.
         The Arabic name on the following line must win.
         """
-        from services.identity_candidate_service import generate_name_candidates, BLOCKED_NAME_CANDIDATES
-        from services.identity_selection_service import select_best_name_candidate
+        from services.identity_candidate_service import (
+            BLOCKED_NAME_CANDIDATES, generate_name_candidates)
         from services.identity_scoring_service import score_name_candidates
+        from services.identity_selection_service import \
+            select_best_name_candidate
 
         raw_text = (
             "Saudi National ID\n"
@@ -4266,7 +4469,8 @@ class NationalIdentityOCRTestCase(TestCase):
 class IdentityParserRefinementTestCase(TestCase):
     def test_aadhaar_parsing(self):
         """Verify Aadhaar detection, filtering, DOB parse and formatted number extraction."""
-        from services.national_identity_service import detect_document_type, parse_identity_document
+        from services.national_identity_service import (
+            detect_document_type, parse_identity_document)
         raw_text = (
             "Government of India\n"
             "भारत सरकार\n"
@@ -4288,7 +4492,8 @@ class IdentityParserRefinementTestCase(TestCase):
 
     def test_saudi_id_parsing(self):
         """Verify Saudi National ID detection, Arabic candidate name filtering, and ID formats."""
-        from services.national_identity_service import detect_document_type, parse_identity_document
+        from services.national_identity_service import (
+            detect_document_type, parse_identity_document)
         raw_text = (
             "Kingdom of Saudi Arabia\n"
             "الهوية الوطنية\n"
@@ -4309,7 +4514,8 @@ class IdentityParserRefinementTestCase(TestCase):
 
     def test_iqama_parsing(self):
         """Verify Iqama permit detection, name filtering, and 10-digit number matching (starting with 2)."""
-        from services.national_identity_service import detect_document_type, parse_identity_document
+        from services.national_identity_service import (
+            detect_document_type, parse_identity_document)
         raw_text = (
             "Residence Permit\n"
             "إقامة\n"
@@ -4330,7 +4536,8 @@ class IdentityParserRefinementTestCase(TestCase):
 
     def test_passport_parsing(self):
         """Verify Passport detection (includes MRZ check) and birth/expiry date assignments."""
-        from services.national_identity_service import detect_document_type, parse_identity_document
+        from services.national_identity_service import (
+            detect_document_type, parse_identity_document)
         raw_text = (
             "Passport\n"
             "جواز السفر\n"
@@ -4352,7 +4559,8 @@ class IdentityParserRefinementTestCase(TestCase):
 
     def test_unknown_document_parsing(self):
         """Verify that unstructured documents gracefully fallback to generic parser and 'unknown' type."""
-        from services.national_identity_service import detect_document_type, parse_identity_document
+        from services.national_identity_service import (
+            detect_document_type, parse_identity_document)
         raw_text = (
             "Random Unstructured Document\n"
             "Some text line\n"
@@ -4373,8 +4581,9 @@ class IdentityParserRefinementTestCase(TestCase):
 class IdentityCandidateEngineTestCase(TestCase):
     def test_name_candidates_extraction(self):
         """Verify extraction of English, Arabic, and mixed-language name candidates, and check reasons/normalized values."""
-        from services.identity_candidate_service import generate_name_candidates
-        
+        from services.identity_candidate_service import \
+            generate_name_candidates
+
         # Test English name
         text_en = "Name: Mohammed Hamza Rahamathulla\nSome irrelevant line 123"
         candidates = generate_name_candidates(text_en)
@@ -4418,7 +4627,8 @@ class IdentityCandidateEngineTestCase(TestCase):
 
     def test_identifier_candidates(self):
         """Verify generic identifier candidate matching, normalization, type classification, and context retention."""
-        from services.identity_candidate_service import generate_identifier_candidates
+        from services.identity_candidate_service import \
+            generate_identifier_candidates
         
         text = (
             "Saudi National ID: 1023456789\n"
@@ -4456,8 +4666,10 @@ class IdentityCandidateEngineTestCase(TestCase):
 
     def test_date_candidates(self):
         """Verify extraction of date candidates, Hijri conversions, type classifications, and context preservation."""
-        from services.identity_candidate_service import generate_date_candidates
         import datetime
+
+        from services.identity_candidate_service import \
+            generate_date_candidates
         
         text = (
             "Date of Birth: 31/08/1985\n"
@@ -4489,10 +4701,8 @@ class IdentityCandidateEngineTestCase(TestCase):
     def test_empty_inputs(self):
         """Verify that empty inputs return empty candidate lists gracefully."""
         from services.identity_candidate_service import (
-            generate_name_candidates,
-            generate_identifier_candidates,
-            generate_date_candidates
-        )
+            generate_date_candidates, generate_identifier_candidates,
+            generate_name_candidates)
         
         self.assertEqual(generate_name_candidates(""), [])
         self.assertEqual(generate_name_candidates(None), [])
@@ -4507,7 +4717,8 @@ class IdentityCandidateEngineTestCase(TestCase):
 class IdentityCandidateScoringTestCase(TestCase):
     def test_name_candidate_scoring(self):
         """Verify that standard names score higher than metadata keywords and noisy candidates containing OCR artifacts."""
-        from services.identity_candidate_service import generate_name_candidates
+        from services.identity_candidate_service import \
+            generate_name_candidates
         from services.identity_scoring_service import score_name_candidates
         
         raw_text = (
@@ -4541,9 +4752,9 @@ class IdentityCandidateScoringTestCase(TestCase):
 
     def test_date_candidate_scoring(self):
         """Verify birth date candidate evaluations, adult bonuses vs minor penalties, and expiry dates."""
-        from services.identity_candidate_service import generate_date_candidates
+        from services.identity_candidate_service import \
+            generate_date_candidates
         from services.identity_scoring_service import score_date_candidates
-        import datetime
         
         raw_text = (
             "Date of Birth: 31/08/2002\n"  # Age 24 in 2026 -> adult_age_range
@@ -4569,8 +4780,10 @@ class IdentityCandidateScoringTestCase(TestCase):
 
     def test_identifier_candidate_scoring(self):
         """Verify standard identifiers (national ID, passport) receive higher scores than malformed ones."""
-        from services.identity_candidate_service import generate_identifier_candidates
-        from services.identity_scoring_service import score_identifier_candidates
+        from services.identity_candidate_service import \
+            generate_identifier_candidates
+        from services.identity_scoring_service import \
+            score_identifier_candidates
         
         raw_text = (
             "ID: 1023456789\n"             # standard 10 digit ID
@@ -4598,10 +4811,8 @@ class IdentityCandidateScoringTestCase(TestCase):
     def test_empty_scoring_inputs(self):
         """Verify that empty candidate lists produce empty scored candidate lists without errors."""
         from services.identity_scoring_service import (
-            score_name_candidates,
-            score_identifier_candidates,
-            score_date_candidates
-        )
+            score_date_candidates, score_identifier_candidates,
+            score_name_candidates)
         
         self.assertEqual(score_name_candidates([], ""), [])
         self.assertEqual(score_name_candidates(None, ""), [])
@@ -4614,7 +4825,8 @@ class IdentityCandidateScoringTestCase(TestCase):
 
     def test_boundary_context_bonus(self):
         """Verify that candidates ending immediately before identity boundary markers get the boundary context bonus."""
-        from services.identity_candidate_service import generate_name_candidates
+        from services.identity_candidate_service import \
+            generate_name_candidates
         from services.identity_scoring_service import score_name_candidates
         
         raw_text = "Mohammed Hamza Rahamathulla ZUÑE ANDOF /DOB: 31/08/2002 Male"
@@ -4631,7 +4843,8 @@ class IdentityCandidateScoringTestCase(TestCase):
 
 class IdentityCandidateExpansionTestCase(TestCase):
     def test_candidate_expansion_produces_multiple_candidates(self):
-        from services.identity_candidate_service import generate_name_candidates
+        from services.identity_candidate_service import \
+            generate_name_candidates
         raw_text = "Mohammed Hamza Rahamathulla ZUÑE ANDOF /DOB: 31/08/2002 Male"
         candidates = generate_name_candidates(raw_text)
         
@@ -4651,7 +4864,9 @@ class IdentityCandidateExpansionTestCase(TestCase):
             self.assertEqual(c.source_line, "Mohammed Hamza Rahamathulla ZUÑE ANDOF /DOB: 31/08/2002 Male")
 
     def test_duplicate_candidates_are_removed(self):
-        from services.identity_candidate_service import generate_name_candidates
+        from services.identity_candidate_service import \
+            generate_name_candidates
+
         # Repeating lines or duplicate names
         raw_text = "Mohammed Hamza\nMohammed Hamza"
         candidates = generate_name_candidates(raw_text)
@@ -4661,14 +4876,16 @@ class IdentityCandidateExpansionTestCase(TestCase):
         self.assertEqual(len(mh_candidates), 1)
 
     def test_empty_ocr_text_returns_empty_list(self):
-        from services.identity_candidate_service import generate_name_candidates
+        from services.identity_candidate_service import \
+            generate_name_candidates
         self.assertEqual(generate_name_candidates(""), [])
         self.assertEqual(generate_name_candidates(None), [])
 
 class IdentityCandidateSelectionTestCase(TestCase):
     def test_select_highest_name_score(self):
         from services.identity_scores import ScoredCandidateName
-        from services.identity_selection_service import select_best_name_candidate
+        from services.identity_selection_service import \
+            select_best_name_candidate
         
         candidates = [
             ScoredCandidateName(value="Mohammed Hamza Rahamathulla", score=10.0, reasons=[], source_line=""),
@@ -4681,7 +4898,8 @@ class IdentityCandidateSelectionTestCase(TestCase):
 
     def test_name_tie_breaker(self):
         from services.identity_scores import ScoredCandidateName
-        from services.identity_selection_service import select_best_name_candidate
+        from services.identity_selection_service import \
+            select_best_name_candidate
         
         candidates = [
             ScoredCandidateName(value="Hamza Rahamathulla", score=8.0, reasons=[], source_line=""),
@@ -4694,7 +4912,8 @@ class IdentityCandidateSelectionTestCase(TestCase):
 
     def test_select_birth_date(self):
         from services.identity_scores import ScoredCandidateDate
-        from services.identity_selection_service import select_best_birth_date_candidate
+        from services.identity_selection_service import \
+            select_best_birth_date_candidate
         
         candidates = [
             ScoredCandidateDate(value="2013-12-28", score=2.0, reasons=[], source_line="", date_type="birth_date"),
@@ -4708,11 +4927,9 @@ class IdentityCandidateSelectionTestCase(TestCase):
 
     def test_empty_candidates(self):
         from services.identity_selection_service import (
-            select_best_name_candidate,
-            select_best_identifier_candidate,
             select_best_birth_date_candidate,
-            select_best_expiry_date_candidate
-        )
+            select_best_expiry_date_candidate,
+            select_best_identifier_candidate, select_best_name_candidate)
         
         self.assertIsNone(select_best_name_candidate([]))
         self.assertIsNone(select_best_identifier_candidate([]))
@@ -4726,9 +4943,10 @@ class IdentityCandidateSelectionTestCase(TestCase):
 
 class IdentityConfidenceEngineTestCase(TestCase):
     def test_clear_name_winner(self):
+        from services.identity_confidence_service import \
+            calculate_name_confidence
         from services.identity_scores import ScoredCandidateName
-        from services.identity_confidence_service import calculate_name_confidence
-        
+
         # Scenario A: Clear winner (margin >= 2.0)
         candidates_a = [
             ScoredCandidateName(value="Mohammed Hamza", score=10.0, reasons=[], source_line=""),
@@ -4748,8 +4966,9 @@ class IdentityConfidenceEngineTestCase(TestCase):
         self.assertTrue(conf_a.confidence > conf_b.confidence)
 
     def test_layout_agreement_bonus(self):
+        from services.identity_confidence_service import \
+            calculate_name_confidence
         from services.identity_scores import ScoredCandidateName
-        from services.identity_confidence_service import calculate_name_confidence
         
         candidates = [
             ScoredCandidateName(value="Mohammed Hamza", score=6.0, reasons=[], source_line="")
@@ -4766,7 +4985,8 @@ class IdentityConfidenceEngineTestCase(TestCase):
 
     def test_overall_confidence(self):
         from services.identity_confidence import FieldConfidence
-        from services.identity_confidence_service import calculate_overall_confidence
+        from services.identity_confidence_service import \
+            calculate_overall_confidence
         
         name_conf = FieldConfidence(confidence=0.8, reasons=[])
         ident_conf = FieldConfidence(confidence=0.9, reasons=[])
@@ -4779,7 +4999,8 @@ class IdentityConfidenceEngineTestCase(TestCase):
 
     def test_missing_expiry_date(self):
         from services.identity_confidence import FieldConfidence
-        from services.identity_confidence_service import calculate_overall_confidence
+        from services.identity_confidence_service import \
+            calculate_overall_confidence
         
         name_conf = FieldConfidence(confidence=0.8, reasons=[])
         ident_conf = FieldConfidence(confidence=0.9, reasons=[])
@@ -4791,13 +5012,9 @@ class IdentityConfidenceEngineTestCase(TestCase):
 
     def test_empty_inputs(self):
         from services.identity_confidence_service import (
-            calculate_name_confidence,
-            calculate_identifier_confidence,
-            calculate_birth_date_confidence,
-            calculate_expiry_date_confidence,
-            calculate_overall_confidence
-        )
-        
+            calculate_birth_date_confidence, calculate_expiry_date_confidence,
+            calculate_identifier_confidence, calculate_name_confidence)
+
         # Test None inputs
         self.assertEqual(calculate_name_confidence(None, None).confidence, 0.0)
         self.assertEqual(calculate_identifier_confidence(None, None).confidence, 0.0)
@@ -4825,9 +5042,11 @@ class TermsAcceptanceTestCase(TestCase):
     """
 
     def setUp(self):
-        from .models import Document, Envelope, Participant, ParticipantToken
-        from django.utils import timezone
         from datetime import timedelta
+
+        from django.utils import timezone
+
+        from .models import Document, Envelope, Participant, ParticipantToken
 
         self.document = Document.objects.create(
             file="terms_test.pdf",
@@ -4861,6 +5080,7 @@ class TermsAcceptanceTestCase(TestCase):
     def test_accept_terms_creates_authorization_state(self):
         """accept_terms() creates ParticipantAuthorizationState if absent."""
         from services.terms_service import accept_terms
+
         from .models import ParticipantAuthorizationState
 
         self.assertFalse(
@@ -4876,6 +5096,7 @@ class TermsAcceptanceTestCase(TestCase):
     def test_accept_terms_updates_existing_state(self):
         """accept_terms() updates existing ParticipantAuthorizationState."""
         from services.terms_service import accept_terms
+
         from .models import ParticipantAuthorizationState
 
         # Pre-create state with email_verified=True to ensure fields survive
@@ -4892,6 +5113,7 @@ class TermsAcceptanceTestCase(TestCase):
     def test_accept_terms_idempotent(self):
         """Calling accept_terms() twice does not create duplicate state rows."""
         from services.terms_service import accept_terms
+
         from .models import ParticipantAuthorizationState
 
         accept_terms(self.participant, terms_version="v1")
@@ -4987,9 +5209,11 @@ class EmailOTPTestCase(TestCase):
     """
 
     def setUp(self):
-        from .models import Document, Envelope, Participant, ParticipantToken
-        from django.utils import timezone
         from datetime import timedelta
+
+        from django.utils import timezone
+
+        from .models import Document, Envelope, Participant, ParticipantToken
 
         self.document = Document.objects.create(
             file="otp_test.pdf",
@@ -5022,9 +5246,9 @@ class EmailOTPTestCase(TestCase):
 
     def test_send_email_otp_generates_otp_and_expiry(self):
         """send_email_otp() stores a 6-digit OTP and sets expiry."""
-        from services.email_otp_service import send_email_otp
-        from .models import ParticipantAuthorizationState
         from django.utils import timezone
+
+        from services.email_otp_service import send_email_otp
 
         with self.settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"):
             state = send_email_otp(self.participant)
@@ -5041,13 +5265,13 @@ class EmailOTPTestCase(TestCase):
     def test_verify_correct_otp_sets_email_verified(self):
         """Correct OTP sets email_verified=True and clears the stored code."""
         from services.email_otp_service import send_email_otp, verify_email_otp
-        from .models import ParticipantAuthorizationState
 
         with self.settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"):
             state = send_email_otp(self.participant)
 
-        from django.core import mail
         import re
+
+        from django.core import mail
         stored_otp = re.search(r"code is:\s*(\d{6})", mail.outbox[-1].body).group(1)
         result = verify_email_otp(self.participant, stored_otp)
 
@@ -5071,16 +5295,18 @@ class EmailOTPTestCase(TestCase):
 
     def test_expired_otp_returns_error(self):
         """Expired OTP returns verified=False with 'OTP expired'."""
-        from services.email_otp_service import send_email_otp, verify_email_otp
-        from .models import ParticipantAuthorizationState
-        from django.utils import timezone
         from datetime import timedelta
+
+        from django.utils import timezone
+
+        from services.email_otp_service import send_email_otp, verify_email_otp
 
         with self.settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"):
             state = send_email_otp(self.participant)
 
-        from django.core import mail
         import re
+
+        from django.core import mail
         stored_otp = re.search(r"code is:\s*(\d{6})", mail.outbox[-1].body).group(1)
 
         # Backdate the expiry to simulate expiration
@@ -5103,8 +5329,9 @@ class EmailOTPTestCase(TestCase):
         with self.settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"):
             state = send_email_otp(self.participant)
 
-        from django.core import mail
         import re
+
+        from django.core import mail
         stored_otp = re.search(r"code is:\s*(\d{6})", mail.outbox[-1].body).group(1)
         verify_email_otp(self.participant, stored_otp)
 
@@ -5118,8 +5345,8 @@ class EmailOTPTestCase(TestCase):
     # ------------------------------------------------------------------
 
     def _post(self, url_name, participant_id, data, token=None):
-        from rest_framework.test import APIClient
         from django.urls import reverse
+        from rest_framework.test import APIClient
         client = APIClient()
         url = reverse(url_name, kwargs={"participant_id": participant_id})
         if token:
@@ -5142,8 +5369,9 @@ class EmailOTPTestCase(TestCase):
 
     def test_api_verify_email_otp_correct(self):
         """Correct OTP via API returns verified=True."""
-        from django.core import mail
         import re
+
+        from django.core import mail
 
         with self.settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"):
             self._post("send-email-otp", self.participant.id, {}, token=self.token)
@@ -5209,7 +5437,8 @@ class VerificationSessionTestCase(TestCase):
         )
 
     def test_create_session(self):
-        from services.verification_session_service import get_or_create_verification_session
+        from services.verification_session_service import \
+            get_or_create_verification_session
         session = get_or_create_verification_session(self.participant)
         self.assertEqual(session.status, "pending")
         self.assertEqual(session.failure_reason, "")
@@ -5217,33 +5446,38 @@ class VerificationSessionTestCase(TestCase):
         self.assertIsNone(session.completed_at)
 
     def test_mark_processing(self):
-        from services.verification_session_service import mark_verification_processing
+        from services.verification_session_service import \
+            mark_verification_processing
         session = mark_verification_processing(self.participant)
         self.assertEqual(session.status, "processing")
         self.assertEqual(session.failure_reason, "")
 
     def test_mark_approved(self):
-        from services.verification_session_service import mark_verification_approved
+        from services.verification_session_service import \
+            mark_verification_approved
         session = mark_verification_approved(self.participant)
         self.assertEqual(session.status, "approved")
         self.assertIsNotNone(session.completed_at)
 
     def test_mark_failed(self):
-        from services.verification_session_service import mark_verification_failed
+        from services.verification_session_service import \
+            mark_verification_failed
         session = mark_verification_failed(self.participant, reason="Face did not match")
         self.assertEqual(session.status, "failed")
         self.assertEqual(session.failure_reason, "Face did not match")
         self.assertIsNotNone(session.completed_at)
 
     def test_mark_manual_review(self):
-        from services.verification_session_service import mark_verification_manual_review
+        from services.verification_session_service import \
+            mark_verification_manual_review
         session = mark_verification_manual_review(self.participant, reason="Low confidence score")
         self.assertEqual(session.status, "requires_manual_review")
         self.assertEqual(session.failure_reason, "Low confidence score")
         self.assertIsNotNone(session.completed_at)
 
     def test_get_or_create_idempotent(self):
-        from services.verification_session_service import get_or_create_verification_session
+        from services.verification_session_service import \
+            get_or_create_verification_session
         session1 = get_or_create_verification_session(self.participant)
         session2 = get_or_create_verification_session(self.participant)
         self.assertEqual(session1.id, session2.id)
@@ -5274,7 +5508,8 @@ class BiometricVerificationTestCase(TestCase):
         )
 
     def test_create_biometric_verification(self):
-        from services.biometric_verification_service import get_or_create_biometric_verification
+        from services.biometric_verification_service import \
+            get_or_create_biometric_verification
         biometric = get_or_create_biometric_verification(self.participant)
         self.assertEqual(biometric.status, "pending")
         self.assertIsNone(biometric.similarity_score)
@@ -5288,12 +5523,14 @@ class BiometricVerificationTestCase(TestCase):
         self.assertEqual(biometric.verification_session.participant, self.participant)
 
     def test_mark_processing(self):
-        from services.biometric_verification_service import mark_biometric_processing
+        from services.biometric_verification_service import \
+            mark_biometric_processing
         biometric = mark_biometric_processing(self.participant)
         self.assertEqual(biometric.status, "processing")
 
     def test_mark_matched(self):
-        from services.biometric_verification_service import mark_biometric_matched
+        from services.biometric_verification_service import \
+            mark_biometric_matched
         biometric = mark_biometric_matched(
             self.participant,
             similarity_score=0.92,
@@ -5307,21 +5544,24 @@ class BiometricVerificationTestCase(TestCase):
         self.assertIsNotNone(biometric.completed_at)
 
     def test_mark_failed(self):
-        from services.biometric_verification_service import mark_biometric_failed
+        from services.biometric_verification_service import \
+            mark_biometric_failed
         biometric = mark_biometric_failed(self.participant, reason="Liveness check failed")
         self.assertEqual(biometric.status, "failed")
         self.assertEqual(biometric.failure_reason, "Liveness check failed")
         self.assertIsNotNone(biometric.completed_at)
 
     def test_mark_manual_review(self):
-        from services.biometric_verification_service import mark_biometric_manual_review
+        from services.biometric_verification_service import \
+            mark_biometric_manual_review
         biometric = mark_biometric_manual_review(self.participant, reason="Lighting too dark")
         self.assertEqual(biometric.status, "requires_manual_review")
         self.assertEqual(biometric.failure_reason, "Lighting too dark")
         self.assertIsNotNone(biometric.completed_at)
 
     def test_get_or_create_idempotent(self):
-        from services.biometric_verification_service import get_or_create_biometric_verification
+        from services.biometric_verification_service import \
+            get_or_create_biometric_verification
         biometric1 = get_or_create_biometric_verification(self.participant)
         biometric2 = get_or_create_biometric_verification(self.participant)
         self.assertEqual(biometric1.id, biometric2.id)
@@ -5337,10 +5577,13 @@ class FaceMatchingTestCase(TestCase):
     """Phase 12.1 & 12.2 — Face Matching Engine and API tests."""
 
     def setUp(self):
-        from .models import Document, Envelope, Participant, ParticipantToken, SignerIdentityVerification
-        from django.utils import timezone
         from datetime import timedelta
+
         from django.core.files.base import ContentFile
+        from django.utils import timezone
+
+        from .models import (Document, Envelope, Participant, ParticipantToken,
+                             SignerIdentityVerification)
 
         self.document = Document.objects.create(
             file="face_test.pdf",
@@ -5417,17 +5660,19 @@ class FaceMatchingTestCase(TestCase):
         self.assertEqual(biometric.failure_reason, "no_face_detected")
 
     def _post(self, participant_id, data, token=None):
-        from rest_framework.test import APIClient
         from django.urls import reverse
+        from rest_framework.test import APIClient
         client = APIClient()
         url = reverse("face-verification", kwargs={"participant_id": participant_id})
         if token:
             return client.post(url, data, format="multipart", HTTP_X_PARTICIPANT_TOKEN=token)
         return client.post(url, data, format="multipart")
 
+    @patch('services.image_quality_service.assess_face_quality')
     @patch('esign.views.validate_image_file')
     @patch('services.face_matching_service.calculate_face_similarity')
-    def test_api_success(self, mock_similarity, mock_validate):
+    def test_api_success(self, mock_similarity, mock_validate, mock_quality):
+        mock_quality.return_value = {"failure_code": None, "retry_allowed": True, "quality_report": {"status": "PASS"}}
         mock_similarity.return_value = 0.83
         from django.core.files.uploadedfile import SimpleUploadedFile
 
@@ -5439,9 +5684,11 @@ class FaceMatchingTestCase(TestCase):
         self.assertEqual(res_json["similarity_score"], 0.83)
         self.assertEqual(res_json["provider"], "insightface")
 
+    @patch('services.image_quality_service.assess_face_quality')
     @patch('esign.views.validate_image_file')
     @patch('services.face_matching_service.calculate_face_similarity')
-    def test_api_failure(self, mock_similarity, mock_validate):
+    def test_api_failure(self, mock_similarity, mock_validate, mock_quality):
+        mock_quality.return_value = {"failure_code": None, "retry_allowed": True, "quality_report": {"status": "PASS"}}
         mock_similarity.return_value = 0.42
         from django.core.files.uploadedfile import SimpleUploadedFile
 
@@ -5461,10 +5708,13 @@ class IdentityVerificationTestCase(TestCase):
     and reference face storage features."""
 
     def setUp(self):
-        from django.contrib.auth.models import User
-        from esign.models import Document, Envelope, Participant, ParticipantToken
-        from django.utils import timezone
         from datetime import timedelta
+
+        from django.contrib.auth.models import User
+        from django.utils import timezone
+
+        from esign.models import (Document, Envelope, Participant,
+                                  ParticipantToken)
 
         self.owner = User.objects.create_user(username="owner_id", password="password")
         self.document = Document.objects.create(file="id_test.pdf", file_hash="idhash001")
@@ -5496,15 +5746,12 @@ class IdentityVerificationTestCase(TestCase):
         return {
             "raw_text": "Aadhaar Card\nName: Alice Tester\nID: 1234 5678 9012\nDOB: 01/01/1990",
             "ocr_confidence": 0.95,
-            "ocr_provider": "azure",
-        }
-
-    def _parse_return(self):
-        import datetime
-        return {
+            "ocr_provider": "gemini",
             "full_name": "Alice Tester",
+            "full_name_en": "Alice Tester",
+            "national_id": "123456789012",
             "national_id_number": "123456789012",
-            "date_of_birth": datetime.date(1990, 1, 1),
+            "date_of_birth": "1990-01-01",
             "document_type": "aadhaar",
         }
 
@@ -5513,15 +5760,14 @@ class IdentityVerificationTestCase(TestCase):
     # ------------------------------------------------------------------
     @patch('services.identity_verification_service.extract_reference_face')
     @patch('services.identity_verification_service.extract_identity_data')
-    @patch('services.identity_verification_service.parse_identity_document')
-    def test_successful_identity_verification(self, mock_parse, mock_extract, mock_crop_face):
+    def test_successful_identity_verification(self, mock_extract, mock_crop_face):
         self.participant.name = "Alice Tester"
         self.participant.save()
         mock_extract.return_value = self._ocr_return()
-        mock_parse.return_value = self._parse_return()
         mock_crop_face.return_value = b"cropped_face_bytes"
 
-        from services.identity_verification_service import perform_identity_verification
+        from services.identity_verification_service import \
+            perform_identity_verification
         verification = perform_identity_verification(self.participant, b"mock_id_card_image_bytes")
 
         self.assertEqual(verification.status, "verified")
@@ -5534,15 +5780,14 @@ class IdentityVerificationTestCase(TestCase):
     # ------------------------------------------------------------------
     @patch('services.identity_verification_service.extract_reference_face')
     @patch('services.identity_verification_service.extract_identity_data')
-    @patch('services.identity_verification_service.parse_identity_document')
-    def test_reference_face_saved(self, mock_parse, mock_extract, mock_crop_face):
+    def test_reference_face_saved(self, mock_extract, mock_crop_face):
         self.participant.name = "Alice Tester"
         self.participant.save()
         mock_extract.return_value = self._ocr_return()
-        mock_parse.return_value = self._parse_return()
         mock_crop_face.return_value = b"cropped_face_bytes"
 
-        from services.identity_verification_service import perform_identity_verification
+        from services.identity_verification_service import \
+            perform_identity_verification
         verification = perform_identity_verification(self.participant, b"mock_id_card_image_bytes")
 
         self.assertTrue(verification.document_image.name.endswith(".jpg"))
@@ -5561,7 +5806,8 @@ class IdentityVerificationTestCase(TestCase):
     def test_manual_review_on_exception(self, mock_extract, mock_crop_face):
         mock_extract.side_effect = Exception("Azure OCR API error")
 
-        from services.identity_verification_service import perform_identity_verification
+        from services.identity_verification_service import \
+            perform_identity_verification
         verification = perform_identity_verification(self.participant, b"mock_id_card_image_bytes")
 
         self.assertEqual(verification.status, "requires_manual_review")
@@ -5572,30 +5818,30 @@ class IdentityVerificationTestCase(TestCase):
     # ------------------------------------------------------------------
     # Test 4 — POST /identity-verification/ -> 200 + verified payload
     # ------------------------------------------------------------------
+    @patch('services.image_quality_service.assess_document_quality')
     @patch('esign.views.validate_image_file')
     @patch('services.identity_verification_service.extract_reference_face')
     @patch('services.identity_verification_service.extract_identity_data')
-    @patch('services.identity_verification_service.parse_identity_document')
-    def test_view_success(self, mock_parse, mock_extract, mock_crop_face, mock_validate):
+    def test_view_success(self, mock_extract, mock_crop_face, mock_validate, mock_quality):
+        mock_quality.return_value = {"failure_code": None, "retry_allowed": True, "quality_report": {"status": "PASS"}}
         self.participant.name = "Khalid"
         self.participant.save()
-        import datetime
         mock_extract.return_value = {
             "raw_text": "Saudi ID\nName: Khalid\nID: 1029384756",
             "ocr_confidence": 0.98,
-            "ocr_provider": "azure",
-        }
-        mock_parse.return_value = {
+            "ocr_provider": "gemini",
             "full_name": "Khalid",
+            "full_name_en": "Khalid",
+            "national_id": "1029384756",
             "national_id_number": "1029384756",
-            "date_of_birth": datetime.date(1985, 5, 20),
+            "date_of_birth": "1985-05-20",
             "document_type": "saudi_id",
         }
         mock_crop_face.return_value = b"cropped_face_bytes"
 
-        from rest_framework.test import APIClient
-        from django.urls import reverse
         from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.urls import reverse
+        from rest_framework.test import APIClient
 
         client = APIClient()
         url = reverse("identity-verification", kwargs={"participant_id": self.participant.id})
@@ -5621,15 +5867,17 @@ class IdentityVerificationTestCase(TestCase):
     # ------------------------------------------------------------------
     # Test 5 — POST /identity-verification/ when OCR raises -> 200 + manual_review
     # ------------------------------------------------------------------
+    @patch('services.image_quality_service.assess_document_quality')
     @patch('esign.views.validate_image_file')
     @patch('services.identity_verification_service.extract_reference_face')
     @patch('services.identity_verification_service.extract_identity_data')
-    def test_view_exception(self, mock_extract, mock_crop_face, mock_validate):
+    def test_view_exception(self, mock_extract, mock_crop_face, mock_validate, mock_quality):
+        mock_quality.return_value = {"failure_code": None, "retry_allowed": True, "quality_report": {"status": "PASS"}}
         mock_extract.side_effect = Exception("OCR downstream failure")
 
-        from rest_framework.test import APIClient
-        from django.urls import reverse
         from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.urls import reverse
+        from rest_framework.test import APIClient
 
         client = APIClient()
         url = reverse("identity-verification", kwargs={"participant_id": self.participant.id})
@@ -5661,6 +5909,7 @@ class LivenessServiceTestCase(TestCase):
 class ParticipantMatchingTestCase(TestCase):
     def test_normalize_string(self):
         from services.participant_matching_service import normalize_string
+
         # Case insensitivity
         self.assertEqual(normalize_string("john doe"), "JOHN DOE")
         # Leading/trailing/collapsed whitespace
@@ -5675,8 +5924,10 @@ class ParticipantMatchingTestCase(TestCase):
         self.assertEqual(normalize_string("مُحَمَّد"), "محمد")
 
     def test_name_matching_thresholds(self):
-        from services.participant_matching_service import match_participant_identity
         from unittest.mock import MagicMock
+
+        from services.participant_matching_service import \
+            match_participant_identity
         
         participant = MagicMock()
         participant.name = "John Doe"
@@ -5693,36 +5944,41 @@ class ParticipantMatchingTestCase(TestCase):
     @patch('services.identity_verification_service.extract_identity_data')
     @patch('services.identity_verification_service.extract_reference_face')
     def test_identity_verification_matching_flow(self, mock_crop_face, mock_extract_ocr):
-        from .models import Document, Envelope, Participant, SignerIdentityVerification
-        from services.identity_verification_service import perform_identity_verification
+        from services.identity_verification_service import \
+            perform_identity_verification
+
+        from .models import Document, Envelope, Participant
         
         doc = Document.objects.create(file="test.pdf", file_hash="hash")
         envelope = Envelope.objects.create(document=doc, status="sent", national_id_required=True)
         
         # 1. Matching case
         participant_match = Participant.objects.create(envelope=envelope, name="John Doe", email="match@test.com", role="signer")
-        mock_extract_ocr.return_value = {"raw_text": "Name: John Doe"}
+        mock_extract_ocr.return_value = {
+            "raw_text": "Name: John Doe",
+            "full_name": "John Doe",
+            "full_name_en": "John Doe",
+            "national_id": "123",
+            "national_id_number": "123",
+            "document_type": "national_id",
+        }
         mock_crop_face.return_value = b"cropped_bytes"
         
-        with patch('services.identity_verification_service.parse_identity_document') as mock_parse:
-            mock_parse.return_value = {"full_name": "John Doe", "national_id_number": "123"}
-            verification = perform_identity_verification(participant_match, b"fake_image_bytes")
-            
-            self.assertEqual(verification.status, "verified")
-            self.assertTrue(verification.identity_matched)
-            self.assertGreaterEqual(verification.identity_match_score, 0.85)
-            self.assertEqual(verification.failure_reason, "")
+        verification = perform_identity_verification(participant_match, b"fake_image_bytes")
+        
+        self.assertEqual(verification.status, "verified")
+        self.assertTrue(verification.identity_matched)
+        self.assertGreaterEqual(verification.identity_match_score, 0.85)
+        self.assertEqual(verification.failure_reason, "")
 
         # 2. Mismatched case (routes to requires_manual_review)
         participant_mismatch = Participant.objects.create(envelope=envelope, name="Jane Smith", email="mismatch@test.com", role="signer")
-        with patch('services.identity_verification_service.parse_identity_document') as mock_parse:
-            mock_parse.return_value = {"full_name": "John Doe", "national_id_number": "123"}
-            verification = perform_identity_verification(participant_mismatch, b"fake_image_bytes")
-            
-            self.assertEqual(verification.status, "requires_manual_review")
-            self.assertFalse(verification.identity_matched)
-            self.assertLess(verification.identity_match_score, 0.85)
-            self.assertEqual(verification.failure_reason, "identity_name_mismatch")
+        verification = perform_identity_verification(participant_mismatch, b"fake_image_bytes")
+        
+        self.assertEqual(verification.status, "requires_manual_review")
+        self.assertFalse(verification.identity_matched)
+        self.assertLess(verification.identity_match_score, 0.85)
+        self.assertEqual(verification.failure_reason, "identity_name_mismatch")
 
 
 class ConfigurationRegistryTestCase(TestCase):
@@ -5737,9 +5993,10 @@ class ConfigurationRegistryTestCase(TestCase):
         self.assertEqual(esign_config.api_version, "v1")
 
     def test_config_validation(self):
-        from esign.config import ESignatureConfig
         from django.core.exceptions import ImproperlyConfigured
         from django.test import override_settings
+
+        from esign.config import ESignatureConfig
 
         # Valid override
         with override_settings(FACE_MATCH_THRESHOLD=0.7):
@@ -5759,11 +6016,12 @@ class ConfigurationRegistryTestCase(TestCase):
 
 class ProviderRegistryTestCase(TestCase):
     def test_provider_registry_resolution(self):
-        from esign.providers.registry import ESignatureProviderRegistry
-        from esign.providers.ocr import CombinedOCRProvider
-        from esign.providers.face import InsightFaceMatchingProvider
         from django.core.exceptions import ImproperlyConfigured
         from django.test import override_settings
+
+        from esign.providers.face import InsightFaceMatchingProvider
+        from esign.providers.ocr import CombinedOCRProvider
+        from esign.providers.registry import ESignatureProviderRegistry
 
         # Test defaults
         registry = ESignatureProviderRegistry()
@@ -5785,8 +6043,8 @@ class ProviderRegistryTestCase(TestCase):
 
 class EventDispatcherTestCase(TestCase):
     def test_event_registration_and_publishing(self):
-        from esign.events.dispatcher import EventDispatcher
         from esign.events.base import DomainEvent
+        from esign.events.dispatcher import EventDispatcher
 
         dispatcher = EventDispatcher()
         executed_events = []
@@ -5802,8 +6060,8 @@ class EventDispatcherTestCase(TestCase):
         self.assertEqual(executed_events[0].payload["foo"], "bar")
 
     def test_handler_error_isolation(self):
-        from esign.events.dispatcher import EventDispatcher
         from esign.events.base import DomainEvent
+        from esign.events.dispatcher import EventDispatcher
 
         dispatcher = EventDispatcher()
         execution_order = []
@@ -5826,11 +6084,13 @@ class EventDispatcherTestCase(TestCase):
 
     @patch("requests.post")
     def test_webhook_delivery(self, mock_post):
-        from esign.models import WebhookSubscription
-        from esign.events.handlers import handle_webhooks
-        from esign.events.base import DomainEvent
-        from django.test import override_settings
         import json
+
+        from django.test import override_settings
+
+        from esign.events.base import DomainEvent
+        from esign.events.handlers import handle_webhooks
+        from esign.models import WebhookSubscription
 
         # Configure mock post
         mock_post.return_value.status_code = 200
@@ -5872,17 +6132,15 @@ class ObservabilityTestCase(TestCase):
         self.assertEqual(response2.get("X-Request-ID"), custom_id)
 
     def test_request_context_thread_local(self):
-        from esign.request_context import set_request_id, get_request_id, clear_request_id
+        from esign.request_context import (clear_request_id, get_request_id,
+                                           set_request_id)
         set_request_id("thread-test-id")
         self.assertEqual(get_request_id(), "thread-test-id")
         clear_request_id()
         self.assertEqual(get_request_id(), "no-request-id")
 
     def test_exceptions_hierarchy(self):
-        from esign.exceptions import (
-            ESignValidationError, ESignProviderError, ESignBusinessRuleViolation,
-            ESignExternalServiceError, ESignNotFoundError, ESignAuthorizationError
-        )
+        from esign.exceptions import ESignValidationError
         val_err = ESignValidationError("validation failure", detail={"field": "error"})
         self.assertEqual(val_err.category, "validation_error")
         self.assertIn("validation failure", str(val_err))
@@ -5926,5 +6184,126 @@ class HealthEndpointTestCase(TestCase):
         self.assertEqual(data["status"], "ok")
         self.assertIn("checks", data)
         self.assertEqual(data["checks"]["database"]["status"], "ok")
+
+
+from unittest.mock import MagicMock, patch
+
+class ImageQualityAssessmentTestCase(TestCase):
+    def test_document_quality_pass(self):
+        import cv2
+        import numpy as np
+        from services.image_quality_service import assess_document_quality
+        
+        # Create textured image
+        img = np.ones((640, 640, 3), dtype=np.uint8) * 128
+        for i in range(15):
+            cv2.line(img, (i * 40, 0), (i * 40, 640), (255, 255, 255), 2)
+            cv2.line(img, (0, i * 40), (640, i * 40), (0, 0, 0), 2)
+            
+        _, img_bytes = cv2.imencode(".jpg", img)
+        res = assess_document_quality(img_bytes.tobytes())
+        
+        self.assertEqual(res["quality_report"]["status"], "PASS")
+        self.assertIsNone(res["failure_code"])
+        self.assertEqual(res["quality_report"]["overall_quality_score"], 1.0)
+        self.assertEqual(len(res["quality_report"]["issues"]), 0)
+
+    def test_document_quality_fail_blur(self):
+        import cv2
+        import numpy as np
+        from services.image_quality_service import assess_document_quality
+        
+        # Solid gray image (zero variance)
+        img = np.ones((640, 640, 3), dtype=np.uint8) * 128
+        _, img_bytes = cv2.imencode(".jpg", img)
+        res = assess_document_quality(img_bytes.tobytes())
+        
+        self.assertEqual(res["quality_report"]["status"], "FAIL")
+        self.assertEqual(res["failure_code"], "image_quality_check_failed")
+        self.assertIn("Image is blurry", res["quality_report"]["issues"])
+
+    def test_document_quality_fail_resolution(self):
+        import cv2
+        import numpy as np
+        from services.image_quality_service import assess_document_quality
+        
+        # Textured low-resolution image (100x100)
+        img = np.ones((100, 100, 3), dtype=np.uint8) * 128
+        for i in range(5):
+            cv2.line(img, (i * 20, 0), (i * 20, 100), (255, 255, 255), 1)
+        _, img_bytes = cv2.imencode(".jpg", img)
+        res = assess_document_quality(img_bytes.tobytes())
+        
+        self.assertEqual(res["quality_report"]["status"], "FAIL")
+        self.assertIn("Image resolution is too low", res["quality_report"]["issues"])
+
+    def test_document_quality_fail_brightness(self):
+        import cv2
+        import numpy as np
+        from services.image_quality_service import assess_document_quality
+        
+        # Solid black image (brightness = 0)
+        img = np.zeros((640, 640, 3), dtype=np.uint8)
+        _, img_bytes = cv2.imencode(".jpg", img)
+        res = assess_document_quality(img_bytes.tobytes())
+        
+        self.assertEqual(res["quality_report"]["status"], "FAIL")
+        self.assertIn("Image is too dark", res["quality_report"]["issues"])
+
+    @patch("services.enterprise_biometric_service.get_face_analysis_app")
+    def test_face_quality_pass(self, mock_get_app):
+        import cv2
+        import numpy as np
+        from services.image_quality_service import assess_face_quality
+        
+        class MockFace:
+            def __init__(self):
+                self.bbox = np.array([100, 100, 300, 300]) # 200x200 px
+                self.det_score = 0.9
+        
+        mock_app = MagicMock()
+        mock_app.get.return_value = [MockFace()]
+        mock_get_app.return_value = mock_app
+        
+        # Textured image
+        img = np.ones((640, 640, 3), dtype=np.uint8) * 128
+        for i in range(15):
+            cv2.line(img, (i * 40, 0), (i * 40, 640), (255, 255, 255), 2)
+            cv2.line(img, (0, i * 40), (640, i * 40), (0, 0, 0), 2)
+            
+        _, img_bytes = cv2.imencode(".jpg", img)
+        res = assess_face_quality(img_bytes.tobytes())
+        
+        self.assertEqual(res["quality_report"]["status"], "PASS")
+        self.assertIsNone(res["failure_code"])
+        self.assertEqual(res["quality_report"]["overall_quality_score"], 1.0)
+
+    @patch("services.enterprise_biometric_service.get_face_analysis_app")
+    def test_face_quality_fail_multiple_faces(self, mock_get_app):
+        import cv2
+        import numpy as np
+        from services.image_quality_service import assess_face_quality
+        
+        class MockFace:
+            def __init__(self):
+                self.bbox = np.array([100, 100, 300, 300])
+                self.det_score = 0.9
+        
+        mock_app = MagicMock()
+        mock_app.get.return_value = [MockFace(), MockFace()]
+        mock_get_app.return_value = mock_app
+        
+        # Textured image
+        img = np.ones((640, 640, 3), dtype=np.uint8) * 128
+        for i in range(15):
+            cv2.line(img, (i * 40, 0), (i * 40, 640), (255, 255, 255), 2)
+            cv2.line(img, (0, i * 40), (640, i * 40), (0, 0, 0), 2)
+            
+        _, img_bytes = cv2.imencode(".jpg", img)
+        res = assess_face_quality(img_bytes.tobytes())
+        
+        self.assertEqual(res["quality_report"]["status"], "FAIL")
+        self.assertIn("Multiple faces detected in the image", res["quality_report"]["issues"])
+
 
 

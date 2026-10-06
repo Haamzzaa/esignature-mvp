@@ -1,10 +1,10 @@
 import base64
-import os
-import fitz
-from PIL import Image, ImageEnhance
 from io import BytesIO
+
+import fitz
 from django.utils import timezone
-from datetime import timedelta
+from PIL import Image, ImageEnhance
+
 
 def preprocess_signature_image(image_bytes: bytes) -> bytes:
     """
@@ -147,10 +147,14 @@ def sign_document(envelope, participant_rec, name, sig_type, signature_text, sig
     Applies the signature, fields, and footer metadata onto the PDF document bytes.
     Returns the signed PDF bytes.
     """
-    from services.field_service import get_fields_for_participant
     from esign.models import DocumentField
+    from services.field_service import get_fields_for_participant
     
+    from rest_framework.exceptions import ValidationError
     pdf_document = fitz.open(stream=original_bytes, filetype="pdf")
+    if getattr(pdf_document, 'is_encrypted', False) is True or (isinstance(getattr(pdf_document, 'needs_pass', 0), int) and getattr(pdf_document, 'needs_pass', 0) > 0):
+        pdf_document.close()
+        raise ValidationError("Encrypted or password-protected PDF files are not supported.")
 
     target_page_idx = max(0, envelope.signature_page - 1)
     target_page_idx = min(target_page_idx, len(pdf_document) - 1)
