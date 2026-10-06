@@ -81,7 +81,12 @@ def _collect_review_cases(status_filter="under_review", search_query=None):
             email_match = query in participant.email.lower()
             env_title = (participant.envelope.title or "").lower()
             env_match = query in env_title
-            if not (name_match or email_match or env_match):
+            ver_name = ""
+            if hasattr(participant, 'signer_identity_verification') and participant.signer_identity_verification:
+                v = participant.signer_identity_verification
+                ver_name = f"{v.full_name or ''} {v.full_name_en or ''} {v.full_name_ar or ''} {v.national_id_number or ''}".lower()
+            ver_match = query in ver_name
+            if not (name_match or email_match or env_match or ver_match):
                 continue
 
         created_at = participant.created_at
