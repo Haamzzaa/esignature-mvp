@@ -91,9 +91,11 @@ jobs:
           npm audit --omit=dev --audit-level=high
 
       - name: Audit Development Dependencies (Advisory Report)
-        continue-on-error: true
         run: |
-          npm audit
+          npm audit --audit-level=high || {
+            echo "Development dependency advisories detected; reporting only."
+            true
+          }
 
       - name: Validate Production Frontend Build
         run: |
