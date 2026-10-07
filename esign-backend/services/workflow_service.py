@@ -141,6 +141,25 @@ def check_and_advance_step(envelope, current_step, request=None):
                 user_agent=user_agent,
             )
 
+            # Apply PAdES cryptographic sealing if enabled
+            from django.conf import settings
+            if getattr(settings, "A08_PADES_ENABLED", False):
+                from services.pades_service import sign_pdf_pades
+                import hashlib
+                from django.core.files.base import ContentFile
+                signed_doc = getattr(envelope, "signeddocument", None)
+                if signed_doc and signed_doc.file:
+                    signed_doc.file.open("rb")
+                    try:
+                        visual_bytes = signed_doc.file.read()
+                    finally:
+                        signed_doc.file.close()
+                    pades_bytes = sign_pdf_pades(visual_bytes)
+                    pades_hash = hashlib.sha256(pades_bytes).hexdigest()
+                    signed_doc.final_hash = pades_hash
+                    filename = signed_doc.file.name.rsplit("/", 1)[-1] or "signed.pdf"
+                    signed_doc.file.save(filename, ContentFile(pades_bytes), save=True)
+
             # Apply A08 Completion Integrity Seal
             from services.integrity_service import seal_envelope_completion
             seal_envelope_completion(envelope)

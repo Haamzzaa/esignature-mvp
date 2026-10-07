@@ -286,8 +286,25 @@ def verify_document_integrity(envelope) -> Dict[str, Any]:
             "reason": "Document completed prior to A08 integrity sealing (legacy)",
         }
 
-    # For sealed documents, verify both file integrity and audit chain
-    is_valid = file_hash_match and audit_result.get("is_valid", False)
+    # Check embedded PAdES cryptographic signature if present
+    pades_info = {"is_signed": False}
+    try:
+        from services.pades_service import verify_pades_signature
+        signed_doc.file.open("rb")
+        try:
+            pdf_bytes = signed_doc.file.read()
+            pades_info = verify_pades_signature(pdf_bytes)
+        finally:
+            signed_doc.file.close()
+    except Exception as e:
+        logger.warning("[Integrity] Could not inspect PAdES signature: %s", e)
+
+    pades_valid = True
+    if pades_info.get("is_signed"):
+        pades_valid = pades_info.get("signature_valid", False) and pades_info.get("intact", False)
+
+    # For sealed documents, verify file integrity, audit chain, and PAdES (if signed)
+    is_valid = file_hash_match and audit_result.get("is_valid", False) and pades_valid
     return {
         "status": "verified" if is_valid else "tampered",
         "is_valid": is_valid,
@@ -297,5 +314,8 @@ def verify_document_integrity(envelope) -> Dict[str, Any]:
         "audit_chain_valid": audit_result.get("is_valid", False),
         "terminal_audit_hash": audit_result.get("terminal_hash"),
         "completion_seal": signed_doc.completion_seal,
-        "reason": "Integrity verified successfully" if is_valid else "Document or audit log integrity mismatch detected",
+        "pades_signed": pades_info.get("is_signed", False),
+        "pades_valid": pades_valid,
+        "pades_details": pades_info,
+        "reason": "Integrity verified successfully" if is_valid else "Document, audit log, or cryptographic signature mismatch detected",
     }
