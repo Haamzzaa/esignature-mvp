@@ -1,0 +1,100 @@
+name: Security & Dependency Vulnerability CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'esign-backend/**'
+      - 'esign-frontend/**'
+      - '.github/workflows/**'
+      - 'SECURITY.md'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'esign-backend/**'
+      - 'esign-frontend/**'
+      - '.github/workflows/**'
+      - 'SECURITY.md'
+  schedule:
+    - cron: '0 0 * * 1'
+  workflow_dispatch:
+
+jobs:
+  backend-security:
+    name: Backend Security & Vulnerability Scan
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: esign-backend
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.9'
+          cache: 'pip'
+          cache-dependency-path: 'esign-backend/requirements.txt'
+
+      - name: Install Dependencies & Scanner
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pip-audit
+
+      - name: Run pip-audit Dependency Scan
+        run: |
+          pip-audit -r requirements.txt --desc
+
+      - name: Verify Dependency Graph Integrity
+        run: |
+          pip check
+
+      - name: Run Security & Integrity Tests
+        run: |
+          python manage.py test esign.tests_a08_integrity
+          python manage.py test esign.tests_a08_pades
+          python manage.py test esign.tests_a08_tsa
+          python manage.py test esign.tests_s1_f1_security
+          python manage.py test esign.tests.AdminAuthorizationReviewTests
+        env:
+          DJANGO_SETTINGS_MODULE: esign_service.settings
+          SECRET_KEY: ci-test-secret-key-for-automated-verification
+          DEBUG: 'True'
+
+  frontend-security:
+    name: Frontend Security & Dependency Audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: esign-frontend
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: 'esign-frontend/package-lock.json'
+
+      - name: Clean Install Dependencies
+        run: |
+          npm ci
+
+      - name: Audit Production Dependencies (Enforced)
+        run: |
+          npm audit --omit=dev --audit-level=high
+
+      - name: Audit Development Dependencies (Advisory Report)
+        continue-on-error: true
+        run: |
+          npm audit
+
+      - name: Validate Production Frontend Build
+        run: |
+          npm run build
