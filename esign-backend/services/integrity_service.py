@@ -300,8 +300,20 @@ def verify_document_integrity(envelope) -> Dict[str, Any]:
         logger.warning("[Integrity] Could not inspect PAdES signature: %s", e)
 
     pades_valid = True
+    pades_type = "hash_sealed"
+    ts_info = None
+
     if pades_info.get("is_signed"):
         pades_valid = pades_info.get("signature_valid", False) and pades_info.get("intact", False)
+        signatures = pades_info.get("signatures", [])
+        if signatures:
+            sig_0 = signatures[0]
+            pades_type = sig_0.get("pades_type", "PAdES-B-B")
+            if sig_0.get("is_timestamped"):
+                ts_info = {
+                    "valid": sig_0.get("timestamp_valid"),
+                    "timestamp_time": sig_0.get("timestamp_time"),
+                }
 
     # For sealed documents, verify file integrity, audit chain, and PAdES (if signed)
     is_valid = file_hash_match and audit_result.get("is_valid", False) and pades_valid
@@ -316,6 +328,8 @@ def verify_document_integrity(envelope) -> Dict[str, Any]:
         "completion_seal": signed_doc.completion_seal,
         "pades_signed": pades_info.get("is_signed", False),
         "pades_valid": pades_valid,
+        "pades_type": pades_type,
+        "timestamp_info": ts_info,
         "pades_details": pades_info,
         "reason": "Integrity verified successfully" if is_valid else "Document, audit log, or cryptographic signature mismatch detected",
     }

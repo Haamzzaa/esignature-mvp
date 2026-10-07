@@ -359,3 +359,9 @@ A08_HASH_SEALING_ENABLED = os.environ.get("A08_HASH_SEALING_ENABLED", "True").lo
 A08_PADES_ENABLED = os.environ.get("A08_PADES_ENABLED", "False").lower() in ("true", "1", "yes")
 A08_TSA_ENABLED = os.environ.get("A08_TSA_ENABLED", "False").lower() in ("true", "1", "yes")
 A08_INTEGRITY_SECRET = os.environ.get("A08_INTEGRITY_SECRET", SECRET_KEY)
+
+PADES_TSA_URL = os.environ.get("PADES_TSA_URL", None)
+PADES_TSA_TIMEOUT = int(os.environ.get("PADES_TSA_TIMEOUT", "5"))
+PADES_TSA_AUTH_HEADER = os.environ.get("PADES_TSA_AUTH_HEADER", None)
+PADES_TSA_USERNAME = os.environ.get("PADES_TSA_USERNAME", None)
+PADES_TSA_PASSWORD = os.environ.get("PADES_TSA_PASSWORD", None)

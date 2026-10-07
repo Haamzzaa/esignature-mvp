@@ -111,6 +111,7 @@ def sign_pdf_pades(
     reason: str = "Digital Signature and Document Integrity Seal",
     location: str = "E-Sign Platform",
     field_name: str = "PlatformSignature",
+    timestamper: Optional[Any] = None,
 ) -> bytes:
     """
     Applies an ETSI PAdES-B-B cryptographic signature to the finalized PDF bytes.
@@ -118,6 +119,14 @@ def sign_pdf_pades(
     """
     if not pdf_bytes or not pdf_bytes.startswith(b"%PDF"):
         raise PAdESError("Invalid PDF bytes provided for PAdES signing.")
+
+    # Check configuration validity: TSA cannot be enabled without PAdES
+    if getattr(settings, "A08_TSA_ENABLED", False) and not getattr(settings, "A08_PADES_ENABLED", False):
+        raise PAdESConfigurationError("Invalid configuration: A08_TSA_ENABLED cannot be True when A08_PADES_ENABLED is False.")
+
+    if timestamper is None and getattr(settings, "A08_TSA_ENABLED", False):
+        from services.timestamp_service import get_timestamper
+        timestamper = get_timestamper()
 
     if cert_pem is None or key_pem is None:
         cert_pem, key_pem, passphrase = load_signing_credentials()
@@ -154,7 +163,7 @@ def sign_pdf_pades(
             location=location,
         )
 
-        pdf_signer = signers.PdfSigner(meta, signer=signer)
+        pdf_signer = signers.PdfSigner(meta, signer=signer, timestamper=timestamper)
         pdf_signer.sign_pdf(w, output=out)
 
         signed_bytes = out.getvalue()
@@ -208,11 +217,27 @@ def verify_pades_signature(pdf_bytes: bytes) -> Dict[str, Any]:
                 if val_status.signing_cert:
                     cert_subject = val_status.signing_cert.subject.human_friendly
 
+                ts_validity = getattr(val_status, "timestamp_validity", None)
+                is_timestamped = ts_validity is not None
+                ts_valid = False
+                ts_time = None
+                if is_timestamped:
+                    ts_valid = bool(ts_validity.valid) and bool(ts_validity.intact)
+                    if ts_validity.timestamp:
+                        ts_time = ts_validity.timestamp.isoformat()
+                    if not ts_valid:
+                        all_valid = False
+                        all_intact = False
+
                 results.append({
                     "field_name": sig.field_name,
                     "intact": intact,
                     "valid": valid,
                     "signer_subject": cert_subject,
+                    "is_timestamped": is_timestamped,
+                    "timestamp_valid": ts_valid,
+                    "timestamp_time": ts_time,
+                    "pades_type": "PAdES-B-T" if is_timestamped else "PAdES-B-B",
                 })
             except Exception as e:
                 all_valid = False
