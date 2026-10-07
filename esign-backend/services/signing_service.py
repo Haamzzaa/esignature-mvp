@@ -450,7 +450,6 @@ def process_action(token_str, request_data, request):
             finally:
                 locked_document.file.close()
 
-        final_hash    = hashlib.sha256(original_bytes).hexdigest()
         original_name = locked_document.file.name.rsplit("/", 1)[-1] or "signed.pdf"
 
         # PDF Signing (inside lock transaction)
@@ -471,12 +470,21 @@ def process_action(token_str, request_data, request):
             logger.exception("Image/PDF processing failed")
             raise ValidationError("Unable to process uploaded signature image.")
 
+        # Realignment: authoritative final_hash and visual_document_hash computed from post-stamped pdf_bytes
+        visual_hash = hashlib.sha256(pdf_bytes).hexdigest()
+        final_hash = visual_hash
+
         # Update existing SignedDocument record in place or create new one
         if signed_doc:
+            signed_doc.visual_document_hash = visual_hash
             signed_doc.final_hash = final_hash
             signed_doc.file.save(original_name, ContentFile(pdf_bytes), save=True)
         else:
-            signed_doc = SignedDocument(envelope=locked_envelope, final_hash=final_hash)
+            signed_doc = SignedDocument(
+                envelope=locked_envelope,
+                visual_document_hash=visual_hash,
+                final_hash=final_hash
+            )
             signed_doc.file.save(original_name, ContentFile(pdf_bytes), save=True)
 
         if locked_token:

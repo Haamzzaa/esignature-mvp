@@ -137,6 +137,14 @@ class AuditLog(models.Model):
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField(null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
+    prev_hash = models.CharField(max_length=64, blank=True, default="")
+    entry_hash = models.CharField(max_length=64, blank=True, default="", db_index=True)
+
+    def save(self, *args, **kwargs):
+        if not self.entry_hash:
+            from services.integrity_service import compute_audit_log_hashes
+            compute_audit_log_hashes(self)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.event} on {self.envelope} at {self.timestamp}"
@@ -144,7 +152,9 @@ class AuditLog(models.Model):
 class SignedDocument(models.Model):
     envelope = models.OneToOneField(Envelope, on_delete=models.CASCADE)
     file = models.FileField(upload_to="signed/")
+    visual_document_hash = models.CharField(max_length=64, blank=True, default="")
     final_hash = models.CharField(max_length=64)
+    completion_seal = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

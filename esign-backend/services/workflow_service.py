@@ -141,6 +141,10 @@ def check_and_advance_step(envelope, current_step, request=None):
                 user_agent=user_agent,
             )
 
+            # Apply A08 Completion Integrity Seal
+            from services.integrity_service import seal_envelope_completion
+            seal_envelope_completion(envelope)
+
             from esign.events.definitions import EnvelopeCompleted
             from esign.events.dispatcher import esign_dispatcher
             base_api_url = request.build_absolute_uri('/')[:-1] if request else None

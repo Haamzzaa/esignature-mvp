@@ -353,3 +353,9 @@ FACE_PROVIDER = "insightface"
 LIVENESS_PROVIDER = "internal"
 NOTIFICATION_PROVIDER = "brevo"
 
+
+# ── A08 — Software & Data Integrity Configuration ────────────────────────────
+A08_HASH_SEALING_ENABLED = os.environ.get("A08_HASH_SEALING_ENABLED", "True").lower() in ("true", "1", "yes")
+A08_PADES_ENABLED = os.environ.get("A08_PADES_ENABLED", "False").lower() in ("true", "1", "yes")
+A08_TSA_ENABLED = os.environ.get("A08_TSA_ENABLED", "False").lower() in ("true", "1", "yes")
+A08_INTEGRITY_SECRET = os.environ.get("A08_INTEGRITY_SECRET", SECRET_KEY)
